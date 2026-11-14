@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Build:  dotnet build -c Release -p:CubedDir="C:\Games\Cubed"
+    CubedDir is the folder containing Cubed.exe (and Cubed_Data). If you are working inside the Cubed
+    Unity project, Cubed.dll from Library/ScriptAssemblies is used automatically.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>ExampleCardMod</AssemblyName>
+    <RootNamespace>ExampleCardMod</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <RestoreAdditionalProjectSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.bepinex.dev/v3/index.json
+    </RestoreAdditionalProjectSources>
+    <CubedDir Condition="'$(CubedDir)' == ''">$(MSBuildThisFileDirectory)..\..\Builds\Windows</CubedDir>
+    <CubedDll>$(CubedDir)\Cubed_Data\Managed\Cubed.dll</CubedDll>
+    <CubedDll Condition="!Exists('$(CubedDll)') And Exists('$(MSBuildThisFileDirectory)..\..\Library\ScriptAssemblies\Cubed.dll')">$(MSBuildThisFileDirectory)..\..\Library\ScriptAssemblies\Cubed.dll</CubedDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" PrivateAssets="all" />
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" IncludeAssets="compile" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Cubed">
+      <HintPath>$(CubedDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Copy the plugin into the Thunderstore package folder after building. -->
+  <Target Name="CopyToPackage" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildThisFileDirectory)thunderstore\plugins" />
+  </Target>
+</Project>

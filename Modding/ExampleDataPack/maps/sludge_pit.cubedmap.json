@@ -1,0 +1,131 @@
+{
+  "formatVersion": 1,
+  "name": "Sludge Pit",
+  "author": "ExampleDataPack",
+  "description": "A sludge-filled bowl with super springs.",
+  "sizeX": 34,
+  "sizeY": 34,
+  "sizeZ": 34,
+  "background": "#141a12",
+  "blocks": [
+    {
+      "x": 7,
+      "y": 7,
+      "z": 7,
+      "w": 20,
+      "h": 1,
+      "d": 20,
+      "type": "solid"
+    },
+    {
+      "x": 11,
+      "y": 8,
+      "z": 11,
+      "w": 12,
+      "h": 1,
+      "d": 12,
+      "type": "exampledata.sludge"
+    },
+    {
+      "x": 9,
+      "y": 8,
+      "z": 9,
+      "w": 2,
+      "h": 1,
+      "d": 2,
+      "type": "exampledata.super_spring"
+    },
+    {
+      "x": 23,
+      "y": 8,
+      "z": 9,
+      "w": 2,
+      "h": 1,
+      "d": 2,
+      "type": "exampledata.super_spring"
+    },
+    {
+      "x": 9,
+      "y": 8,
+      "z": 23,
+      "w": 2,
+      "h": 1,
+      "d": 2,
+      "type": "exampledata.super_spring"
+    },
+    {
+      "x": 23,
+      "y": 8,
+      "z": 23,
+      "w": 2,
+      "h": 1,
+      "d": 2,
+      "type": "exampledata.super_spring"
+    },
+    {
+      "x": 7,
+      "y": 8,
+      "z": 7,
+      "w": 20,
+      "h": 2,
+      "d": 1,
+      "type": "light"
+    },
+    {
+      "x": 7,
+      "y": 8,
+      "z": 26,
+      "w": 20,
+      "h": 2,
+      "d": 1,
+      "type": "light"
+    },
+    {
+      "x": 14,
+      "y": 20,
+      "z": 14,
+      "w": 6,
+      "h": 1,
+      "d": 6,
+      "type": "solid"
+    }
+  ],
+  "spawns": [
+    {
+      "x": 8,
+      "y": 8,
+      "z": 16,
+      "team": 0
+    },
+    {
+      "x": 25,
+      "y": 8,
+      "z": 16,
+      "team": 1
+    },
+    {
+      "x": 16,
+      "y": 8,
+      "z": 8,
+      "team": 2
+    },
+    {
+      "x": 16,
+      "y": 8,
+      "z": 25,
+      "team": 3
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "z": 18,
+      "team": 0
+    },
+    {
+      "x": 25,
+      "y": 8,
+      "z": 14,
+      "team": 1
+    }
+  ]
+}

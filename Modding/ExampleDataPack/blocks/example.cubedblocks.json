@@ -1,0 +1,6 @@
+{
+  "blocks": [
+    { "id": "exampledata.sludge", "name": "Sludge", "color": "#6b8f2a", "damagePerSecond": 8, "groundAccel": 0.35 },
+    { "id": "exampledata.super_spring", "name": "Super Spring", "color": "#ffd23f", "bounceSpeed": 34 }
+  ]
+}

@@ -1,0 +1,150 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace Cubed
+{
+    public enum ControlType { None, KeyboardMouse, Gamepad1, Gamepad2, Gamepad3, Gamepad4, Bot }
+
+    /// <summary>Who picks cards after a round.</summary>
+    public enum PickRule { Losers, Everyone, Winners, Nobody }
+
+    public enum MapRotation { Fixed, Cycle, Random }
+
+    public enum BotDifficulty { Easy, Normal, Hard, Brutal }
+
+    [Serializable]
+    public class PlayerSlot
+    {
+        public string name = "Player";
+        public ControlType control = ControlType.Bot;
+        public int team;
+        public BotDifficulty difficulty = BotDifficulty.Normal;
+
+        public bool IsHuman => control != ControlType.None && control != ControlType.Bot;
+        public bool IsActive => control != ControlType.None;
+        public PlayerSlot Clone() => (PlayerSlot)MemberwiseClone();
+    }
+
+    /// <summary>Everything that configures a match. Persisted in PlayerPrefs as JSON.</summary>
+    [Serializable]
+    public class MatchSettings
+    {
+        const string PrefsKey = "cubed.settings.v1";
+
+        public List<PlayerSlot> slots = new List<PlayerSlot>();
+
+        // Match flow
+        public int roundsToWin = 5;
+        public float roundTimeLimit = 0f;
+
+        // Cards
+        public int cardsPerHand = 5;
+        public int picksPerRound = 1;
+        public int startingPicks = 0;
+        /// <summary>Seconds to choose a card. 0 = no timer.</summary>
+        public float pickTimer = 20f;
+        public PickRule pickRule = PickRule.Losers;
+        /// <summary>When picking several cards in a row, draw a fresh hand for each pick.</summary>
+        public bool rerollBetweenPicks = true;
+        public List<string> disabledCards = new List<string>();
+
+        // Map
+        public string mapId = "builtin:garden";
+        public MapRotation mapRotation = MapRotation.Fixed;
+
+        // Borders and falling
+        public bool damagingBorders = true;
+        public float borderDamage = 25f;
+        public bool fallDamage = true;
+        /// <summary>Damage from hitting the bottom of the arena.</summary>
+        public float bottomDamage = 35f;
+        /// <summary>Damage from landing hard on blocks after a long fall.</summary>
+        public bool landingDamage = true;
+        public float landingDamageScale = 3f;
+        /// <summary>Seconds into a round before the borders start closing in. 0 = never.</summary>
+        public float borderShrinkAfter = 60f;
+        public float borderShrinkDuration = 40f;
+
+        // Combat
+        public bool friendlyFire;
+
+        // Preferences
+        public float mouseSensitivity = 2f;
+        public float gamepadSensitivity = 160f;
+        public bool invertY;
+        public float volume = 0.6f;
+
+        public static MatchSettings CreateDefault()
+        {
+            var s = new MatchSettings();
+            s.slots.Add(new PlayerSlot { name = "You", control = ControlType.KeyboardMouse, team = 0 });
+            s.slots.Add(new PlayerSlot { name = "Bot Blue", control = ControlType.Bot, team = 1 });
+            return s;
+        }
+
+        public MatchSettings Clone()
+        {
+            var c = JsonUtility.FromJson<MatchSettings>(JsonUtility.ToJson(this));
+            c.Validate();
+            return c;
+        }
+
+        public void Validate()
+        {
+            if (slots == null) slots = new List<PlayerSlot>();
+            if (disabledCards == null) disabledCards = new List<string>();
+            slots.RemoveAll(s => s == null);
+            foreach (var s in slots) s.team = Mathf.Clamp(s.team, 0, Teams.Max - 1);
+            roundsToWin = Mathf.Clamp(roundsToWin, 1, 50);
+            cardsPerHand = Mathf.Clamp(cardsPerHand, 1, 10);
+            picksPerRound = Mathf.Clamp(picksPerRound, 0, 10);
+            startingPicks = Mathf.Clamp(startingPicks, 0, 10);
+            pickTimer = Mathf.Clamp(pickTimer, 0f, 600f);
+            if (string.IsNullOrEmpty(mapId)) mapId = "builtin:garden";
+        }
+
+        public IEnumerable<PlayerSlot> ActiveSlots => slots.Where(s => s.IsActive);
+
+        public int TeamCount => ActiveSlots.Select(s => s.team).Distinct().Count();
+
+        /// <summary>Returns an error message if the match cannot start, otherwise null.</summary>
+        public string CheckPlayable()
+        {
+            if (!ActiveSlots.Any()) return "Add some players.";
+            if (TeamCount < 2) return "Players must be on at least two different teams.";
+            var pads = ActiveSlots.Where(s => s.IsHuman).GroupBy(s => s.control).FirstOrDefault(g => g.Count() > 1);
+            if (pads != null) return "Two players can't share " + pads.Key + ".";
+            return null;
+        }
+
+        public void Save()
+        {
+            try
+            {
+                PlayerPrefs.SetString(PrefsKey, JsonUtility.ToJson(this));
+                PlayerPrefs.Save();
+            }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        public static MatchSettings Load()
+        {
+            try
+            {
+                if (PlayerPrefs.HasKey(PrefsKey))
+                {
+                    var s = JsonUtility.FromJson<MatchSettings>(PlayerPrefs.GetString(PrefsKey));
+                    if (s != null)
+                    {
+                        s.Validate();
+                        if (s.slots.Count > 0) return s;
+                    }
+                }
+            }
+            catch (Exception e) { Debug.LogException(e); }
+            return CreateDefault();
+        }
+    }
+}

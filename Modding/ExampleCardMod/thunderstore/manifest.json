@@ -1,0 +1,9 @@
+{
+  "name": "ExampleCards",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/lordfulger/Cubed",
+  "description": "Example Cubed mod: Moon Boots, Storm Caller and Underdog cards plus a Harmony patch.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2100"
+  ]
+}

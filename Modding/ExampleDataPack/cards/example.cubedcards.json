@@ -1,0 +1,44 @@
+{
+  "author": "ExampleDataPack",
+  "cards": [
+    {
+      "id": "exampledata.bulwark",
+      "title": "Bulwark",
+      "description": "Block for much longer, but it recharges slowly. Blocks push enemies away.",
+      "rarity": "Uncommon",
+      "color": "#5fa8ff",
+      "maxStacks": 2,
+      "modifiers": [
+        { "stat": "BlockDuration", "op": "Multiply", "value": 3.0 },
+        { "stat": "BlockCooldown", "op": "Multiply", "value": 1.4 }
+      ],
+      "effects": [ "pulse_guard" ]
+    },
+    {
+      "id": "exampledata.confetti_cannon",
+      "title": "Confetti Cannon",
+      "description": "Seven tiny bouncing pellets per shot.",
+      "rarity": "Rare",
+      "color": "#ff7ad9",
+      "modifiers": [
+        { "stat": "BulletsPerShot", "op": "Add", "value": 6 },
+        { "stat": "Spread", "op": "Add", "value": 25 },
+        { "stat": "Damage", "op": "Multiply", "value": 0.35 },
+        { "stat": "Bounces", "op": "Add", "value": 2 },
+        { "stat": "BulletSize", "op": "Multiply", "value": 0.6 }
+      ]
+    },
+    {
+      "id": "exampledata.cold_feet",
+      "title": "Cold Feet",
+      "description": "Frost bullets and immunity to most fall damage.",
+      "rarity": "Common",
+      "color": "#a8ecff",
+      "modifiers": [
+        { "stat": "HazardDamageTaken", "op": "Multiply", "value": 0.4 },
+        { "stat": "MoveSpeed", "op": "Multiply", "value": 0.95 }
+      ],
+      "effects": [ "frost_tips" ]
+    }
+  ]
+}
