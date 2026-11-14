@@ -115,8 +115,9 @@ namespace Cubed
                 look = Deadzone(new Vector2(SafeInput.JoyAxis(j, 4), -SafeInput.JoyAxis(j, 5)), 0.15f) * sens;
                 move = Deadzone(new Vector2(SafeInput.JoyAxis(j, 1), -SafeInput.JoyAxis(j, 2)), 0.2f);
                 // Windows XInput maps triggers to axes 9/10; Linux/macOS drivers commonly use 3/6.
-                float rt = Mathf.Max(SafeInput.JoyAxis(j, 10), SafeInput.JoyAxis(j, 6));
-                float lt = Mathf.Max(SafeInput.JoyAxis(j, 9), SafeInput.JoyAxis(j, 3));
+                bool windows = Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
+                float rt = SafeInput.JoyAxis(j, windows ? 10 : 6);
+                float lt = SafeInput.JoyAxis(j, windows ? 9 : 3);
                 bool blockTrigger = lt > 0.5f;
                 JumpPressed = Input.GetKeyDown(SafeInput.JoyButton(j, 0));
                 FireHeld = rt > 0.4f || Input.GetKey(SafeInput.JoyButton(j, 5));

@@ -20,8 +20,12 @@ namespace Cubed
             if (Hp <= 0f) Break();
         }
 
+        bool broken;
+
         public void Break()
         {
+            if (broken) return;
+            broken = true;
             var size = transform.lossyScale;
             int count = Mathf.Clamp(Mathf.RoundToInt(size.x * size.y * size.z * 3f), 4, 30);
             Fx.Burst(transform.position, Type != null ? Type.Color : Color.gray, count, 7f, 0.25f, 0.9f);
@@ -118,8 +122,9 @@ namespace Cubed
         {
             var type = BlockTypes.Get(typeId);
             var mat = type.Transparent ? Mats.Transparent(type.Color) : Mats.Solid(type.Color);
-            var go = Prim.Cube("TempBlock", blockRoot, center, size, mat, true);
+            var go = Prim.Cube("TempBlock", blockRoot, center, size, mat, false);
             go.transform.rotation = rotation;
+            go.AddComponent<BoxCollider>();
             var info = go.AddComponent<BlockInfo>();
             info.Type = type;
             info.Hp = type.Health;

@@ -257,8 +257,9 @@ namespace Cubed
             Paused = false;
             Bullet.ClearAll();
             Fx.Clear();
-            foreach (var p in Players) if (p != null) Destroy(p.gameObject);
-            foreach (var c in Cameras) if (c != null) Destroy(c.gameObject);
+            // Deactivate first: Destroy is deferred and stale colliders/updates would leak into this frame.
+            foreach (var p in Players) if (p != null) { p.gameObject.SetActive(false); Destroy(p.gameObject); }
+            foreach (var c in Cameras) if (c != null) { c.gameObject.SetActive(false); Destroy(c.gameObject); }
             Players.Clear();
             Cameras.Clear();
             ActiveTeams.Clear();
@@ -415,7 +416,7 @@ namespace Cubed
         /// <summary>Pick a card from a hand (also called by the UI for mouse clicks).</summary>
         public void Pick(PickState st, int index)
         {
-            if (st == null || st.Done || State != GameState.CardPick) return;
+            if (st == null || st.Done || State != GameState.CardPick || Paused) return;
             if (index < 0 || index >= st.Hand.Count) index = UnityEngine.Random.Range(0, st.Hand.Count);
             if (st.Hand.Count == 0) { st.PicksRemaining = 0; return; }
             var card = st.Hand[index];

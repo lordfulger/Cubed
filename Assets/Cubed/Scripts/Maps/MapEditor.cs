@@ -523,6 +523,13 @@ namespace Cubed
             {
                 PushUndo();
                 Map.ResizeArena(nx, ny, nz);
+                int removed = Data.blocks.RemoveAll(b => b.x + b.W > Data.sizeX || b.y + b.H > Data.sizeY || b.z + b.D > Data.sizeZ)
+                            + Data.spawns.RemoveAll(sp => sp.x >= Data.sizeX || sp.y >= Data.sizeY || sp.z >= Data.sizeZ);
+                if (removed > 0)
+                {
+                    Rebuild(Data);
+                    Status("Removed " + removed + " blocks/spawns outside the new arena (Ctrl+Z to undo)");
+                }
             }
 
             UIKit.Text(new Rect(x, y, w, 24f), "Brush  (1-9, X = eraser)", UIKit.Small, UIKit.Muted);

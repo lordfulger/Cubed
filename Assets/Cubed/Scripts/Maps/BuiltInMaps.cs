@@ -37,8 +37,12 @@ namespace Cubed
         public static MapData Pillars()
         {
             var m = New("Pillar Hall", "Cover pillars, high bridges and a lava pit.", 40, 30, 40);
-            m.Box(7, 7, 7, 26, 1, 26, "solid");
-            m.Box(18, 7, 18, 4, 1, 4, "hazard");
+            // Floor with a sunken lava pit in the middle.
+            m.Box(7, 7, 7, 26, 1, 11, "solid");
+            m.Box(7, 7, 22, 26, 1, 11, "solid");
+            m.Box(7, 7, 18, 11, 1, 4, "solid");
+            m.Box(22, 7, 18, 11, 1, 4, "solid");
+            m.Box(18, 6, 18, 4, 1, 4, "hazard");
             m.BoxMirror4(11, 8, 11, 2, 7, 2, "light");
             m.BoxMirror4(7, 8, 18, 1, 3, 4, "dark");
             m.Box(11, 10, 13, 18, 1, 2, "solid");
@@ -46,7 +50,7 @@ namespace Cubed
             m.BoxMirror4(14, 8, 15, 1, 1, 1, "light");
             m.BoxMirror4(15, 8, 9, 2, 2, 1, "crate");
             m.Spawn(9, 8, 20, 0).Spawn(30, 8, 20, 1).Spawn(20, 8, 9, 2).Spawn(20, 8, 30, 3);
-            m.Spawn(9, 8, 16, 0).Spawn(30, 8, 23, 1).Spawn(16, 8, 9, 2).Spawn(23, 8, 30, 3);
+            m.Spawn(9, 8, 16, 0).Spawn(30, 8, 23, 1).Spawn(18, 8, 10, 2).Spawn(21, 8, 29, 3);
             return m;
         }
 

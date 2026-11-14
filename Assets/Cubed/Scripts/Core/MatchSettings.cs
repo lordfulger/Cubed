@@ -114,6 +114,7 @@ namespace Cubed
         {
             if (!ActiveSlots.Any()) return "Add some players.";
             if (TeamCount < 2) return "Players must be on at least two different teams.";
+            if (ActiveSlots.Count(s => s.IsHuman) > 4) return "Split-screen supports up to 4 human players.";
             var pads = ActiveSlots.Where(s => s.IsHuman).GroupBy(s => s.control).FirstOrDefault(g => g.Count() > 1);
             if (pads != null) return "Two players can't share " + pads.Key + ".";
             return null;

@@ -18,6 +18,16 @@ namespace Cubed
 
         public static float Volume = 0.6f;
 
+        /// <summary>Reset statics when "Enter Play Mode Options" skips domain reload.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            pool = null;
+            next = 0;
+            Player.All.Clear();
+            Bullet.Active.Clear();
+        }
+
         public static void Init(GameObject host)
         {
             if (pool != null) return;

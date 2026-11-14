@@ -119,7 +119,12 @@ namespace Cubed
         public static void ClearAll()
         {
             foreach (var b in Active.ToArray())
-                if (b != null) Destroy(b.gameObject);
+            {
+                if (b == null) continue;
+                b.dead = true;
+                b.gameObject.SetActive(false);
+                Destroy(b.gameObject);
+            }
             Active.Clear();
         }
 

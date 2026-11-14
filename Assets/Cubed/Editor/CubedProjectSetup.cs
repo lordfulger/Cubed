@@ -35,6 +35,7 @@ namespace Cubed.EditorTools
         {
             EnsureScene(interactive);
             EnsureInputAxes();
+            EnsureAlwaysIncludedShaders();
             ConfigurePlayerSettings();
             if (interactive) Debug.Log("[Cubed] Project setup complete. Press Play in any scene to start the game.");
         }
@@ -100,6 +101,33 @@ namespace Cubed.EditorTools
                 for (int a = 1; a <= 10; a++)
                     Add("Cubed_J" + j + "_A" + a, 2, a - 1, j, 1f, 0.05f);
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// The game creates all materials at runtime and the build scene is empty, so make sure the shaders
+        /// it uses are always shipped in the player.
+        /// </summary>
+        static void EnsureAlwaysIncludedShaders()
+        {
+            var settings = UnityEngine.Rendering.GraphicsSettings.GetGraphicsSettings();
+            if (settings == null) return;
+            var so = new SerializedObject(settings);
+            var list = so.FindProperty("m_AlwaysIncludedShaders");
+            if (list == null) return;
+            bool changed = false;
+            foreach (var name in new[] { "Standard", "Sprites/Default", "Hidden/Internal-Colored" })
+            {
+                var shader = Shader.Find(name);
+                if (shader == null) continue;
+                bool present = false;
+                for (int i = 0; i < list.arraySize; i++)
+                    if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader) { present = true; break; }
+                if (present) continue;
+                list.arraySize++;
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+                changed = true;
+            }
+            if (changed) so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>BepInEx 5 needs a Mono build with readable (unstripped) managed assemblies.</summary>

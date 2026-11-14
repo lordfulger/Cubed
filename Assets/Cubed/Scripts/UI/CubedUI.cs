@@ -32,7 +32,11 @@ namespace Cubed
                 case GameState.CardLibrary: DrawCardLibrary(); break;
                 case GameState.Mods: DrawMods(); break;
                 case GameState.Editor: gm.Editor.DrawGUI(); break;
-                default: CubedHud.Draw(gm); break;
+                default:
+                    GUI.enabled = !gm.Paused;
+                    CubedHud.Draw(gm);
+                    GUI.enabled = true;
+                    break;
             }
             if (gm.Paused) DrawPause();
 

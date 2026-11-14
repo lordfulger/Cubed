@@ -197,17 +197,17 @@ namespace Cubed
                 WeightMultiplier = cj.weight <= 0f ? 1f : cj.weight,
                 Source = source,
             };
-            if (Enum.TryParse(cj.rarity ?? "Common", true, out Rarity r)) card.Rarity = r;
+            if (Enum.TryParse(cj.rarity ?? "Common", true, out Rarity r) && Enum.IsDefined(typeof(Rarity), r)) card.Rarity = r;
             if (!string.IsNullOrEmpty(cj.color) && ColorUtility.TryParseHtmlString(cj.color, out var c)) card.Color = c;
             if (cj.modifiers != null)
                 foreach (var m in cj.modifiers)
                 {
-                    if (m == null || !Enum.TryParse(m.stat ?? "", true, out Stat stat))
+                    if (m == null || !Enum.TryParse(m.stat ?? "", true, out Stat stat) || !Enum.IsDefined(typeof(Stat), stat))
                     {
                         Debug.LogWarning("[Cubed] Card " + cj.id + ": unknown stat '" + m?.stat + "'");
                         continue;
                     }
-                    if (!Enum.TryParse(m.op ?? "Add", true, out StatOp op)) op = StatOp.Add;
+                    if (!Enum.TryParse(m.op ?? "Add", true, out StatOp op) || !Enum.IsDefined(typeof(StatOp), op)) op = StatOp.Add;
                     card.Modifiers.Add(new StatModifier(stat, op, m.value));
                 }
             if (cj.effects != null) card.Effects.AddRange(cj.effects.Where(e => !string.IsNullOrEmpty(e)));
