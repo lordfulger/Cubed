@@ -27,6 +27,15 @@ namespace Cubed
             ShotsFired = 0;
         }
 
+        /// <summary>Network clients mirror the host's weapon state with this.</summary>
+        public void NetSet(int ammo, bool reloading, float progress)
+        {
+            Ammo = ammo;
+            Reloading = reloading;
+            reloadDuration = 1f;
+            reloadTimer = 1f - Mathf.Clamp01(progress);
+        }
+
         public void AddAmmo(int amount)
         {
             Ammo = Mathf.Min(MaxAmmo, Ammo + amount);

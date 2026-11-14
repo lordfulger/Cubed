@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Cubed.Net;
 using UnityEngine;
 
 namespace Cubed
@@ -19,6 +20,28 @@ namespace Cubed
 
         void Awake() { gm = GetComponent<GameManager>(); }
 
+        NetSession Net => gm.Net;
+
+        void Update()
+        {
+            if (gm == null) return;
+            UIKit.PollNavigation(!gm.InMatch && gm.State != GameState.Editor);
+
+            // Couch co-op: press Start on any gamepad in Match Setup to join with it.
+            if (gm.State == GameState.Setup)
+            {
+                for (int j = 1; j <= 4; j++)
+                {
+                    if (!Input.GetKeyDown(SafeInput.JoyButton(j, 7))) continue;
+                    var pad = (ControlType)((int)ControlType.Gamepad1 + j - 1);
+                    var slots = gm.Settings.slots;
+                    if (slots.Any(s => s.control == pad) || slots.Count >= 8) continue;
+                    slots.Add(new PlayerSlot { name = "Player " + (slots.Count(s => s.IsHuman) + 1), control = pad, team = NextTeam() });
+                    Sfx.Play("pick", 0.6f, 0f);
+                }
+            }
+        }
+
         void OnGUI()
         {
             if (gm == null) return;
@@ -29,6 +52,8 @@ namespace Cubed
             {
                 case GameState.MainMenu: DrawMainMenu(); break;
                 case GameState.Setup: DrawSetup(); break;
+                case GameState.Online: DrawOnline(); break;
+                case GameState.Lobby: DrawLobby(); break;
                 case GameState.CardLibrary: DrawCardLibrary(); break;
                 case GameState.Mods: DrawMods(); break;
                 case GameState.Editor: gm.Editor.DrawGUI(); break;
@@ -39,6 +64,9 @@ namespace Cubed
                     break;
             }
             if (gm.Paused) DrawPause();
+            else if (gm.NetClientMode && gm.HostPaused)
+                UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.2f, UIKit.Size.x, 40f), "Host paused the game", UIKit.Title, Color.white);
+            UIKit.End();
 
             // Mod overlays draw in raw pixel coordinates.
             GUI.matrix = Matrix4x4.identity;
@@ -69,6 +97,8 @@ namespace Cubed
                 gm.StartMatch();
             }
             y += h + gap;
+            if (UIKit.Btn(new Rect(50f, y, w, h), "Online")) { Net.LastError = ""; gm.GoToMenu(GameState.Online); }
+            y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Map Editor")) gm.OpenEditor();
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Card Library")) gm.GoToMenu(GameState.CardLibrary);
@@ -85,6 +115,7 @@ namespace Cubed
                 y += 40f + 8f;
             }
             if (UIKit.Btn(new Rect(50f, s.y - 90f, w, 44f), "Quit")) Application.Quit();
+            UIKit.Text(new Rect(54f, s.y - 130f, 380f, 20f), "Gamepad: stick/d-pad to move, A select, B back", UIKit.Small, UIKit.Muted);
             UIKit.Text(new Rect(54f, s.y - 36f, 380f, 20f), "v" + CubedAPI.GameVersion + (ContentLoader.BepInExLoaded ? "  -  BepInEx active" : ""), UIKit.Small, UIKit.Muted);
         }
 
@@ -92,7 +123,8 @@ namespace Cubed
         void QuickPreset(int teamSize, int enemyTeams, bool fillAllyBots = true)
         {
             var st = gm.Settings;
-            string myName = st.slots.FirstOrDefault(x => x.IsHuman)?.name ?? "You";
+            string myName = st.slots.FirstOrDefault(x => x.IsLocalHuman)?.name ?? "You";
+            var online = st.slots.Where(x => x.IsOnline).ToList();
             st.slots.Clear();
             st.slots.Add(new PlayerSlot { name = myName, control = ControlType.KeyboardMouse, team = 0 });
             if (fillAllyBots)
@@ -101,6 +133,14 @@ namespace Cubed
             for (int t = 1; t <= enemyTeams; t++)
                 for (int i = 0; i < teamSize; i++)
                     st.slots.Add(new PlayerSlot { name = Teams.GetName(t) + " Bot" + (teamSize > 1 ? " " + (i + 1) : ""), control = ControlType.Bot, team = t });
+            // Online players replace bots, spreading across teams.
+            foreach (var o in online)
+            {
+                int bot = st.slots.FindIndex(x => x.control == ControlType.Bot && x.team == o.team);
+                if (bot < 0) bot = st.slots.FindIndex(x => x.control == ControlType.Bot);
+                if (bot >= 0) { o.team = st.slots[bot].team; st.slots[bot] = o; }
+                else st.slots.Add(o);
+            }
             gm.SaveSettings();
         }
 
@@ -108,6 +148,7 @@ namespace Cubed
 
         void DrawSetup()
         {
+            if (Net.IsHosting) RefreshLocalIps();
             var s = UIKit.Size;
             var st = gm.Settings;
             float W = Mathf.Min(1400f, s.x - 40f), H = Mathf.Min(820f, s.y - 40f);
@@ -143,7 +184,9 @@ namespace Cubed
                 slot.name = GUI.TextField(new Rect(12f, y + 4f, cw * 0.26f, rowH - 14f), slot.name ?? "", 16, UIKit.Field);
                 float x = 18f + cw * 0.26f;
                 int ci = Mathf.Max(0, Array.IndexOf(controlValues, slot.control));
-                if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.27f, rowH - 14f), controlNames[ci], true))
+                if (slot.IsOnline)
+                    UIKit.Text(new Rect(x, y + 4f, cw * 0.27f, rowH - 14f), "<color=#7dff8a>Online</color>", UIKit.LabelCenter, Color.white);
+                else if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.27f, rowH - 14f), controlNames[ci], true))
                     slot.control = controlValues[(ci + 1) % controlValues.Length];
                 x += cw * 0.27f + 6f;
                 if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.16f, rowH - 14f), "<color=#" + ColorUtility.ToHtmlStringRGB(Teams.GetColor(slot.team)) + ">" + Teams.GetName(slot.team) + "</color>", true))
@@ -157,7 +200,11 @@ namespace Cubed
                 if (UIKit.Btn(new Rect(cw - 36f, y + 4f, 32f, rowH - 14f), "X", true)) remove = i;
             }
             GUI.EndScrollView();
-            if (remove >= 0) st.slots.RemoveAt(remove);
+            if (remove >= 0)
+            {
+                if (st.slots[remove].IsOnline) Net.Kick(st.slots[remove].netOwner);
+                st.slots.RemoveAt(remove);
+            }
 
             if (st.slots.Count < 8)
             {
@@ -172,7 +219,7 @@ namespace Cubed
                     st.slots.Add(new PlayerSlot { name = "Player " + (st.slots.Count + 1), control = pad, team = NextTeam() });
                 }
             }
-            UIKit.Text(new Rect(left.x + 390f, left.yMax - 46f, left.width - 400f, 36f), "Click control/team/difficulty to cycle", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(left.x + 390f, left.yMax - 46f, left.width - 400f, 36f), "Press Start on a gamepad to join", UIKit.Small, UIKit.Muted);
 
             // ---- Rules column
             var right = new Rect(left.xMax + 20f, left.y, W - colW - 60f, left.height);
@@ -183,10 +230,18 @@ namespace Cubed
             DrawRules(rcontent.width);
             GUI.EndScrollView();
 
+            // ---- Online status
+            if (Net.IsHosting)
+            {
+                string info = "<color=#7dff8a>Hosting</color> on port " + Net.Port + "  -  " + Net.ClientCount + " connected  -  your IP: " + localIps;
+                UIKit.Text(new Rect(panel.x + 260f, panel.y + 14f, W - 280f, 40f), info, UIKit.Label, Color.white);
+            }
+
             // ---- Footer
             float fy = panel.yMax - 70f;
-            if (UIKit.Btn(new Rect(panel.x + 20f, fy, 200f, 50f), "Back"))
+            if (UIKit.Btn(new Rect(panel.x + 20f, fy, 200f, 50f), Net.IsHosting ? "Close Lobby" : "Back") || UIKit.BackPressed())
             {
+                Net.StopHost();
                 gm.SaveSettings();
                 gm.GoToMenu(GameState.MainMenu);
             }
@@ -195,6 +250,16 @@ namespace Cubed
             GUI.enabled = setupError == null;
             if (UIKit.Btn(new Rect(panel.xMax - 280f, fy, 260f, 50f), "<b>START MATCH</b>")) gm.StartMatch();
             GUI.enabled = true;
+        }
+
+        string localIps = "";
+        float localIpsTime = -100f;
+
+        void RefreshLocalIps()
+        {
+            if (Time.unscaledTime - localIpsTime < 10f) return;
+            localIpsTime = Time.unscaledTime;
+            localIps = NetSession.LocalAddresses();
         }
 
         int NextTeam()
@@ -308,7 +373,7 @@ namespace Cubed
                 bool on = CardRegistry.IsEnabled(c, st);
                 UIKit.DrawCard(r, c, false, on ? 1f : 0.35f);
                 if (!on) UIKit.Shadowed(new Rect(r.x, r.center.y - 15f, r.width, 30f), "DISABLED", UIKit.HeaderCenter, UIKit.Bad);
-                if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                if (UIKit.Clickable(r))
                 {
                     if (on) st.disabledCards.Add(c.Id);
                     else st.disabledCards.Remove(c.Id);
@@ -317,7 +382,7 @@ namespace Cubed
             }
             GUI.EndScrollView();
 
-            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back"))
+            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back") || UIKit.BackPressed())
             {
                 gm.SaveSettings();
                 gm.GoToMenu(GameState.MainMenu);
@@ -414,7 +479,7 @@ namespace Cubed
             GUI.EndScrollView();
 
             float by = panel.yMax - 64f;
-            if (UIKit.Btn(new Rect(panel.x + 20f, by, 200f, 46f), "Back")) gm.GoToMenu(GameState.MainMenu);
+            if (UIKit.Btn(new Rect(panel.x + 20f, by, 200f, 46f), "Back") || UIKit.BackPressed()) gm.GoToMenu(GameState.MainMenu);
             if (UIKit.Btn(new Rect(panel.x + 240f, by, 240f, 46f), "Reload content"))
             {
                 ContentLoader.LoadAll();
@@ -422,6 +487,148 @@ namespace Cubed
             }
             if (UIKit.Btn(new Rect(panel.x + 500f, by, 280f, 46f), "Open content folder"))
                 Application.OpenURL("file://" + ContentLoader.UserContentFolder);
+        }
+
+        // ------------------------------------------------------------------ online
+
+        string portText, joinPortText;
+
+        void DrawOnline()
+        {
+            var s = UIKit.Size;
+            var st = gm.Settings;
+            float W = Mathf.Min(1000f, s.x - 40f), H = Mathf.Min(720f, s.y - 40f);
+            var panel = new Rect(s.x * 0.5f - W * 0.5f, s.y * 0.5f - H * 0.5f, W, H);
+            UIKit.Fill(panel, UIKit.Bg);
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, 400f, 40f), "Online", UIKit.Header, Color.white);
+            if (portText == null) portText = st.onlinePort.ToString();
+            if (joinPortText == null) joinPortText = st.onlinePort.ToString();
+
+            float x = panel.x + 24f, y = panel.y + 70f, w = W - 48f;
+            UIKit.Text(new Rect(x, y, 160f, 34f), "Your name", UIKit.Label, Color.white);
+            st.onlineName = GUI.TextField(new Rect(x + 170f, y, 260f, 34f), st.onlineName ?? "", 16, UIKit.Field);
+            int ci = st.onlineControl == ControlType.KeyboardMouse ? 0 : Mathf.Clamp((int)st.onlineControl - (int)ControlType.Gamepad1 + 1, 1, 4);
+            string[] devices = { "Keyboard + Mouse", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4" };
+            int ni = UIKit.Cycle(new Rect(x + 460f, y, w - 460f, 34f), "Play with", ci, devices);
+            st.onlineControl = ni == 0 ? ControlType.KeyboardMouse : (ControlType)((int)ControlType.Gamepad1 + ni - 1);
+            y += 56f;
+
+            // Host
+            UIKit.Fill(new Rect(x, y, w, 110f), UIKit.Panel);
+            UIKit.Text(new Rect(x + 14f, y + 8f, 300f, 30f), "Host a game", UIKit.Header, UIKit.Accent);
+            UIKit.Text(new Rect(x + 14f, y + 50f, 60f, 34f), "Port", UIKit.Label, Color.white);
+            portText = GUI.TextField(new Rect(x + 80f, y + 50f, 110f, 34f), portText, 5, UIKit.Field);
+            if (UIKit.Btn(new Rect(x + 210f, y + 48f, 220f, 38f), "<b>Host Lobby</b>") && int.TryParse(portText, out int port))
+            {
+                st.onlinePort = port;
+                gm.SaveSettings();
+                if (Net.StartHost(port)) gm.GoToMenu(GameState.Setup);
+            }
+            UIKit.Text(new Rect(x + 450f, y + 44f, w - 470f, 50f), "Friends on your network see it automatically. Over the internet, forward TCP port " + portText + " on your router.", UIKit.Wrap, UIKit.Muted);
+            y += 128f;
+
+            // Join by address
+            UIKit.Fill(new Rect(x, y, w, 110f), UIKit.Panel);
+            UIKit.Text(new Rect(x + 14f, y + 8f, 300f, 30f), "Join by address", UIKit.Header, UIKit.Accent);
+            st.lastJoinAddress = GUI.TextField(new Rect(x + 14f, y + 50f, 300f, 34f), st.lastJoinAddress ?? "", 64, UIKit.Field);
+            joinPortText = GUI.TextField(new Rect(x + 324f, y + 50f, 100f, 34f), joinPortText, 5, UIKit.Field);
+            bool connecting = Net.IsClient;
+            GUI.enabled = !connecting;
+            if (UIKit.Btn(new Rect(x + 440f, y + 48f, 200f, 38f), "<b>Join</b>") && int.TryParse(joinPortText, out int jport))
+            {
+                gm.SaveSettings();
+                Net.Join(st.lastJoinAddress, jport);
+            }
+            GUI.enabled = true;
+            if (connecting && UIKit.Btn(new Rect(x + 660f, y + 48f, 140f, 38f), "Cancel", true)) Net.Leave();
+            y += 128f;
+
+            // LAN
+            UIKit.Fill(new Rect(x, y, w, H - (y - panel.y) - 90f), UIKit.Panel);
+            UIKit.Text(new Rect(x + 14f, y + 8f, 400f, 30f), "Games on your network", UIKit.Header, UIKit.Accent);
+            float ly = y + 46f;
+            if (Net.Lan.Hosts.Count == 0)
+                UIKit.Text(new Rect(x + 14f, ly, w - 28f, 24f), "Searching...", UIKit.Small, UIKit.Muted);
+            foreach (var h in Net.Lan.Hosts.ToList())
+            {
+                if (ly > panel.yMax - 140f) break;
+                UIKit.Text(new Rect(x + 14f, ly, w - 200f, 34f), h.Name + "  <color=#8890a8>" + h.Address + ":" + h.Port + "  -  " + h.Players + " players" + (h.InMatch ? "  (in match)" : "") + "</color>", UIKit.Label, Color.white);
+                GUI.enabled = !connecting && !h.InMatch;
+                if (UIKit.Btn(new Rect(x + w - 170f, ly, 150f, 34f), "Join", true))
+                {
+                    st.lastJoinAddress = h.Address;
+                    joinPortText = h.Port.ToString();
+                    gm.SaveSettings();
+                    Net.Join(h.Address, h.Port);
+                }
+                GUI.enabled = true;
+                ly += 40f;
+            }
+
+            string status = !string.IsNullOrEmpty(Net.LastError) ? "<color=#ff7a70>" + Net.LastError + "</color>" : Net.Status;
+            UIKit.Text(new Rect(panel.x + 240f, panel.yMax - 64f, W - 260f, 46f), status, UIKit.Label, Color.white);
+            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back") || UIKit.BackPressed())
+            {
+                Net.Leave();
+                gm.SaveSettings();
+                gm.GoToMenu(GameState.MainMenu);
+            }
+        }
+
+        void DrawLobby()
+        {
+            var s = UIKit.Size;
+            float W = Mathf.Min(1000f, s.x - 40f), H = Mathf.Min(720f, s.y - 40f);
+            var panel = new Rect(s.x * 0.5f - W * 0.5f, s.y * 0.5f - H * 0.5f, W, H);
+            UIKit.Fill(panel, UIKit.Bg);
+            var lobby = Net.LobbySettings;
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, W - 48f, 40f), "Lobby  -  " + Net.HostName + "'s game", UIKit.Header, Color.white);
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 52f, W - 48f, 24f), "Waiting for the host to start the match...", UIKit.Small, UIKit.Muted);
+            if (lobby == null) return;
+
+            float x = panel.x + 24f, y = panel.y + 90f, colW = W * 0.5f - 36f;
+            UIKit.Fill(new Rect(x, y, colW, H - 190f), UIKit.Panel);
+            UIKit.Text(new Rect(x + 12f, y + 8f, colW, 28f), "Players", UIKit.Header, UIKit.Accent);
+            float py = y + 46f;
+            foreach (var slot in lobby.ActiveSlots)
+            {
+                bool me = slot.IsOnline && slot.netOwner == Net.MyId;
+                UIKit.Fill(new Rect(x + 12f, py, colW - 24f, 34f), new Color(1f, 1f, 1f, me ? 0.1f : 0.04f));
+                UIKit.Fill(new Rect(x + 12f, py, 5f, 34f), Teams.GetColor(slot.team));
+                string kind = slot.control == ControlType.Bot ? "bot (" + slot.difficulty + ")" : slot.IsOnline ? "online" : "host";
+                UIKit.Text(new Rect(x + 24f, py, colW - 180f, 34f), slot.name + (me ? "  (you)" : "") + "  <color=#8890a8>" + kind + "</color>", UIKit.Label, Color.white);
+                if (me && UIKit.Btn(new Rect(x + colW - 150f, py + 2f, 126f, 30f), "<color=#" + ColorUtility.ToHtmlStringRGB(Teams.GetColor(slot.team)) + ">" + Teams.GetName(slot.team) + "</color>", true))
+                    Net.RequestTeam((slot.team + 1) % Teams.Max);
+                py += 40f;
+            }
+
+            float rx = x + colW + 24f;
+            UIKit.Fill(new Rect(rx, y, colW, H - 190f), UIKit.Panel);
+            UIKit.Text(new Rect(rx + 12f, y + 8f, colW, 28f), "Rules", UIKit.Header, UIKit.Accent);
+            var map = MapRegistry.Get(lobby.mapId);
+            string[] rules =
+            {
+                "First to " + lobby.roundsToWin + " rounds",
+                "Map: " + (map != null ? map.Data.name : lobby.mapId) + " (" + lobby.mapRotation + ")",
+                lobby.cardsPerHand + " cards per hand, " + lobby.picksPerRound + " pick(s) per round",
+                "Starting picks: " + lobby.startingPicks + ",  pick timer: " + (lobby.pickTimer > 0f ? lobby.pickTimer + "s" : "off"),
+                "Who picks: " + lobby.pickRule,
+                "Damaging borders: " + (lobby.damagingBorders ? "on (" + lobby.borderDamage + ")" : "off"),
+                "Fall damage: " + (lobby.fallDamage ? "on (" + lobby.bottomDamage + ")" : "off"),
+                "Friendly fire: " + (lobby.friendlyFire ? "on" : "off"),
+            };
+            float ry = y + 46f;
+            foreach (var line in rules)
+            {
+                UIKit.Text(new Rect(rx + 14f, ry, colW - 28f, 26f), line, UIKit.Label, Color.white);
+                ry += 30f;
+            }
+
+            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Leave") || UIKit.BackPressed())
+            {
+                Net.Leave();
+                gm.GoToMenu(GameState.Online);
+            }
         }
 
         // ------------------------------------------------------------------ pause
@@ -444,8 +651,13 @@ namespace Cubed
             y += 42f;
             st.invertY = UIKit.CheckRow(new Rect(r.x + 20f, y, w - 40f, 36f), "Invert Y", st.invertY);
             y += 56f;
-            if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Resume")) { gm.SaveSettings(); gm.SetPaused(false); }
+            if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Resume") || UIKit.BackPressed()) { gm.SaveSettings(); gm.SetPaused(false); }
             y += 56f;
+            if (gm.NetClientMode)
+            {
+                if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Leave Match")) { Net.Leave(); gm.ReturnToMenu(); }
+                return;
+            }
             if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Restart Match")) gm.Rematch();
             y += 56f;
             if (gm.TestingFromEditor)
@@ -453,7 +665,7 @@ namespace Cubed
                 if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Back to Editor")) gm.BackToEditor();
                 y += 56f;
             }
-            if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Quit to Menu")) { gm.SaveSettings(); gm.ReturnToMenu(); }
+            if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), Net.IsHosting ? "Back to Lobby" : "Quit to Menu")) { gm.SaveSettings(); gm.ReturnToMenu(); }
         }
     }
 }

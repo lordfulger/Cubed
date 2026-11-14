@@ -258,6 +258,7 @@ namespace Cubed
 
         public static void Burst(Vector3 pos, Color color, int count, float speed, float size = 0.15f, float life = 0.6f, float gravity = 20f)
         {
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBurst(pos, color, count, speed, size, life, gravity);
             var mat = Mats.Solid(color);
             for (int i = 0; i < count; i++)
             {
@@ -273,6 +274,7 @@ namespace Cubed
 
         public static void Pulse(Vector3 pos, Color color, float fromDiameter, float toDiameter, float life)
         {
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorPulse(pos, color, fromDiameter, toDiameter, life);
             var go = Prim.Sphere("pulse", Root, pos, fromDiameter, Mats.Transparent(color));
             var p = go.AddComponent<FxPulse>();
             p.From = fromDiameter;
@@ -283,6 +285,7 @@ namespace Cubed
 
         public static void Line(Vector3 a, Vector3 b, Color color, float width = 0.08f, float life = 0.2f)
         {
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorLine(a, b, color, width, life);
             var go = new GameObject("line");
             go.transform.SetParent(Root, false);
             var lr = go.AddComponent<LineRenderer>();

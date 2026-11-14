@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Cubed
 {
-    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Editor, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
+    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
 
     /// <summary>One player's progress through a card pick phase.</summary>
     public class PickState
@@ -57,11 +57,15 @@ namespace Cubed
         public bool InMatch => State >= GameState.RoundIntro;
         public bool StartingPickPhase { get; private set; }
         public bool TestingFromEditor => editorTestMap != null;
+        /// <summary>True while this machine is a network client in a match: the host simulates, we display.</summary>
+        public bool NetClientMode { get; private set; }
+        public Net.NetSession Net { get; private set; }
 
         public Camera OverviewCamera { get; private set; }
         public MapEditor Editor { get; private set; }
 
         MapData editorTestMap;
+        MatchSettings localSettingsBackup;
         float pickDoneTimer;
         float orbitAngle;
 
@@ -93,6 +97,7 @@ namespace Cubed
             ContentLoader.LoadAll();
             MapRegistry.RefreshUserMaps();
 
+            Net = gameObject.AddComponent<Net.NetSession>();
             gameObject.AddComponent<CubedUI>();
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
@@ -138,6 +143,17 @@ namespace Cubed
 
         public void ReturnToMenu()
         {
+            if (NetClientMode) ClientExitMatch(GameState.MainMenu);
+            if (Net != null && Net.IsHosting && InMatch)
+            {
+                // The host leaving a match returns everyone to the lobby.
+                ClearMatch();
+                editorTestMap = null;
+                Net.BroadcastMatchAbort();
+                SetState(GameState.Setup);
+                ShowMenuBackdrop();
+                return;
+            }
             ClearMatch();
             if (Editor.IsOpen) Editor.Close();
             editorTestMap = null;
@@ -187,6 +203,11 @@ namespace Cubed
 
         public void SaveSettings()
         {
+            if (NetClientMode)
+            {
+                Sfx.Volume = Settings.volume;
+                return; // host rules are active; preferences are copied back on exit
+            }
             Settings.Validate();
             Sfx.Volume = Settings.volume;
             Settings.Save();
@@ -217,7 +238,10 @@ namespace Cubed
             int index = 0;
             foreach (var slot in Settings.ActiveSlots)
             {
-                IPlayerInput input = slot.control == ControlType.Bot ? new BotBrain(slot.difficulty) : (IPlayerInput)new HumanInput(slot.control);
+                IPlayerInput input;
+                if (slot.control == ControlType.Bot) input = new BotBrain(slot.difficulty);
+                else if (slot.control == ControlType.Online) input = new Net.NetworkInput(slot.netOwner);
+                else input = new HumanInput(slot.control);
                 var p = Player.Create(slot.Clone(), index++, input);
                 Players.Add(p);
                 if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
@@ -417,6 +441,11 @@ namespace Cubed
         public void Pick(PickState st, int index)
         {
             if (st == null || st.Done || State != GameState.CardPick || Paused) return;
+            if (NetClientMode)
+            {
+                Net.SendPickChoice(st.Player.Index, index);
+                return;
+            }
             if (index < 0 || index >= st.Hand.Count) index = UnityEngine.Random.Range(0, st.Hand.Count);
             if (st.Hand.Count == 0) { st.PicksRemaining = 0; return; }
             var card = st.Hand[index];
@@ -500,6 +529,14 @@ namespace Cubed
         {
             float udt = Time.unscaledDeltaTime;
             HandlePause();
+            if (NetClientMode)
+            {
+                StateTime += udt;
+                if (State == GameState.CardPick && !Paused) UpdateClientPicks(udt);
+                UpdateOverviewCamera(udt);
+                UpdateCursor();
+                return;
+            }
             if (!Paused) StateTime += udt;
 
             switch (State)
@@ -577,6 +614,7 @@ namespace Cubed
         {
             if (!InMatch) paused = false;
             Paused = paused;
+            if (NetClientMode) return; // a client's pause menu is only a local overlay
             if (paused) Time.timeScale = 0f;
             else Time.timeScale = State == GameState.RoundEnd && StateTime < 0.9f ? 0.35f : 1f;
         }
@@ -614,6 +652,144 @@ namespace Cubed
             var mode = lockIt ? CursorLockMode.Locked : CursorLockMode.None;
             if (Cursor.lockState != mode) Cursor.lockState = mode;
             Cursor.visible = !lockIt;
+        }
+    
+        // ------------------------------------------------------------------ network client API
+
+        public struct NetPlayerInfo
+        {
+            public int Index, Team;
+            public string Name;
+            public bool Bot, Local;
+        }
+
+        /// <summary>Network client: build the match described by the host.</summary>
+        public void ClientStartMatch(MatchSettings rules, List<NetPlayerInfo> infos, MapData map)
+        {
+            if (Editor.IsOpen) Editor.Close();
+            ClearMatch();
+            if (localSettingsBackup == null) localSettingsBackup = Settings;
+            rules.Validate();
+            rules.CopyPreferencesFrom(localSettingsBackup);
+            Settings = rules;
+            NetClientMode = true;
+            editorTestMap = null;
+            Array.Clear(TeamScores, 0, TeamScores.Length);
+            RoundNumber = 0;
+            MatchWinner = -1;
+            LastRoundWinner = -1;
+
+            foreach (var info in infos)
+            {
+                var control = info.Local ? localSettingsBackup.onlineControl : info.Bot ? ControlType.Bot : ControlType.Online;
+                if (info.Local && (control == ControlType.Bot || control == ControlType.Online || control == ControlType.None)) control = ControlType.KeyboardMouse;
+                var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control };
+                IPlayerInput input = info.Local ? new HumanInput(control) : null;
+                var p = Player.Create(slot, info.Index, input);
+                p.MakePuppet();
+                p.Frozen = true;
+                Players.Add(p);
+                if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
+            }
+            ActiveTeams.AddRange(Players.Select(p => p.Team).Distinct().OrderBy(t => t));
+            LayoutCameras();
+            if (map != null) ClientLoadMap(map);
+            SetState(GameState.RoundIntro);
+        }
+
+        public void ClientLoadMap(MapData map)
+        {
+            Fx.Clear();
+            ReplaceMap(map);
+            CurrentMapId = "net";
+            foreach (var p in Players)
+            {
+                p.NetResetForRound();
+                var look = Map.FullBounds.center - p.transform.position;
+                look.y = 0f;
+                if (p.Input is HumanInput h && look.sqrMagnitude > 0.01f) h.OnSpawn(p, look.normalized);
+            }
+        }
+
+        public void ClientSetState(GameState state, float stateTime, int round, float roundTime, int lastWinner, int matchWinner, int[] scores, bool hostPaused)
+        {
+            if (state != State) Picks.RemoveAll(_ => state != GameState.CardPick);
+            State = state;
+            StateTime = stateTime;
+            RoundNumber = round;
+            RoundTime = roundTime;
+            LastRoundWinner = lastWinner;
+            MatchWinner = matchWinner;
+            HostPaused = hostPaused;
+            for (int i = 0; i < TeamScores.Length && i < scores.Length; i++) TeamScores[i] = scores[i];
+        }
+
+        /// <summary>True on a client while the host has the game paused.</summary>
+        public bool HostPaused { get; private set; }
+
+        public void ClientSetPicks(List<PickState> picks, bool starting)
+        {
+            // Keep the local player's own highlight so navigation doesn't jitter.
+            foreach (var st in picks)
+            {
+                var old = Picks.FirstOrDefault(o => o.Player == st.Player);
+                if (old != null && st.Player.Input is HumanInput && old.Hand.Count == st.Hand.Count && old.PicksRemaining == st.PicksRemaining)
+                    st.Highlight = old.Highlight;
+            }
+            Picks.Clear();
+            Picks.AddRange(picks);
+            StartingPickPhase = starting;
+        }
+
+        void UpdateClientPicks(float dt)
+        {
+            foreach (var st in Picks)
+            {
+                if (st.Done) continue;
+                if (Settings.pickTimer > 0f) st.TimeLeft = Mathf.Max(0f, st.TimeLeft - dt);
+                if (!(st.Player.Input is IMenuInput menu)) continue;
+                menu.TickMenu();
+                if (menu.MenuHorizontal != 0 && st.Hand.Count > 0)
+                {
+                    st.Highlight = (st.Highlight + menu.MenuHorizontal + st.Hand.Count) % st.Hand.Count;
+                    Sfx.Play("ui", 0.5f, 0f);
+                    Net.SendPickHighlight(st.Player.Index, st.Highlight);
+                }
+                if (menu.MenuConfirm) Pick(st, st.Highlight);
+            }
+        }
+
+        /// <summary>Leave client mode (disconnect, or host went back to the lobby).</summary>
+        public void ClientExitMatch(GameState next)
+        {
+            ClearMatch();
+            if (localSettingsBackup != null)
+            {
+                localSettingsBackup.CopyPreferencesFrom(Settings);
+                Settings = localSettingsBackup;
+                localSettingsBackup = null;
+            }
+            NetClientMode = false;
+            HostPaused = false;
+            SetState(next);
+            ShowMenuBackdrop();
+            Net.ClearBulletViews();
+        }
+
+        /// <summary>Host: a client dropped out mid-match, so a bot takes over its players.</summary>
+        public void ReplaceRemoteWithBot(int owner)
+        {
+            foreach (var p in Players)
+            {
+                if (p.Input is Net.NetworkInput ni && ni.Owner == owner)
+                {
+                    var bot = new BotBrain(BotDifficulty.Normal);
+                    bot.OnSpawn(p, p.AimDirection);
+                    p.Input = bot;
+                    p.Slot.control = ControlType.Bot;
+                    p.DisplayName += " (bot)";
+                }
+            }
         }
     }
 }

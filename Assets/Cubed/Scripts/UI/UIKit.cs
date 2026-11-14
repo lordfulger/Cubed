@@ -78,10 +78,148 @@ namespace Cubed
             Field.padding = new RectOffset(8, 8, 4, 4);
         }
 
+        // ------------------------------------------------------------------ gamepad / keyboard navigation
+
+        /// <summary>True while the menus are being driven by a gamepad or the arrow keys (mouse movement turns it off).</summary>
+        public static bool NavActive { get; private set; }
+        static int focus, counter, lastCount, frame = -1, pendingMove, pendingAdjust;
+        static bool pendingSubmit, pendingBack, submit, back, focusMoved;
+        static int adjust;
+        static float repeatTimer;
+        static int heldDir;
+        static Vector3 lastMousePos;
+
+        /// <summary>Read navigation input. Call once per frame from Update.</summary>
+        public static void PollNavigation(bool allowKeyboardBack)
+        {
+            int vertical = 0, horizontal = 0;
+            bool a = false, b = false;
+            if (Input.GetKeyDown(KeyCode.UpArrow)) vertical = -1;
+            if (Input.GetKeyDown(KeyCode.DownArrow)) vertical = 1;
+            if (Input.GetKeyDown(KeyCode.LeftArrow)) horizontal = -1;
+            if (Input.GetKeyDown(KeyCode.RightArrow)) horizontal = 1;
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) a = true;
+            if (allowKeyboardBack && Input.GetKeyDown(KeyCode.Escape)) b = true;
+            bool keyboardNav = vertical != 0 || horizontal != 0 || a;
+
+            // Gamepads: left stick or d-pad (axes differ per platform) with key repeat.
+            bool windows = Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
+            int dir = 0; // 1 up, 2 down, 3 left, 4 right
+            for (int j = 1; j <= 4; j++)
+            {
+                float x = SafeInput.JoyAxis(j, 1), y = SafeInput.JoyAxis(j, 2);
+                float dx = SafeInput.JoyAxis(j, windows ? 6 : 7), dy = SafeInput.JoyAxis(j, windows ? 7 : 8);
+                if (Mathf.Abs(dx) > 0.5f) x = dx;
+                if (Mathf.Abs(dy) > 0.5f) y = windows ? -dy : dy; // Windows d-pad Y is up-positive
+                if (y < -0.6f) dir = 1;
+                else if (y > 0.6f) dir = 2;
+                else if (x < -0.6f) dir = 3;
+                else if (x > 0.6f) dir = 4;
+                if (Input.GetKeyDown(SafeInput.JoyButton(j, 0))) a = true;
+                if (Input.GetKeyDown(SafeInput.JoyButton(j, 1))) b = true;
+                if (dir != 0) break;
+            }
+            bool fire = false;
+            if (dir != heldDir) { heldDir = dir; fire = dir != 0; repeatTimer = 0.4f; }
+            else if (dir != 0)
+            {
+                repeatTimer -= Time.unscaledDeltaTime;
+                if (repeatTimer <= 0f) { fire = true; repeatTimer = 0.11f; }
+            }
+            if (fire)
+            {
+                if (dir == 1) vertical = -1;
+                else if (dir == 2) vertical = 1;
+                else if (dir == 3) horizontal = -1;
+                else horizontal = 1;
+            }
+
+            bool any = vertical != 0 || horizontal != 0 || a || b;
+            if (any && (fire || keyboardNav || a))
+            {
+                if (!NavActive) { NavActive = true; vertical = 0; horizontal = 0; a = false; } // first press only shows focus
+            }
+            if ((Input.mousePosition - lastMousePos).sqrMagnitude > 4f || Input.GetMouseButtonDown(0)) NavActive = false;
+            lastMousePos = Input.mousePosition;
+
+            pendingMove += vertical;
+            pendingAdjust += horizontal;
+            pendingSubmit |= a && NavActive;
+            pendingBack |= b;
+        }
+
+        /// <summary>Register a focusable control. Returns true when it has gamepad focus.</summary>
+        public static bool NavFocus(Rect r)
+        {
+            int id = counter++;
+            bool f = NavActive && id == focus;
+            if (f && Event.current.type == EventType.Repaint)
+            {
+                Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), new Color(1f, 0.85f, 0.3f), 3f);
+                if (focusMoved) GUI.ScrollTo(new Rect(r.x, r.y - 40f, r.width, r.height + 80f));
+            }
+            return f;
+        }
+
+        /// <summary>True (once) when the focused control should activate.</summary>
+        static bool TakeSubmit(bool focused)
+        {
+            if (!focused || !submit) return false;
+            submit = false;
+            return true;
+        }
+
+        static int TakeAdjust(bool focused)
+        {
+            if (!focused || adjust == 0) return 0;
+            int a = adjust;
+            adjust = 0;
+            return a;
+        }
+
+        /// <summary>True (once per press) when B / Escape was pressed this frame.</summary>
+        public static bool BackPressed()
+        {
+            if (!back) return false;
+            back = false;
+            return true;
+        }
+
+        /// <summary>An invisible clickable/focusable area (used for cards).</summary>
+        public static bool Clickable(Rect r)
+        {
+            bool f = NavFocus(r);
+            return GUI.Button(r, GUIContent.none, GUIStyle.none) || TakeSubmit(f);
+        }
+
+        /// <summary>Call at the end of OnGUI.</summary>
+        public static void End()
+        {
+            if (Event.current.type == EventType.Repaint) lastCount = counter;
+        }
+
         /// <summary>Call at the start of OnGUI.</summary>
         public static void Begin()
         {
             if (!initialized) Init();
+            counter = 0;
+            if (Event.current.type == EventType.Repaint && Time.frameCount != frame)
+            {
+                frame = Time.frameCount;
+                submit = pendingSubmit;
+                back = pendingBack;
+                adjust = pendingAdjust;
+                focusMoved = pendingMove != 0;
+                if (lastCount > 0) focus = ((focus + pendingMove) % lastCount + lastCount) % lastCount;
+                else focus = 0;
+                pendingMove = pendingAdjust = 0;
+                pendingSubmit = pendingBack = false;
+            }
+            else if (Event.current.type == EventType.Repaint)
+            {
+                submit = back = false;
+                adjust = 0;
+            }
             Scale = Mathf.Clamp(Screen.height / VirtualHeight, 0.5f, 4f);
             Size = new Vector2(Screen.width / Scale, Screen.height / Scale);
             GUI.matrix = Matrix4x4.Scale(new Vector3(Scale, Scale, 1f));
@@ -131,7 +269,16 @@ namespace Cubed
 
         public static bool Btn(Rect r, string text, bool small = false)
         {
-            bool clicked = GUI.Button(r, text, small ? ButtonSmall : Button);
+            bool focused = GUI.enabled && NavFocus(r);
+            bool clicked = GUI.Button(r, text, small ? ButtonSmall : Button) || TakeSubmit(focused);
+            if (clicked) Sfx.Play("ui", 0.4f, 0f);
+            return clicked;
+        }
+
+        /// <summary>A button that is not a navigation stop (part of a larger focusable row).</summary>
+        static bool RawBtn(Rect r, string text)
+        {
+            bool clicked = GUI.Button(r, text, Button);
             if (clicked) Sfx.Play("ui", 0.4f, 0f);
             return clicked;
         }
@@ -143,7 +290,8 @@ namespace Cubed
             var style = small ? ButtonSmall : Button;
             var old = style.normal.background;
             if (on) style.normal.background = Tex(Accent * 0.55f);
-            bool clicked = GUI.Button(r, text, style);
+            bool focused = NavFocus(r);
+            bool clicked = GUI.Button(r, text, style) || TakeSubmit(focused);
             style.normal.background = old;
             if (clicked) Sfx.Play("ui", 0.4f, 0f);
             return clicked;
@@ -153,12 +301,19 @@ namespace Cubed
         public static float Stepper(Rect r, string label, float value, float step, float min, float max, string format = "0", string suffix = "", string zeroText = null)
         {
             float bw = 34f;
+            bool focused = NavFocus(r);
             Text(new Rect(r.x, r.y, r.width - bw * 2f - 90f, r.height), label, Label, Color.white);
             float x = r.xMax - bw * 2f - 90f;
-            if (Btn(new Rect(x, r.y + 2f, bw, r.height - 4f), "-")) value = Mathf.Max(min, value - step);
+            if (RawBtn(new Rect(x, r.y + 2f, bw, r.height - 4f), "-")) value = Mathf.Max(min, value - step);
             string shown = zeroText != null && Mathf.Approximately(value, 0f) ? zeroText : value.ToString(format) + suffix;
             Text(new Rect(x + bw, r.y, 90f, r.height), shown, LabelCenter, Accent);
-            if (Btn(new Rect(x + bw + 90f, r.y + 2f, bw, r.height - 4f), "+")) value = Mathf.Min(max, value + step);
+            if (RawBtn(new Rect(x + bw + 90f, r.y + 2f, bw, r.height - 4f), "+")) value = Mathf.Min(max, value + step);
+            int adj = TakeAdjust(focused);
+            if (adj != 0)
+            {
+                value = Mathf.Clamp(value + adj * step, min, max);
+                Sfx.Play("ui", 0.4f, 0f);
+            }
             return value;
         }
 
@@ -169,12 +324,19 @@ namespace Cubed
         public static int Cycle(Rect r, string label, int index, string[] options)
         {
             float w = Mathf.Min(220f, r.width * 0.55f);
+            bool focused = NavFocus(r);
             Text(new Rect(r.x, r.y, r.width - w, r.height), label, Label, Color.white);
             var b = new Rect(r.xMax - w, r.y + 2f, w, r.height - 4f);
-            if (Btn(b, "<  " + options[Mathf.Clamp(index, 0, options.Length - 1)] + "  >"))
+            if (RawBtn(b, "<  " + options[Mathf.Clamp(index, 0, options.Length - 1)] + "  >") || TakeSubmit(focused))
             {
-                bool back = Event.current != null && Event.current.button == 1;
-                index = (index + (back ? -1 : 1) + options.Length) % options.Length;
+                bool backwards = Event.current != null && Event.current.button == 1;
+                index = (index + (backwards ? -1 : 1) + options.Length) % options.Length;
+            }
+            int adj = TakeAdjust(focused);
+            if (adj != 0)
+            {
+                index = (index + adj + options.Length) % options.Length;
+                Sfx.Play("ui", 0.4f, 0f);
             }
             return index;
         }
@@ -182,8 +344,15 @@ namespace Cubed
         public static bool CheckRow(Rect r, string label, bool value)
         {
             float w = Mathf.Min(220f, r.width * 0.55f);
+            bool focused = NavFocus(r);
             Text(new Rect(r.x, r.y, r.width - w, r.height), label, Label, Color.white);
-            if (Toggle(new Rect(r.xMax - w, r.y + 2f, w, r.height - 4f), value ? "ON" : "OFF", value)) value = !value;
+            var b = new Rect(r.xMax - w, r.y + 2f, w, r.height - 4f);
+            if (value) Fill(b, Accent * 0.55f);
+            if (RawBtn(b, value ? "ON" : "OFF") || TakeSubmit(focused) || TakeAdjust(focused) != 0)
+            {
+                value = !value;
+                Sfx.Play("ui", 0.4f, 0f);
+            }
             return value;
         }
 

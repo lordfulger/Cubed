@@ -17,6 +17,7 @@ namespace Cubed
         public static void AddDamageNumber(Vector3 pos, float amount, Color color)
         {
             if (amount < 0.5f) return;
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorDamageNumber(pos, amount, color);
             damageNumbers.Add(new DamageNumber { Pos = pos + Random.insideUnitSphere * 0.3f, Amount = amount, Color = color, Time = Time.unscaledTime });
             if (damageNumbers.Count > 60) damageNumbers.RemoveAt(0);
         }
@@ -34,6 +35,13 @@ namespace Cubed
                     info.Type == DamageType.Hazard ? "touched lava" : "died";
                 text = v + " " + how;
             }
+            AddFeedText(text);
+        }
+
+        /// <summary>Add a line to the kill feed (also used for join/leave messages).</summary>
+        public static void AddFeedText(string text)
+        {
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorFeed(text);
             feed.Add(new FeedEntry { Text = text, Time = Time.unscaledTime });
             if (feed.Count > 6) feed.RemoveAt(0);
         }
@@ -412,6 +420,12 @@ namespace Cubed
             }
 
             float by = r.yMax - 60f;
+            if (gm.NetClientMode)
+            {
+                UIKit.Text(new Rect(r.x + 20f, by, w - 280f, 42f), "Waiting for the host...", UIKit.Label, UIKit.Muted);
+                if (UIKit.Btn(new Rect(r.xMax - 240f, by, 220f, 42f), "Leave")) { gm.Net.Leave(); gm.ReturnToMenu(); }
+                return;
+            }
             float bw = gm.TestingFromEditor ? 220f : 300f;
             float bx = r.x + 20f;
             if (UIKit.Btn(new Rect(bx, by, bw, 42f), "Rematch")) gm.Rematch();
@@ -421,7 +435,7 @@ namespace Cubed
                 if (UIKit.Btn(new Rect(bx, by, bw, 42f), "Back to Editor")) gm.BackToEditor();
                 bx += bw + 20f;
             }
-            if (UIKit.Btn(new Rect(r.xMax - 20f - bw, by, bw, 42f), "Main Menu")) gm.ReturnToMenu();
+            if (UIKit.Btn(new Rect(r.xMax - 20f - bw, by, bw, 42f), gm.Net.IsHosting ? "Back to Lobby" : "Main Menu")) gm.ReturnToMenu();
         }
     }
 }

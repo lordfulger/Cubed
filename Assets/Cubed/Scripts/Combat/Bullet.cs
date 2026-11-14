@@ -14,6 +14,9 @@ namespace Cubed
         /// <summary>Layer mask for bullet collision (everything except Ignore Raycast).</summary>
         public static int CollisionMask = ~(1 << 2);
 
+        static int nextNetId;
+        /// <summary>Id used to match this bullet in network snapshots.</summary>
+        public int NetId;
         public Player Owner;
         public int Team;
         public Vector3 Velocity;
@@ -46,6 +49,7 @@ namespace Cubed
             var go = new GameObject("Bullet");
             go.transform.position = position;
             var b = go.AddComponent<Bullet>();
+            b.NetId = ++nextNetId;
             b.Owner = owner;
             b.Team = owner != null ? owner.Team : -1;
             b.Velocity = velocity;
@@ -97,17 +101,23 @@ namespace Cubed
         void BuildVisual()
         {
             if (visual != null) Destroy(visual.gameObject);
-            visual = Prim.Sphere("Visual", transform, Vector3.zero, Mathf.Max(0.08f, Radius * 2f), Mats.Solid(Color)).transform;
-            var trail = gameObject.GetComponent<TrailRenderer>();
-            if (trail == null) trail = gameObject.AddComponent<TrailRenderer>();
+            visual = CreateVisual(gameObject, Radius, Color);
+        }
+
+        /// <summary>Sphere + trail look shared by simulated bullets and network bullet views.</summary>
+        public static Transform CreateVisual(GameObject host, float radius, Color color)
+        {
+            var visual = Prim.Sphere("Visual", host.transform, Vector3.zero, Mathf.Max(0.08f, radius * 2f), Mats.Solid(color)).transform;
+            var trail = host.GetComponent<TrailRenderer>();
+            if (trail == null) trail = host.AddComponent<TrailRenderer>();
             trail.time = 0.12f;
-            trail.startWidth = Mathf.Max(0.06f, Radius * 1.6f);
+            trail.startWidth = Mathf.Max(0.06f, radius * 1.6f);
             trail.endWidth = 0f;
             trail.sharedMaterial = Mats.Transparent(Color.white);
-            var c = Color;
-            trail.startColor = new Color(c.r, c.g, c.b, 0.7f);
-            trail.endColor = new Color(c.r, c.g, c.b, 0f);
+            trail.startColor = new Color(color.r, color.g, color.b, 0.7f);
+            trail.endColor = new Color(color.r, color.g, color.b, 0f);
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return visual;
         }
 
         /// <summary>Refresh visuals after changing Radius or Color.</summary>

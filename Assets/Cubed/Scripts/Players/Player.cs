@@ -86,6 +86,13 @@ namespace Cubed
         public float Radius => 0.45f * Size;
         public bool IsBot => Input is BotBrain;
         public bool IsHuman => Input is HumanInput;
+        /// <summary>Controlled by a remote client (host side).</summary>
+        public bool IsRemote => Input is Net.NetworkInput;
+        /// <summary>
+        /// On network clients every player is a puppet: the host simulates, the client only displays
+        /// the received state (the local player's Input still drives the camera and is sent to the host).
+        /// </summary>
+        public bool NetworkPuppet;
         public bool CanAirJump => airJumpsUsed < GetStatInt(Stat.ExtraJumps);
         public float SlowFactor => slowTimer > 0f ? 1f - slowAmount : 1f;
         public bool IsPoisoned => poisonTimer > 0f;
@@ -191,7 +198,9 @@ namespace Cubed
             transform.localScale = Vector3.one * Size;
         }
 
-        public void ApplyCard(CardDefinition card)
+        /// <param name="runHooks">False on network clients: effects are attached (for stat display) but
+        /// OnApplied/OnApply code only runs on the host.</param>
+        public void ApplyCard(CardDefinition card, bool runHooks = true)
         {
             if (card == null) return;
             Cards.Add(card);
@@ -202,9 +211,9 @@ namespace Cubed
                 effect.Player = this;
                 effect.Card = card;
                 Effects.Add(effect);
-                SafeEffect(effect, x => x.OnApplied());
+                if (runHooks) SafeEffect(effect, x => x.OnApplied());
             }
-            if (card.OnApply != null)
+            if (runHooks && card.OnApply != null)
             {
                 try { card.OnApply(this); }
                 catch (Exception e) { Debug.LogException(e); }
@@ -284,6 +293,11 @@ namespace Cubed
         {
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
+            if (NetworkPuppet)
+            {
+                PuppetUpdate(dt);
+                return;
+            }
             if (!IsAlive)
             {
                 // Dead humans keep steering their spectator camera.
@@ -325,6 +339,107 @@ namespace Cubed
                 catch (Exception e) { Debug.LogException(e); }
             }
             UpdateShield();
+        }
+
+        // ------------------------------------------------------------------ network puppet
+
+        CapsuleCollider puppetCollider;
+
+        /// <summary>
+        /// Turn this player into a display-only puppet (network client). The CharacterController is replaced
+        /// by a plain capsule so positions can be set directly while bullets/aim rays still hit the player.
+        /// </summary>
+        public void MakePuppet()
+        {
+            NetworkPuppet = true;
+            Controller.enabled = false;
+            if (puppetCollider == null)
+            {
+                puppetCollider = gameObject.AddComponent<CapsuleCollider>();
+                puppetCollider.center = new Vector3(0f, 0.7f, 0f);
+                puppetCollider.radius = 0.45f;
+                puppetCollider.height = 1.4f;
+            }
+        }
+
+        Vector3 netPosition;
+        float netYaw, netPitch, netTime, netHealth = -1f;
+        bool netHasState;
+
+        void PuppetUpdate(float dt)
+        {
+            if (flashTimer > 0f)
+            {
+                flashTimer -= dt;
+                if (flashTimer <= 0f) SetBodyMaterial(null);
+            }
+            Input?.Tick(this, dt);
+            if (Input != null) UpdateAim();
+            else
+            {
+                transform.rotation = Quaternion.Euler(0f, netYaw, 0f);
+                Head.localRotation = Quaternion.Euler(netPitch, 0f, 0f);
+                AimDirection = Quaternion.Euler(netPitch, netYaw, 0f) * Vector3.forward;
+            }
+            if (IsAlive && netHasState)
+            {
+                Vector3 target = netPosition + Velocity * Mathf.Min(Time.time - netTime, 0.15f);
+                Vector3 pos = transform.position;
+                transform.position = (target - pos).sqrMagnitude > 25f ? target : Vector3.Lerp(pos, target, 1f - Mathf.Exp(-dt * 20f));
+            }
+            UpdateShield();
+        }
+
+        /// <summary>Apply one player's state from a host snapshot (network clients only).</summary>
+        public void NetApply(Vector3 position, Vector3 velocity, float yaw, float pitch, float health, bool alive,
+            bool blocking, bool grounded, bool slowed, bool poisoned, bool invulnerable, int ammo, bool reloading,
+            float reloadProgress, float blockCooldownFraction, int lives, int kills, int deaths, float damageDealt)
+        {
+            if (alive != IsAlive) NetSetAlive(alive, position);
+            if (!netHasState) transform.position = position;
+            netHasState = true;
+            netPosition = position;
+            netTime = Time.time;
+            Velocity = velocity;
+            netYaw = yaw;
+            netPitch = pitch;
+            if (netHealth >= 0f && health < netHealth - 0.01f && alive) Flash();
+            netHealth = health;
+            Health = health;
+            Grounded = grounded;
+            BlockTimer = blocking ? 0.1f : 0f;
+            BlockCooldownTimer = blockCooldownFraction * GetStat(Stat.BlockCooldown);
+            slowTimer = slowed ? 0.2f : 0f;
+            slowAmount = slowed ? 0.4f : 0f;
+            poisonTimer = poisoned ? 0.2f : 0f;
+            InvulnerableTimer = invulnerable ? 0.2f : 0f;
+            Weapon.NetSet(ammo, reloading, reloadProgress);
+            LivesRemaining = lives;
+            Kills = kills;
+            Deaths = deaths;
+            DamageDealt = damageDealt;
+        }
+
+        void NetSetAlive(bool alive, Vector3 position)
+        {
+            IsAlive = alive;
+            Model.gameObject.SetActive(alive);
+            if (puppetCollider != null) puppetCollider.enabled = alive;
+            else Controller.enabled = alive;
+            if (!alive) shield.SetActive(false);
+            else
+            {
+                transform.position = position;
+                netHealth = -1f;
+            }
+        }
+
+        /// <summary>Reset puppet interpolation (new round on a network client).</summary>
+        public void NetResetForRound()
+        {
+            netHasState = false;
+            netHealth = -1f;
+            RecalculateStats();
         }
 
         void UpdateAim()

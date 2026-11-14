@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Cubed
 {
-    public enum ControlType { None, KeyboardMouse, Gamepad1, Gamepad2, Gamepad3, Gamepad4, Bot }
+    public enum ControlType { None, KeyboardMouse, Gamepad1, Gamepad2, Gamepad3, Gamepad4, Bot, Online }
 
     /// <summary>Who picks cards after a round.</summary>
     public enum PickRule { Losers, Everyone, Winners, Nobody }
@@ -21,8 +21,12 @@ namespace Cubed
         public ControlType control = ControlType.Bot;
         public int team;
         public BotDifficulty difficulty = BotDifficulty.Normal;
+        /// <summary>Network client id that controls this slot (ControlType.Online), otherwise -1.</summary>
+        public int netOwner = -1;
 
         public bool IsHuman => control != ControlType.None && control != ControlType.Bot;
+        public bool IsLocalHuman => IsHuman && control != ControlType.Online;
+        public bool IsOnline => control == ControlType.Online;
         public bool IsActive => control != ControlType.None;
         public PlayerSlot Clone() => (PlayerSlot)MemberwiseClone();
     }
@@ -76,6 +80,26 @@ namespace Cubed
         public bool invertY;
         public float volume = 0.6f;
 
+        // Online
+        public string onlineName = "Player";
+        public int onlinePort = 27015;
+        public string lastJoinAddress = "127.0.0.1";
+        /// <summary>Device used when playing as an online client.</summary>
+        public ControlType onlineControl = ControlType.KeyboardMouse;
+
+        /// <summary>Copy personal preferences (not match rules) from another settings object.</summary>
+        public void CopyPreferencesFrom(MatchSettings o)
+        {
+            mouseSensitivity = o.mouseSensitivity;
+            gamepadSensitivity = o.gamepadSensitivity;
+            invertY = o.invertY;
+            volume = o.volume;
+            onlineName = o.onlineName;
+            onlinePort = o.onlinePort;
+            lastJoinAddress = o.lastJoinAddress;
+            onlineControl = o.onlineControl;
+        }
+
         public static MatchSettings CreateDefault()
         {
             var s = new MatchSettings();
@@ -102,6 +126,9 @@ namespace Cubed
             picksPerRound = Mathf.Clamp(picksPerRound, 0, 10);
             startingPicks = Mathf.Clamp(startingPicks, 0, 10);
             pickTimer = Mathf.Clamp(pickTimer, 0f, 600f);
+            if (string.IsNullOrWhiteSpace(onlineName)) onlineName = "Player";
+            if (onlinePort <= 0 || onlinePort > 65535) onlinePort = 27015;
+            if (lastJoinAddress == null) lastJoinAddress = "127.0.0.1";
             if (string.IsNullOrEmpty(mapId)) mapId = "builtin:garden";
         }
 
@@ -114,8 +141,8 @@ namespace Cubed
         {
             if (!ActiveSlots.Any()) return "Add some players.";
             if (TeamCount < 2) return "Players must be on at least two different teams.";
-            if (ActiveSlots.Count(s => s.IsHuman) > 4) return "Split-screen supports up to 4 human players.";
-            var pads = ActiveSlots.Where(s => s.IsHuman).GroupBy(s => s.control).FirstOrDefault(g => g.Count() > 1);
+            if (ActiveSlots.Count(s => s.IsLocalHuman) > 4) return "Split-screen supports up to 4 human players.";
+            var pads = ActiveSlots.Where(s => s.IsLocalHuman).GroupBy(s => s.control).FirstOrDefault(g => g.Count() > 1);
             if (pads != null) return "Two players can't share " + pads.Key + ".";
             return null;
         }
@@ -124,7 +151,10 @@ namespace Cubed
         {
             try
             {
-                PlayerPrefs.SetString(PrefsKey, JsonUtility.ToJson(this));
+                // Online slots belong to a session, never persist them.
+                var copy = JsonUtility.FromJson<MatchSettings>(JsonUtility.ToJson(this));
+                copy.slots.RemoveAll(s => s == null || s.IsOnline);
+                PlayerPrefs.SetString(PrefsKey, JsonUtility.ToJson(copy));
                 PlayerPrefs.Save();
             }
             catch (Exception e) { Debug.LogException(e); }
@@ -140,6 +170,7 @@ namespace Cubed
                     if (s != null)
                     {
                         s.Validate();
+                        s.slots.RemoveAll(x => x.IsOnline);
                         if (s.slots.Count > 0) return s;
                     }
                 }

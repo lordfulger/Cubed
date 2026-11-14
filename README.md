@@ -18,7 +18,9 @@ so you can open it and press Play.
 | **Card options** | Cards per hand (1-10), picks per round (0-5), picks before round 1, pick timer (off/5-120 s, picks the highlighted card when time runs out), who picks (losers / everyone / winners / nobody), new hand per pick or keep the same hand, and a Card Library to enable or disable individual cards. |
 | **Teams** | Up to 8 players on 4 teams, plus friendly fire on/off. Scoring is per team, spawns are per team, and eliminated players spectate their teammates. |
 | **Bots** | 4 difficulties. Bots lead their shots (accounting for bullet drop), strafe, avoid ledges and lava, jump gaps, block incoming bullets, and block before they hit borders or land hard. They also pick cards. You can watch a bots-only match. |
-| **Local multiplayer** | Keyboard+mouse plus up to 4 gamepads. Split-screen handles 1-4 humans. |
+| **Local multiplayer** | Keyboard+mouse plus up to 4 gamepads. Split-screen handles 1-4 humans. In Match Setup, press **Start** on a gamepad to join. |
+| **Online multiplayer** | Host a lobby, and friends join by IP. Games on your local network appear automatically. Hosts can mix online players with split-screen players and bots on any team. The host runs the match and clients see live snapshots. If someone drops out mid-match, a bot takes over. There are no third-party networking packages. |
+| **Gamepad support** | Gamepads work in matches, card picks, and every menu (stick or d-pad to move, A to select, B to go back). The keyboard arrows and Enter work in menus too. |
 | **Damaging borders** | The arena is a box. Touching a side or the ceiling deals damage and bounces you back in. Optionally the borders close in after X seconds. |
 | **Fall damage** | Falling into the bottom of the arena deals damage and launches you back up. Landing hard on blocks also hurts. **Blocking at the moment of impact negates it** (and still triggers on-block card effects). |
 | **Map editor** | Fly camera, paint blocks on a grid, 9 block types (stone, bouncer, lava, ice, breakable glass/crate...), team spawns, X/Z mirroring for symmetric maps, arena resize, undo/redo, save/load, and one-click **Test Play** against bots. |
@@ -48,6 +50,8 @@ so you can open it and press Play.
 | Reload | R | X |
 | Pick card | Click, or A/D + Space | Stick or LB/RB, then A |
 | Pause | Esc | Start |
+| Menus | Mouse, or arrows + Enter / Esc | Stick or d-pad, A, B |
+| Join Match Setup | - | Start |
 
 Map editor: hold **right mouse** and use WASD/QE to fly (Shift to go fast). Left click places blocks (drag to
 paint). The mouse wheel or `[` `]` changes the build layer. `1-9` pick a brush, `X` picks the eraser, `F`
@@ -62,6 +66,21 @@ frames the map, `Ctrl+Z`/`Ctrl+Y` undo/redo, `Ctrl+S` saves.
 5. The map is rebuilt between rounds, which restores breakable blocks, and can rotate to the next map or a random one.
 6. The first team to reach the target round wins.
 
+## Online play
+
+1. **Main Menu > Online**. Enter your name and pick your input device.
+2. **Host:** press **Host Lobby** (default port 27015). You land in Match Setup with a lobby panel showing your
+   IP. Joining players appear as "Online" slots you can move between teams. Press **Start Match**
+   when everyone's in.
+3. **Join:** pick a game under *Games on your network*, or type the host's IP and port. In the lobby you can
+   change your team. The host picks the rules and map, including custom editor maps, which are sent over automatically.
+4. Over the internet, the host forwards **TCP port 27015** on their router. LAN discovery uses UDP 27016.
+
+The host is authoritative. It runs the physics, bots and card picks and sends snapshots 30 times a second.
+Clients send their input and card choices. Aiming is local, so it feels instant. Movement shows up after one
+round trip, which works well on LAN and is fine on a decent internet connection. Every machine needs the same
+game version. Card mods only need to be on the host, but clients without them see placeholder cards.
+
 ## Project layout
 
 ```
@@ -73,6 +92,7 @@ Assets/Cubed/Scripts/      Game code (assembly: Cubed.dll; this is what mods ref
   Maps/        MapData (JSON format), BlockTypes, MapRuntime, BuiltInMaps, MapEditor
   UI/          IMGUI toolkit, menus, HUD and card pick screens
   Modding/     CubedAPI, ContentLoader (JSON mods)
+  Net/         TCP transport + LAN discovery, protocol, NetSession (host/client)
 Assets/Cubed/Editor/       Project setup + build menu
 Modding/ExampleCardMod/    Example BepInEx plugin (C#, Harmony) + Thunderstore metadata
 Modding/ExampleDataPack/   Example no-code mod (JSON cards, blocks, map)
@@ -88,7 +108,7 @@ docs/                      MODDING.md, R2MODMAN.md
 
 ## Not done yet
 
-* Online multiplayer. Multiplayer is local only (split-screen). `IPlayerInput` is the place to plug
-  in networked input.
-* Menus need a mouse. Gamepads work in matches and in card picks.
+* Online play doesn't have client-side prediction yet, so your own movement lags by your ping. There's also no
+  Steam or relay matchmaking; you join by IP or over LAN.
+* Gamepad rumble isn't supported (Unity's legacy input has no rumble).
 * There are no art or audio assets: visuals are flat-shaded cubes and sounds are synthesized.

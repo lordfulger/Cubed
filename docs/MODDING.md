@@ -238,6 +238,15 @@ static class SparkleJumpPatch
 Useful patch targets include `GameManager.StartMatch`, `GameManager.Pick`, `CardRegistry.DrawHand`,
 `Player.TakeDamage`, `Player.TryBlock`, `Weapon.Fire`, `Bullet.Spawn`, `BotBrain.ChooseCard` and `MapRuntime.Build`.
 
+### Multiplayer notes for mod authors
+
+* In online matches **only the host simulates**. Card effects, `OnApply`, `GameEvents` handlers and Harmony
+  patches on gameplay code run on the host. Clients are display-only (`Player.NetworkPuppet == true`).
+* Anything you draw with `Fx.*`, play with `Sfx.Play` (for the standard sound ids) or add with `CubedHud.AddFeedText`
+  on the host during a match is mirrored to clients automatically.
+* Clients need your card definitions so they can show card names and stats. Ship the same mod to everyone.
+* `GameManager.Instance.NetClientMode` tells you that you're running as a client.
+
 ### Custom input / networking
 
 Players are driven by `IPlayerInput` (`HumanInput`, `BotBrain`). To drive a player from a network peer or a

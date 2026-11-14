@@ -50,6 +50,7 @@ namespace Cubed
 
         public static void Play(string id, float volume = 1f, float pitchVariance = 0.08f)
         {
+            if (Net.NetSession.Mirroring && Net.NetSession.MirroredSounds.Contains(id)) Net.NetSession.Instance.MirrorSound(id, volume);
             if (pool == null || Volume <= 0f) return;
             if (!clips.TryGetValue(id, out var clip) || clip == null) return;
             var s = pool[next];
