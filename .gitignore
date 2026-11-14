@@ -28,3 +28,7 @@ Modding/**/bin/
 Modding/**/obj/
 Modding/**/dist/
 !Modding/**/*.csproj
+
+# Python
+__pycache__/
+*.pyc
