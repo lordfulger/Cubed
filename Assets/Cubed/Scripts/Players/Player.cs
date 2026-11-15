@@ -84,6 +84,8 @@ namespace Cubed
         public Vector3 Center => transform.position + Vector3.up * (0.7f * Size);
         public Vector3 Top => transform.position + Vector3.up * (1.45f * Size);
         public float Radius => 0.45f * Size;
+        /// <summary>Radius of the 360-degree block bubble.</summary>
+        public float ShieldRadius => 1.05f * Size;
         public bool IsBot => Input is BotBrain;
         public bool IsHuman => Input is HumanInput;
         /// <summary>Controlled by a remote client (host side).</summary>

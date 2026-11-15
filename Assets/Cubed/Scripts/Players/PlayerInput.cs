@@ -79,7 +79,7 @@ namespace Cubed
         public HumanInput(ControlType device) { Device = device; }
 
         public bool IsKeyboard => Device == ControlType.KeyboardMouse;
-        public int Joystick => Device >= ControlType.Gamepad1 && Device <= ControlType.Gamepad4 ? (int)Device - (int)ControlType.Gamepad1 + 1 : 0;
+        public int Joystick => ControlTypes.Joystick(Device);
 
         static MatchSettings Settings => GameManager.Instance != null ? GameManager.Instance.Settings : null;
 

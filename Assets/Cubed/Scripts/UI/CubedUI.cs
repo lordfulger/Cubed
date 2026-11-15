@@ -12,8 +12,12 @@ namespace Cubed
         Vector2 rulesScroll, playersScroll, cardsScroll, modsScroll;
         string setupError;
 
-        static readonly string[] controlNames = { "Keyboard + Mouse", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4", "Bot" };
-        static readonly ControlType[] controlValues = { ControlType.KeyboardMouse, ControlType.Gamepad1, ControlType.Gamepad2, ControlType.Gamepad3, ControlType.Gamepad4, ControlType.Bot };
+        static readonly string[] controlNames = { "Keyboard + Mouse", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4", "Gamepad 5", "Gamepad 6", "Gamepad 7", "Gamepad 8", "Bot" };
+        static readonly ControlType[] controlValues =
+        {
+            ControlType.KeyboardMouse, ControlType.Gamepad1, ControlType.Gamepad2, ControlType.Gamepad3, ControlType.Gamepad4,
+            ControlType.Gamepad5, ControlType.Gamepad6, ControlType.Gamepad7, ControlType.Gamepad8, ControlType.Bot,
+        };
         static readonly string[] difficultyNames = Enum.GetNames(typeof(BotDifficulty));
         static readonly string[] pickRuleNames = { "Losers pick", "Everyone picks", "Winners pick", "No cards" };
         static readonly string[] rotationNames = { "Same map", "Cycle maps", "Random map" };
@@ -30,10 +34,10 @@ namespace Cubed
             // Couch co-op: press Start on any gamepad in Match Setup to join with it.
             if (gm.State == GameState.Setup)
             {
-                for (int j = 1; j <= 4; j++)
+                for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
                 {
                     if (!Input.GetKeyDown(SafeInput.JoyButton(j, 7))) continue;
-                    var pad = (ControlType)((int)ControlType.Gamepad1 + j - 1);
+                    var pad = ControlTypes.Gamepad(j);
                     var slots = gm.Settings.slots;
                     if (slots.Any(s => s.control == pad) || slots.Count >= 8) continue;
                     slots.Add(new PlayerSlot { name = "Player " + (slots.Count(s => s.IsHuman) + 1), control = pad, team = NextTeam() });
@@ -162,11 +166,13 @@ namespace Cubed
             UIKit.Fill(left, UIKit.Panel);
             UIKit.Text(new Rect(left.x + 12f, left.y + 8f, 200f, 28f), "Players & Teams", UIKit.Header, UIKit.Accent);
 
-            float px = left.x + 12f, py = left.y + 44f, bw = (colW - 24f - 30f) / 4f;
-            if (UIKit.Btn(new Rect(px, py, bw, 32f), "1 v 1", true)) QuickPreset(1, 1);
-            if (UIKit.Btn(new Rect(px + (bw + 10f), py, bw, 32f), "2 v 2", true)) QuickPreset(2, 1);
-            if (UIKit.Btn(new Rect(px + (bw + 10f) * 2f, py, bw, 32f), "3 v 3", true)) QuickPreset(3, 1);
-            if (UIKit.Btn(new Rect(px + (bw + 10f) * 3f, py, bw, 32f), "4-way FFA", true)) QuickPreset(1, 3);
+            float px = left.x + 12f, py = left.y + 44f, bw = (colW - 24f - 50f) / 6f;
+            if (UIKit.Btn(new Rect(px, py, bw, 32f), "1v1", true)) QuickPreset(1, 1);
+            if (UIKit.Btn(new Rect(px + (bw + 10f), py, bw, 32f), "2v2", true)) QuickPreset(2, 1);
+            if (UIKit.Btn(new Rect(px + (bw + 10f) * 2f, py, bw, 32f), "4v4", true)) QuickPreset(4, 1);
+            if (UIKit.Btn(new Rect(px + (bw + 10f) * 3f, py, bw, 32f), "2v2v2v2", true)) QuickPreset(2, 3);
+            if (UIKit.Btn(new Rect(px + (bw + 10f) * 4f, py, bw, 32f), "4 FFA", true)) QuickPreset(1, 3);
+            if (UIKit.Btn(new Rect(px + (bw + 10f) * 5f, py, bw, 32f), "8 FFA", true)) QuickPreset(1, 7);
             py += 44f;
 
             var view = new Rect(left.x + 8f, py, left.width - 16f, left.yMax - py - 54f);
@@ -214,7 +220,7 @@ namespace Cubed
                 if (UIKit.Btn(new Rect(addRect.xMax + 10f, addRect.y, 180f, 36f), "+ Add Gamepad", true))
                 {
                     var used = st.slots.Select(x => x.control).ToList();
-                    var pad = controlValues.Skip(1).Take(4).FirstOrDefault(c => !used.Contains(c));
+                    var pad = controlValues.Where(ControlTypes.IsGamepad).FirstOrDefault(c => !used.Contains(c));
                     if (pad == ControlType.None) pad = ControlType.Gamepad1;
                     st.slots.Add(new PlayerSlot { name = "Player " + (st.slots.Count + 1), control = pad, team = NextTeam() });
                 }
@@ -294,8 +300,8 @@ namespace Cubed
 
             Section("Cards");
             st.cardsPerHand = UIKit.StepperInt(Row(), "Cards shown per pick", st.cardsPerHand, 1, 10);
-            st.picksPerRound = UIKit.StepperInt(Row(), "Picks after each round", st.picksPerRound, 0, 5);
-            st.startingPicks = UIKit.StepperInt(Row(), "Picks before round 1", st.startingPicks, 0, 5, "None");
+            st.picksPerRound = UIKit.StepperInt(Row(), "Picks after each round", st.picksPerRound, 0, 10);
+            st.startingPicks = UIKit.StepperInt(Row(), "Picks before round 1", st.startingPicks, 0, 10, "None");
             st.pickTimer = UIKit.Stepper(Row(), "Pick timer", st.pickTimer, 5f, 0f, 120f, "0", "s", "Off");
             st.pickRule = (PickRule)UIKit.Cycle(Row(), "Who picks", (int)st.pickRule, pickRuleNames);
             st.rerollBetweenPicks = UIKit.CheckRow(Row(), "New hand for each pick", st.rerollBetweenPicks);
@@ -348,17 +354,23 @@ namespace Cubed
             var st = gm.Settings;
             var panel = new Rect(20f, 20f, s.x - 40f, s.y - 40f);
             UIKit.Fill(panel, UIKit.Bg);
-            var all = CardRegistry.All;
-            int enabled = all.Count(c => CardRegistry.IsEnabled(c, st));
-            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, 600f, 40f), "Card Library  (" + enabled + " / " + all.Count + " enabled)", UIKit.Header, Color.white);
-            UIKit.Text(new Rect(panel.x + 24f, panel.y + 50f, 800f, 24f), "Click a card to enable or disable it for matches.", UIKit.Small, UIKit.Muted);
+            var everything = CardRegistry.All;
+            int enabled = everything.Count(c => CardRegistry.IsEnabled(c, st));
+            var all = everything.Where(c =>
+                (libraryFilter == 0 || (libraryFilter == 1) != c.Tags.Contains("generated")) &&
+                (rarityFilter < 0 || (int)c.Rarity == rarityFilter)).ToList();
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, 600f, 40f), "Card Library  (" + enabled + " / " + everything.Count + " enabled)", UIKit.Header, Color.white);
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 50f, 520f, 24f), "Click a card to enable or disable it. Buttons apply to the cards shown.", UIKit.Small, UIKit.Muted);
 
-            if (UIKit.Btn(new Rect(panel.xMax - 420f, panel.y + 16f, 190f, 38f), "Enable all", true)) st.disabledCards.Clear();
-            if (UIKit.Btn(new Rect(panel.xMax - 220f, panel.y + 16f, 190f, 38f), "Disable all", true))
-            {
-                st.disabledCards.Clear();
-                st.disabledCards.AddRange(all.Select(c => c.Id));
-            }
+            string[] filters = { "All cards", "Hand-made", "Generated" };
+            if (UIKit.Btn(new Rect(panel.x + 560f, panel.y + 44f, 150f, 32f), filters[libraryFilter], true)) { libraryFilter = (libraryFilter + 1) % 3; cardsScroll = Vector2.zero; }
+            string rarityLabel = rarityFilter < 0 ? "Any rarity" : ((Rarity)rarityFilter).ToString();
+            if (UIKit.Btn(new Rect(panel.x + 720f, panel.y + 44f, 150f, 32f), rarityLabel, true)) { rarityFilter = rarityFilter >= 3 ? -1 : rarityFilter + 1; cardsScroll = Vector2.zero; }
+
+            if (UIKit.Btn(new Rect(panel.xMax - 420f, panel.y + 16f, 190f, 38f), "Enable shown", true))
+                st.disabledCards.RemoveAll(id => all.Any(c => c.Id == id));
+            if (UIKit.Btn(new Rect(panel.xMax - 220f, panel.y + 16f, 190f, 38f), "Disable shown", true))
+                foreach (var c in all) if (!st.disabledCards.Contains(c.Id)) st.disabledCards.Add(c.Id);
 
             const float cw = 190f, ch = 280f, gap = 16f;
             var view = new Rect(panel.x + 16f, panel.y + 84f, panel.width - 32f, panel.height - 160f);
@@ -366,7 +378,10 @@ namespace Cubed
             int rows = Mathf.CeilToInt(all.Count / (float)perRow);
             var content = new Rect(0f, 0f, view.width - 20f, rows * (ch + gap) + 20f);
             cardsScroll = GUI.BeginScrollView(view, cardsScroll, content);
-            for (int i = 0; i < all.Count; i++)
+            // Only draw rows that are on screen (there can be hundreds of cards).
+            int firstRow = Mathf.Max(0, Mathf.FloorToInt((cardsScroll.y - 10f) / (ch + gap)) - 1);
+            int lastRow = Mathf.CeilToInt((cardsScroll.y + view.height) / (ch + gap)) + 1;
+            for (int i = firstRow * perRow; i < all.Count && i < (lastRow + 1) * perRow; i++)
             {
                 var c = all[i];
                 var r = new Rect(10f + (i % perRow) * (cw + gap), 10f + (i / perRow) * (ch + gap), cw, ch);
@@ -492,6 +507,7 @@ namespace Cubed
         // ------------------------------------------------------------------ online
 
         string portText, joinPortText;
+        int libraryFilter, rarityFilter = -1;
 
         void DrawOnline()
         {
@@ -507,10 +523,10 @@ namespace Cubed
             float x = panel.x + 24f, y = panel.y + 70f, w = W - 48f;
             UIKit.Text(new Rect(x, y, 160f, 34f), "Your name", UIKit.Label, Color.white);
             st.onlineName = GUI.TextField(new Rect(x + 170f, y, 260f, 34f), st.onlineName ?? "", 16, UIKit.Field);
-            int ci = st.onlineControl == ControlType.KeyboardMouse ? 0 : Mathf.Clamp((int)st.onlineControl - (int)ControlType.Gamepad1 + 1, 1, 4);
-            string[] devices = { "Keyboard + Mouse", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4" };
+            int ci = Mathf.Clamp(ControlTypes.Joystick(st.onlineControl), 0, 8);
+            string[] devices = { "Keyboard + Mouse", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4", "Gamepad 5", "Gamepad 6", "Gamepad 7", "Gamepad 8" };
             int ni = UIKit.Cycle(new Rect(x + 460f, y, w - 460f, 34f), "Play with", ci, devices);
-            st.onlineControl = ni == 0 ? ControlType.KeyboardMouse : (ControlType)((int)ControlType.Gamepad1 + ni - 1);
+            st.onlineControl = ni == 0 ? ControlType.KeyboardMouse : ControlTypes.Gamepad(ni);
             y += 56f;
 
             // Host

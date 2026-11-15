@@ -199,7 +199,19 @@ namespace Cubed
             while (remaining > 0.0001f && iterations++ < 5 && !dead)
             {
                 Vector3 dir = Velocity.normalized;
-                if (!FindHit(pos, dir, remaining, out var hit, out var hitPlayer))
+                bool found = FindHit(pos, dir, remaining, out var hit, out var hitPlayer);
+                // A blocking player is protected by a full 360-degree bubble, not just their body.
+                var shielded = FindShield(pos, dir, found ? hit.distance : remaining, out float shieldDist);
+                if (shielded != null)
+                {
+                    pos += dir * shieldDist;
+                    remaining -= shieldDist;
+                    transform.position = pos;
+                    if (!shielded.BlockBullet(this)) { Kill(false); return; }
+                    pos = transform.position;
+                    continue;
+                }
+                if (!found)
                 {
                     pos += dir * remaining;
                     break;
@@ -224,6 +236,37 @@ namespace Cubed
                 b.Expand(12f);
                 if (!b.Contains(pos)) Kill(false);
             }
+        }
+
+        /// <summary>Nearest blocking player's shield bubble along the path, if any.</summary>
+        Player FindShield(Vector3 origin, Vector3 dir, float maxDistance, out float distance)
+        {
+            distance = 0f;
+            Player best = null;
+            float bestT = maxDistance;
+            var gm = GameManager.Instance;
+            bool ff = gm != null && gm.Settings.friendlyFire;
+            foreach (var p in Player.All)
+            {
+                if (!p.IsAlive || !p.IsBlocking || AlreadyHit.Contains(p)) continue;
+                if (p == Owner && !CanHitOwner) continue;
+                if (p != Owner && p.Team == Team && !ff) continue;
+                Vector3 m = origin - p.Center;
+                float r = p.ShieldRadius + Radius;
+                float b = Vector3.Dot(m, dir);
+                float c = Vector3.Dot(m, m) - r * r;
+                if (c > 0f && b > 0f) continue;
+                float disc = b * b - c;
+                if (disc < 0f) continue;
+                float t = Mathf.Max(0f, -b - Mathf.Sqrt(disc));
+                if (t <= bestT)
+                {
+                    bestT = t;
+                    best = p;
+                }
+            }
+            distance = bestT;
+            return best;
         }
 
         bool FindHit(Vector3 origin, Vector3 dir, float distance, out RaycastHit best, out Player bestPlayer)

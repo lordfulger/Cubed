@@ -86,8 +86,10 @@ namespace Cubed
         static void DrawSplitLines(GameManager gm)
         {
             var c = new Color(0f, 0f, 0f, 0.9f);
-            UIKit.Fill(new Rect(UIKit.Size.x * 0.5f - 1.5f, 0f, 3f, UIKit.Size.y), c);
-            if (gm.Cameras.Count > 2) UIKit.Fill(new Rect(0f, UIKit.Size.y * 0.5f - 1.5f, UIKit.Size.x, 3f), c);
+            int n = gm.Cameras.Count;
+            int cols = n == 2 ? 2 : n <= 4 ? 2 : n <= 6 ? 3 : 4;
+            for (int i = 1; i < cols; i++) UIKit.Fill(new Rect(UIKit.Size.x * i / cols - 1.5f, 0f, 3f, UIKit.Size.y), c);
+            if (n > 2) UIKit.Fill(new Rect(0f, UIKit.Size.y * 0.5f - 1.5f, UIKit.Size.x, 3f), c);
         }
 
         static void DrawWorldOverlays(GameManager gm, Camera cam, Rect area, Player self, Vector2 groupOffset = default)
@@ -248,27 +250,41 @@ namespace Cubed
 
             int n = st.Hand.Count;
             if (n == 0) return;
+            // One row for up to 6 cards, two rows beyond that.
+            int rows = n > 6 ? 2 : 1;
+            int perRow = Mathf.CeilToInt(n / (float)rows);
             float gap = 14f;
             float avail = v.width - 40f;
-            float cardW = Mathf.Min(220f, (avail - gap * (n - 1)) / n);
-            float cardH = Mathf.Min(cardW * 1.5f, v.height - 200f);
-            float totalW = cardW * n + gap * (n - 1);
-            float x0 = v.center.x - totalW * 0.5f;
-            float y0 = v.y + 120f + Mathf.Max(0f, (v.height - 200f - cardH) * 0.4f);
+            float areaH = v.height - 200f;
+            float cardW = Mathf.Min(220f, (avail - gap * (perRow - 1)) / perRow);
+            float cardH = Mathf.Min(cardW * 1.5f, (areaH - gap * (rows - 1)) / rows);
+            cardW = Mathf.Min(cardW, cardH / 1.3f);
+            float totalH = cardH * rows + gap * (rows - 1);
+            float y0 = v.y + 120f + Mathf.Max(0f, (areaH - totalH) * 0.4f);
 
             bool mouseUser = p.Input is HumanInput hi && hi.IsKeyboard;
             var e = Event.current;
+            float now = Time.unscaledTime;
             for (int i = 0; i < n; i++)
             {
-                var r = new Rect(x0 + i * (cardW + gap), y0, cardW, cardH);
+                int row = i / perRow, col = i % perRow;
+                int inRow = row == rows - 1 ? n - perRow * (rows - 1) : perRow;
+                float rowW = cardW * inRow + gap * (inRow - 1);
+                var r = new Rect(v.center.x - rowW * 0.5f + col * (cardW + gap), y0 + row * (cardH + gap), cardW, cardH);
                 bool hl = i == st.Highlight;
-                if (hl) r.y -= 14f;
-                if (mouseUser)
+
+                // Deal animation: cards flip in one after another.
+                float t = Mathf.Clamp01((now - st.DealtTime - i * 0.05f) / 0.3f);
+                float ease = 1f - (1f - t) * (1f - t) * (1f - t);
+                r.y += (1f - ease) * 50f;
+                if (hl) r.y -= 14f + Mathf.Sin(now * 5f) * 2f;
+
+                if (mouseUser && t >= 1f)
                 {
                     if (e.type == EventType.Repaint && r.Contains(e.mousePosition) && st.Highlight != i && (e.mousePosition - lastMouse).sqrMagnitude > 1f)
                     {
                         st.Highlight = i;
-                        Sfx.Play("ui", 0.4f, 0f);
+                        Sfx.Play("hover", 0.5f, 0.05f);
                     }
                     if (GUI.Button(r, GUIContent.none, GUIStyle.none))
                     {
@@ -276,12 +292,21 @@ namespace Cubed
                         return;
                     }
                 }
+                if (ease < 1f)
+                {
+                    // "Flip" by narrowing the card around its center while it slides in.
+                    float w = r.width * Mathf.Max(0.05f, ease);
+                    r = new Rect(r.center.x - w * 0.5f, r.y, w, r.height);
+                    UIKit.Fill(r, new Color(0.1f, 0.11f, 0.16f, t));
+                    UIKit.Outline(r, CardDefinition.RarityColor(st.Hand[i].Rarity), 2f);
+                    continue;
+                }
                 UIKit.DrawCard(r, st.Hand[i], hl);
             }
             if (mouseUser && e.type == EventType.Repaint) lastMouse = e.mousePosition;
 
             string hint = mouseUser ? "Click a card  -  or A/D + Space" : "Stick / LB RB to choose  -  A to pick";
-            UIKit.Shadowed(new Rect(v.x, Mathf.Min(v.yMax - 40f, y0 + cardH + 20f), v.width, 24f), hint, UIKit.SmallCenter, UIKit.Muted);
+            UIKit.Shadowed(new Rect(v.x, Mathf.Min(v.yMax - 40f, y0 + totalH + 20f), v.width, 24f), hint, UIKit.SmallCenter, UIKit.Muted);
         }
 
         static void DrawPickerList(GameManager gm, Rect r)
@@ -322,7 +347,8 @@ namespace Cubed
         {
             var teams = gm.ActiveTeams;
             if (teams.Count == 0) return;
-            float w = 150f, gap = 10f;
+            float gap = 8f;
+            float w = Mathf.Min(150f, (UIKit.Size.x - 360f) / teams.Count - gap);
             float total = teams.Count * w + (teams.Count - 1) * gap;
             float x = UIKit.Size.x * 0.5f - total * 0.5f;
             const float y = 10f;

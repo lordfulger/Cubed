@@ -97,7 +97,7 @@ namespace Cubed.EditorTools
 
             Add("Mouse X", 1, 0, 0, 0.1f, 0f);
             Add("Mouse Y", 1, 1, 0, 0.1f, 0f);
-            for (int j = 1; j <= 4; j++)
+            for (int j = 1; j <= 8; j++)
                 for (int a = 1; a <= 10; a++)
                     Add("Cubed_J" + j + "_A" + a, 2, a - 1, j, 1f, 0.05f);
             so.ApplyModifiedPropertiesWithoutUndo();

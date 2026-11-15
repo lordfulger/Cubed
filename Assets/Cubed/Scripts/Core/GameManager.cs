@@ -13,6 +13,8 @@ namespace Cubed
         public Player Player;
         public int PicksRemaining;
         public int PicksTotal;
+        /// <summary>Unscaled time the current hand was dealt (drives the deal animation).</summary>
+        public float DealtTime;
         public List<CardDefinition> Hand = new List<CardDefinition>();
         public int Highlight;
         public float TimeLeft;
@@ -291,26 +293,35 @@ namespace Cubed
             CubedHud.Clear();
         }
 
+        /// <summary>Split-screen cells (normalized, bottom-left origin) for n viewports: 1, 2 side by side, 2x2, 3x2 or 4x2.</summary>
+        public static Rect[] SplitLayout(int n)
+        {
+            if (n <= 1) return new[] { new Rect(0f, 0f, 1f, 1f) };
+            if (n == 2) return new[] { new Rect(0f, 0f, 0.5f, 1f), new Rect(0.5f, 0f, 0.5f, 1f) };
+            int cols = n <= 4 ? 2 : n <= 6 ? 3 : 4;
+            const int rows = 2;
+            var cells = new Rect[cols * rows];
+            for (int i = 0; i < cells.Length; i++)
+            {
+                int c = i % cols, r = i / cols;
+                cells[i] = new Rect(c / (float)cols, 1f - (r + 1) / (float)rows, 1f / cols, 1f / rows);
+            }
+            return cells;
+        }
+
         void LayoutCameras()
         {
             int n = Cameras.Count;
-            Rect[] quads =
-            {
-                new Rect(0f, 0.5f, 0.5f, 0.5f), new Rect(0.5f, 0.5f, 0.5f, 0.5f),
-                new Rect(0f, 0f, 0.5f, 0.5f), new Rect(0.5f, 0f, 0.5f, 0.5f),
-            };
+            var cells = SplitLayout(n);
             for (int i = 0; i < n; i++)
             {
-                Rect r;
-                if (n == 1) r = new Rect(0f, 0f, 1f, 1f);
-                else if (n == 2) r = i == 0 ? new Rect(0f, 0f, 0.5f, 1f) : new Rect(0.5f, 0f, 0.5f, 1f);
-                else r = quads[Mathf.Min(i, 3)];
-                Cameras[i].SetViewport(r);
+                Cameras[i].SetViewport(cells[Mathf.Min(i, cells.Length - 1)]);
                 Cameras[i].Cam.depth = 1 + i;
-                Cameras[i].Cam.fieldOfView = n == 2 ? 75f : 70f;
+                Cameras[i].Cam.fieldOfView = n == 2 ? 75f : n > 4 ? 78f : 70f;
             }
-            OverviewCamera.enabled = n == 0 || n == 3;
-            OverviewCamera.rect = n == 3 ? quads[3] : new Rect(0f, 0f, 1f, 1f);
+            // Spectator view fills the screen with no humans, or the first empty split-screen cell.
+            OverviewCamera.enabled = n == 0 || cells.Length > n;
+            OverviewCamera.rect = n == 0 ? new Rect(0f, 0f, 1f, 1f) : cells[Mathf.Min(n, cells.Length - 1)];
         }
 
         void LoadMapForRound(bool first)
@@ -434,6 +445,8 @@ namespace Cubed
             st.Highlight = st.Hand.Count / 2;
             st.TimeLeft = Settings.pickTimer;
             st.BotDelay = UnityEngine.Random.Range(0.8f, 1.8f);
+            st.DealtTime = Time.unscaledTime;
+            if (st.Player.IsHuman) Sfx.Play("deal", 0.6f, 0f);
             if (st.Hand.Count == 0) st.PicksRemaining = 0;
         }
 
@@ -606,7 +619,7 @@ namespace Cubed
         {
             if (!InMatch) return;
             bool pressed = Input.GetKeyDown(KeyCode.Escape);
-            for (int j = 1; j <= 4 && !pressed; j++) pressed = Input.GetKeyDown(SafeInput.JoyButton(j, 7));
+            for (int j = 1; j <= ControlTypes.MaxGamepads && !pressed; j++) pressed = Input.GetKeyDown(SafeInput.JoyButton(j, 7));
             if (pressed) SetPaused(!Paused);
         }
 
@@ -733,7 +746,10 @@ namespace Cubed
             foreach (var st in picks)
             {
                 var old = Picks.FirstOrDefault(o => o.Player == st.Player);
-                if (old != null && st.Player.Input is HumanInput && old.Hand.Count == st.Hand.Count && old.PicksRemaining == st.PicksRemaining)
+                bool sameHand = old != null && old.Hand.Count == st.Hand.Count && old.Hand.Select(c => c.Id).SequenceEqual(st.Hand.Select(c => c.Id));
+                st.DealtTime = sameHand ? old.DealtTime : Time.unscaledTime;
+                if (!sameHand && st.Player.Input is HumanInput) Sfx.Play("deal", 0.6f, 0f);
+                if (sameHand && st.Player.Input is HumanInput && old.PicksRemaining == st.PicksRemaining)
                     st.Highlight = old.Highlight;
             }
             Picks.Clear();

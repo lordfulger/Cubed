@@ -105,7 +105,7 @@ namespace Cubed
             // Gamepads: left stick or d-pad (axes differ per platform) with key repeat.
             bool windows = Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
             int dir = 0; // 1 up, 2 down, 3 left, 4 right
-            for (int j = 1; j <= 4; j++)
+            for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
             {
                 float x = SafeInput.JoyAxis(j, 1), y = SafeInput.JoyAxis(j, 2);
                 float dx = SafeInput.JoyAxis(j, windows ? 6 : 7), dy = SafeInput.JoyAxis(j, windows ? 7 : 8);
@@ -363,6 +363,11 @@ namespace Cubed
         {
             if (c == null) return;
             var rc = CardDefinition.RarityColor(c.Rarity);
+            if (c.Rarity >= Rarity.Rare)
+            {
+                float glow = 0.18f + 0.12f * Mathf.Sin(Time.unscaledTime * (c.Rarity == Rarity.Legendary ? 5f : 3f));
+                Fill(new Rect(r.x - 4f, r.y - 4f, r.width + 8f, r.height + 8f), new Color(rc.r, rc.g, rc.b, glow * alpha));
+            }
             if (highlighted) Fill(new Rect(r.x - 6f, r.y - 6f, r.width + 12f, r.height + 12f), new Color(rc.r, rc.g, rc.b, 0.35f * alpha));
             Fill(r, new Color(0.1f, 0.11f, 0.16f, 0.97f * alpha));
             Fill(new Rect(r.x, r.y, r.width, 54f), new Color(c.Color.r * 0.75f, c.Color.g * 0.75f, c.Color.b * 0.75f, alpha));

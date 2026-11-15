@@ -365,8 +365,7 @@ namespace Cubed
         {
             if (team < 0) return team;
             // First mirror gets the "opposing" team, the rest cycle through the others.
-            int[] partner = { 1, 0, 3, 2 };
-            return index == 0 ? partner[team] : (team + index + 1) % Teams.Max;
+            return index == 0 ? team ^ 1 : (team + index + 1) % Teams.Max;
         }
 
         IEnumerable<Vector3Int> Mirrored(Vector3Int c)

@@ -5,7 +5,25 @@ using UnityEngine;
 
 namespace Cubed
 {
-    public enum ControlType { None, KeyboardMouse, Gamepad1, Gamepad2, Gamepad3, Gamepad4, Bot, Online }
+    public enum ControlType { None, KeyboardMouse, Gamepad1, Gamepad2, Gamepad3, Gamepad4, Bot, Online, Gamepad5, Gamepad6, Gamepad7, Gamepad8 }
+
+    public static class ControlTypes
+    {
+        public const int MaxGamepads = 8;
+
+        /// <summary>1-based joystick number for a gamepad control type, or 0.</summary>
+        public static int Joystick(ControlType c)
+        {
+            if (c >= ControlType.Gamepad1 && c <= ControlType.Gamepad4) return (int)c - (int)ControlType.Gamepad1 + 1;
+            if (c >= ControlType.Gamepad5 && c <= ControlType.Gamepad8) return (int)c - (int)ControlType.Gamepad5 + 5;
+            return 0;
+        }
+
+        public static ControlType Gamepad(int joystick) =>
+            joystick <= 4 ? (ControlType)((int)ControlType.Gamepad1 + joystick - 1) : (ControlType)((int)ControlType.Gamepad5 + joystick - 5);
+
+        public static bool IsGamepad(ControlType c) => Joystick(c) > 0;
+    }
 
     /// <summary>Who picks cards after a round.</summary>
     public enum PickRule { Losers, Everyone, Winners, Nobody }
@@ -141,7 +159,7 @@ namespace Cubed
         {
             if (!ActiveSlots.Any()) return "Add some players.";
             if (TeamCount < 2) return "Players must be on at least two different teams.";
-            if (ActiveSlots.Count(s => s.IsLocalHuman) > 4) return "Split-screen supports up to 4 human players.";
+            if (ActiveSlots.Count(s => s.IsLocalHuman) > 8) return "Split-screen supports up to 8 human players.";
             var pads = ActiveSlots.Where(s => s.IsLocalHuman).GroupBy(s => s.control).FirstOrDefault(g => g.Count() > 1);
             if (pads != null) return "Two players can't share " + pads.Key + ".";
             return null;

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regenerates ProjectSettings/InputManager.asset with Unity's standard axes plus
-per-joystick axes named Cubed_J{joystick}_A{axis} (joysticks 1-4, axes 1-10)
+per-joystick axes named Cubed_J{joystick}_A{axis} (joysticks 1-8, axes 1-10)
 used by Cubed's gamepad input. Run from the repository root."""
 import os
 
@@ -36,7 +36,7 @@ axes = [
     axis("Submit", pos="return", altpos="joystick button 0", gravity=1000, dead=0.001, sens=1000),
     axis("Cancel", pos="escape", altpos="joystick button 1", gravity=1000, dead=0.001, sens=1000),
 ]
-for j in range(1, 5):
+for j in range(1, 9):
     for a in range(1, 11):
         axes.append(axis(f"Cubed_J{j}_A{a}", type_=2, axis_=a - 1, joy=j, dead=0.05, sens=1))
 
