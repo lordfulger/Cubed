@@ -261,6 +261,14 @@ Useful patch targets include `GameManager.StartMatch`, `GameManager.Pick`, `Card
 * Clients need your card definitions so they can show card names and stats. Ship the same mod to everyone.
 * `GameManager.Instance.NetClientMode` tells you that you're running as a client.
 
+### Profiles, achievements, modes
+
+* `Profile.Current` holds lifetime stats. `Profile.AchievementUnlocked` fires for each unlock.
+* Add achievements to `Achievements.All`, and hats to `Hats.All`. A hat is a cube builder that runs on top of the head.
+* `GameManager.Settings.mode` selects the round rules. `GameManager.RoundKills`, `HillProgress` and `RespawnIn(player)` expose mode state.
+* `CardIcons.Register(id, rows)` and `CardIcons.EffectGlyphs` let mods give their cards icons.
+* `NavGraph.For(map).FindPath(from, to)` gives you bot paths for custom AI.
+
 ### Custom input / networking
 
 Players are driven by `IPlayerInput` (`HumanInput`, `BotBrain`). To drive a player from a network peer or a

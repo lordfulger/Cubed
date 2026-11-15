@@ -55,8 +55,7 @@ your own app id.
 - Spacewar has its own achievements and rich presence strings, so Cubed's achievements and presence text only
   work once you use your real app id (section 5).
 
-For release, replace 480 with your app id wherever the game reads it (the Steam code's app id constant; check the
-code once it lands). **Don't ship `steam_appid.txt`** in Steam depots. The game should be launched by Steam.
+For release, replace 480 with your app id in `SteamIntegration.AppId` (`Assets/Cubed/Scripts/Net/SteamIntegration.cs`). **Don't ship `steam_appid.txt`** in Steam depots. The game should be launched by Steam.
 
 ## 3. Turn on the define
 
@@ -72,7 +71,7 @@ available to CI too.
 
 | Feature | What players get |
 |---|---|
-| **Steam lobbies and invites** | Host a lobby from **Online > Steam** and invite friends through the Steam overlay. Friends can also join from their Steam friends list. No IP addresses or port forwarding. |
+| **Steam lobbies and invites** | Host a lobby from **Online > Host Steam lobby**, then press **Invite friends** in Match Setup to invite people through the Steam overlay. Friends can also join from their Steam friends list. No IP addresses or port forwarding. |
 | **Relay networking** | Match traffic goes through Steam Datagram Relay. Hosts don't need to open TCP 27015, NAT isn't a problem, and players' IP addresses are hidden from each other. The host is still authoritative, as in IP play. |
 | **Achievements** | Unlocked during play, shown in the Steam overlay and on the player's profile. |
 | **Rich presence** | Friends see what you're doing ("In Match Setup", "In a match, round 3", "Editing a map") and can join a joinable lobby from your profile. |
@@ -83,7 +82,7 @@ IP/LAN, and only if both run the same game version.
 ### How players use it
 
 1. Start Cubed **from Steam** (the overlay and invites need Steam running).
-2. **Host:** *Main Menu > Online > Steam > Host Steam Lobby* (or similar). Then invite people with
+2. **Host:** *Main Menu > Online > Host Steam lobby*. Then invite people with
    *Invite Friends*, or press **Shift+Tab** to open the overlay, right-click a friend and choose *Invite to Game*.
 3. **Join:** accept the invite in the overlay or Steam chat, or right-click a friend who is in a lobby and choose
    *Join Game*. Cubed starts (if needed) and joins the lobby.
@@ -101,7 +100,7 @@ The Player log (docs/RELEASE.md, section 7) shows why.
      `"#Status_InMatch" "In a match"`). See <https://partner.steamgames.com/doc/features/enhancedrichpresence>.
    - **Networking:** Steam Datagram Relay works with no extra setup for most games. Check
      <https://partner.steamgames.com/doc/features/multiplayer/steamdatagramrelay> if anything changes.
-2. Change the app id in the game code and in `steam_appid.txt` for local testing.
+2. Change the app id in `SteamIntegration.AppId` and in `steam_appid.txt` for local testing.
 3. Upload a build to a beta branch (docs/RELEASE.md, section 5), install it through Steam and test invites,
    achievements and presence with two accounts.
 

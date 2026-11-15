@@ -204,6 +204,29 @@ namespace Cubed
             }
         }
 
+        // ------------------------------------------------------------------ late joiners
+
+        readonly List<PlayerSlot> lateJoiners = new List<PlayerSlot>();
+
+        /// <summary>Host: an online player joined mid-match; they get a fighter next round.</summary>
+        public void QueueLateJoin(PlayerSlot slot) => lateJoiners.Add(slot);
+
+        void AddLateJoiners()
+        {
+            if (lateJoiners.Count == 0) return;
+            foreach (var slot in lateJoiners)
+            {
+                if (!Settings.slots.Contains(slot)) continue; // left again before the round started
+                int index = Players.Count == 0 ? 0 : Players.Max(p => p.Index) + 1;
+                var p = Player.Create(slot.Clone(), index, new Net.NetworkInput(slot.netOwner));
+                Players.Add(p);
+            }
+            lateJoiners.Clear();
+            ActiveTeams.Clear();
+            ActiveTeams.AddRange(Players.Select(p => p.Team).Distinct().OrderBy(t => t));
+            Net.BroadcastFullSync();
+        }
+
         // ------------------------------------------------------------------ training
 
         /// <summary>Start the guided tutorial / practice range with target dummies.</summary>

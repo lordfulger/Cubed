@@ -26,7 +26,7 @@ namespace Cubed.Net
 
         /// <summary>Host: every Fx/Sfx call during a match is mirrored to clients.</summary>
         public static bool Mirroring =>
-            Instance != null && Instance.Role == NetRole.Host && Instance.server != null && Instance.server.Connections.Count > 0 &&
+            Instance != null && Instance.Role == NetRole.Host && Instance.remotes.Count > 0 &&
             GameManager.Instance != null && GameManager.Instance.InMatch;
 
         public static readonly HashSet<string> MirroredSounds = new HashSet<string>
@@ -37,9 +37,23 @@ namespace Cubed.Net
         // ---- host state
         class Remote
         {
-            public NetConnection Conn;
+            public INetLink Conn;
             public string Name = "";
             public bool Welcomed;
+            public int Token;
+        }
+
+        /// <summary>Reconnect token → player index for clients that dropped mid-match.</summary>
+        readonly Dictionary<int, int> droppedPlayers = new Dictionary<int, int>();
+        readonly System.Random tokenRng = new System.Random();
+
+        /// <summary>Stable fingerprint of installed content, to warn about mod mismatches.</summary>
+        public static string ContentHash()
+        {
+            uint h = 2166136261;
+            foreach (var id in CardRegistry.All.Select(c => c.Id).OrderBy(x => x, StringComparer.Ordinal))
+                foreach (char ch in id) { h ^= ch; h *= 16777619; }
+            return CardRegistry.All.Count + "-" + h.ToString("x8");
         }
 
         NetServer server;
@@ -53,13 +67,19 @@ namespace Cubed.Net
 
         // ---- client state
         NetConnector connector;
-        NetConnection host;
+        INetLink host;
         public int MyId { get; private set; } = -1;
         public MatchSettings LobbySettings { get; private set; }
         public string HostName { get; private set; } = "";
         readonly Dictionary<int, NetBulletView> bulletViews = new Dictionary<int, NetBulletView>();
         int pendingButtons;
-        float inputTimer;
+        float inputTimer, pingTimer, reconnectTimer;
+        int reconnectToken, reconnectTries;
+        string lastAddress;
+        int lastPort;
+        /// <summary>Smoothed round-trip time to the host in seconds (clients).</summary>
+        public float Rtt { get; private set; }
+        public bool Reconnecting => reconnectTries > 0 && reconnectTries <= 6;
 
         readonly List<byte[]> inbox = new List<byte[]>();
 
@@ -122,7 +142,7 @@ namespace Cubed.Net
         public void StopHost()
         {
             if (!IsHosting) return;
-            foreach (var r in remotes.Values) SendReject(r.Conn, "Host closed the lobby");
+            foreach (var r in remotes.Values) { SendReject(r.Conn, "Host closed the lobby"); r.Conn.Close("host closed"); }
             server.Stop();
             server = null;
             remotes.Clear();
@@ -138,7 +158,7 @@ namespace Cubed.Net
             r.Conn.Close("kicked");
         }
 
-        static void SendReject(NetConnection c, string reason)
+        static void SendReject(INetLink c, string reason)
         {
             if (c == null || !c.Connected) return;
             c.Send(new NetWriter(Msg.Reject).Str(reason).ToArray());
@@ -169,11 +189,20 @@ namespace Cubed.Net
             }
         }
 
+        void SendWelcome(Remote r, string clientContent)
+        {
+            string mine = ContentHash();
+            r.Conn.Send(new NetWriter(Msg.Welcome).Int(r.Conn.Id).Int(r.Token).Bool(clientContent == mine).Int(CardRegistry.All.Count).ToArray());
+        }
+
         void HostDrop(Remote r)
         {
             remotes.Remove(r.Conn.Id);
             if (!r.Welcomed) return;
             int id = r.Conn.Id;
+            if (Gm.InMatch)
+                foreach (var p in Gm.Players)
+                    if (p.Input is NetworkInput ni && ni.Owner == id) droppedPlayers[r.Token] = p.Index;
             Gm.Settings.slots.RemoveAll(s => s.IsOnline && s.netOwner == id);
             if (Gm.InMatch) Gm.ReplaceRemoteWithBot(id);
             CubedHud.AddFeedText(r.Name + " left (" + r.Conn.CloseReason + ")");
@@ -189,7 +218,9 @@ namespace Cubed.Net
                     int protocol = m.Int();
                     string version = m.Str();
                     string name = m.Str().Trim();
-                    string hat = m.AtEnd ? "" : m.Str();
+                    string hat = m.Str();
+                    int token = m.Int();
+                    string content = m.Str();
                     if (name.Length == 0) name = "Player " + id;
                     if (name.Length > 16) name = name.Substring(0, 16);
                     if (protocol != NetConst.Protocol || version != CubedAPI.GameVersion)
@@ -198,10 +229,27 @@ namespace Cubed.Net
                         r.Conn.Close("version mismatch");
                         return;
                     }
-                    if (Gm.InMatch)
+                    if (Gm.InMatch && token != 0 && droppedPlayers.TryGetValue(token, out int playerIndex))
                     {
-                        SendReject(r.Conn, "A match is in progress - try again when it ends");
-                        r.Conn.Close("in match");
+                        // Reconnect: hand the player back from the bot that was covering for them.
+                        droppedPlayers.Remove(token);
+                        var p = Gm.Players.FirstOrDefault(x => x.Index == playerIndex);
+                        r.Name = name;
+                        r.Welcomed = true;
+                        r.Token = token;
+                        if (p != null)
+                        {
+                            var ni = new NetworkInput(id);
+                            ni.OnSpawn(p, p.AimDirection);
+                            p.Input = ni;
+                            p.Slot.control = ControlType.Online;
+                            p.Slot.netOwner = id;
+                            p.DisplayName = name;
+                            Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = p.Team, netOwner = id, hat = p.Slot.hat });
+                        }
+                        SendWelcome(r, content);
+                        r.Conn.Send(BuildFullSync());
+                        CubedHud.AddFeedText(name + " reconnected");
                         return;
                     }
                     if (Gm.Settings.slots.Count >= 8)
@@ -212,10 +260,19 @@ namespace Cubed.Net
                     }
                     r.Name = name;
                     r.Welcomed = true;
-                    Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id, hat = hat ?? "" });
-                    r.Conn.Send(new NetWriter(Msg.Welcome).Int(id).ToArray());
+                    r.Token = tokenRng.Next(1, int.MaxValue);
+                    var slot = new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id, hat = hat ?? "" };
+                    Gm.Settings.slots.Add(slot);
+                    SendWelcome(r, content);
                     lastLobbyJson = "";
-                    CubedHud.AddFeedText(name + " joined");
+                    if (Gm.InMatch)
+                    {
+                        // Late join: spectate now, play from the next round.
+                        Gm.QueueLateJoin(slot);
+                        r.Conn.Send(BuildFullSync());
+                        CubedHud.AddFeedText(name + " joined (plays next round)");
+                    }
+                    else CubedHud.AddFeedText(name + " joined");
                     Sfx.Play("pick", 0.5f, 0f);
                     break;
                 }
@@ -232,10 +289,18 @@ namespace Cubed.Net
                     var move = m.Vec3();
                     var aim = m.Vec3();
                     int buttons = m.Byte();
+                    float rtt = m.Float();
                     foreach (var p in Gm.Players)
-                        if (p.Input is NetworkInput ni && ni.Owner == id) ni.Receive(move, aim, buttons);
+                        if (p.Input is NetworkInput ni && ni.Owner == id)
+                        {
+                            ni.Receive(move, aim, buttons);
+                            ni.Rtt = Mathf.Clamp(rtt, 0f, 1f);
+                        }
                     break;
                 }
+                case Msg.Ping:
+                    r.Conn.Send(new NetWriter(Msg.Pong).Float(m.Float()).ToArray());
+                    break;
                 case Msg.PickChoice:
                 case Msg.PickHighlight:
                 {
@@ -266,7 +331,7 @@ namespace Cubed.Net
         {
             float dt = Time.unscaledDeltaTime;
             FlushFx();
-            if (server.Connections.Count == 0) return;
+            if (remotes.Count == 0) return;
 
             if (!Gm.InMatch)
             {
@@ -278,7 +343,7 @@ namespace Cubed.Net
                     if (json != lastLobbyJson)
                     {
                         lastLobbyJson = json;
-                        server.Broadcast(new NetWriter(Msg.Lobby).Str(json).Str(Gm.Settings.onlineName).ToArray());
+                        Broadcast(new NetWriter(Msg.Lobby).Str(json).Str(Gm.Settings.onlineName).ToArray());
                     }
                 }
                 return;
@@ -288,7 +353,7 @@ namespace Cubed.Net
             if (snapshotTimer <= 0f)
             {
                 snapshotTimer = 1f / NetConst.SnapshotRate;
-                server.Broadcast(BuildSnapshot());
+                Broadcast(BuildSnapshot());
             }
 
             if (Gm.State == GameState.CardPick)
@@ -297,7 +362,7 @@ namespace Cubed.Net
                 if (pickSendTimer <= 0f)
                 {
                     pickSendTimer = 0.2f;
-                    server.Broadcast(BuildPickState());
+                    Broadcast(BuildPickState());
                 }
             }
         }
@@ -305,39 +370,87 @@ namespace Cubed.Net
         void OnMatchStarted(MatchSettings s)
         {
             if (!IsHosting || server == null) return;
+            droppedPlayers.Clear();
+            Broadcast(BuildFullSync());
+            snapshotTimer = 0f;
+        }
+
+        /// <summary>Host: resend the whole match (roster changed after late joins).</summary>
+        public void BroadcastFullSync()
+        {
+            if (!IsHosting || server == null) return;
+            Broadcast(BuildFullSync());
+        }
+
+        /// <summary>Everything a client needs to (re)build the match: rules, map, roster with cards, scores.</summary>
+        byte[] BuildFullSync()
+        {
             var w = new NetWriter(Msg.MatchStart)
-                .Str(JsonUtility.ToJson(s))
+                .Str(JsonUtility.ToJson(Gm.Settings))
                 .Str(Gm.Map != null ? Gm.Map.Data.ToJson(false) : "");
             w.Byte(Gm.Players.Count);
             foreach (var p in Gm.Players)
             {
                 int owner = p.Input is NetworkInput ni ? ni.Owner : -1;
                 w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.hat : "");
+                w.Byte(p.Cards.Count);
+                foreach (var c in p.Cards) w.Str(c.Id);
             }
-            server.Broadcast(w.ToArray());
-            snapshotTimer = 0f;
+            w.UShort(Gm.RoundNumber);
+            for (int i = 0; i < Teams.Max; i++) w.Byte(Gm.TeamScores[i]);
+            return w.ToArray();
         }
 
         void OnRoundStarted(int round)
         {
             if (!IsHosting || server == null || Gm.Map == null) return;
-            server.Broadcast(new NetWriter(Msg.RoundStart).UShort(round).Str(Gm.Map.Data.ToJson(false)).ToArray());
+            Broadcast(new NetWriter(Msg.RoundStart).UShort(round).Str(Gm.Map.Data.ToJson(false)).ToArray());
             snapshotTimer = 0f;
         }
 
         void OnCardPicked(Player p, CardDefinition card)
         {
             if (!IsHosting || server == null || !Gm.InMatch) return;
-            server.Broadcast(new NetWriter(Msg.CardApplied).Byte(p.Index).Str(card.Id).ToArray());
+            Broadcast(new NetWriter(Msg.CardApplied).Byte(p.Index).Str(card.Id).ToArray());
             pickSendTimer = 0f;
         }
 
         void OnPickPhaseStarted() => pickSendTimer = 0f;
 
+        void Broadcast(byte[] message)
+        {
+            foreach (var r in remotes.Values)
+                if (r.Conn.Connected) r.Conn.Send(message);
+        }
+
+        int nextLinkId = 100000;
+
+        /// <summary>Host: accept a connection from another transport (Steam relay).</summary>
+        public void AcceptLink(INetLink link)
+        {
+            if (!IsHosting) { link.Close("not hosting"); return; }
+            link.Id = nextLinkId++;
+            remotes[link.Id] = new Remote { Conn = link };
+        }
+
+        /// <summary>Client: use an already-connecting link (Steam relay) as the host connection.</summary>
+        public void JoinLink(INetLink link, string description)
+        {
+            Leave();
+            host = link;
+            Role = NetRole.Client;
+            LastError = "";
+            Status = "Connecting via " + description + "...";
+            MyId = -1;
+            helloSent = false;
+        }
+
+        bool helloSent;
+
         public void BroadcastMatchAbort()
         {
             if (!IsHosting || server == null) return;
-            server.Broadcast(new NetWriter(Msg.MatchAbort).ToArray());
+            Broadcast(new NetWriter(Msg.MatchAbort).ToArray());
             lastLobbyJson = "";
         }
 
@@ -348,6 +461,8 @@ namespace Cubed.Net
              .SByte(Gm.LastRoundWinner).SByte(Gm.MatchWinner);
             for (int i = 0; i < Teams.Max; i++) w.Byte(Gm.TeamScores[i]);
             w.Bool(Gm.Paused).Float(Gm.Map != null ? Gm.Map.Shrink : 0f);
+            w.SByte(Gm.HillHolder);
+            for (int i = 0; i < Teams.Max; i++) w.Float(Gm.HillProgress[i]).Byte(Gm.RoundKills[i]);
 
             w.Byte(Gm.Players.Count);
             foreach (var p in Gm.Players)
@@ -437,16 +552,20 @@ namespace Cubed.Net
             int count = fxCount;
             fxBody = null;
             fxCount = 0;
-            if (server == null || server.Connections.Count == 0 || count == 0) return;
+            if (remotes.Count == 0 || count == 0) return;
             var w = new NetWriter(Msg.Fx).UShort(count).Bytes(body, 1, body.Length - 1);
-            server.Broadcast(w.ToArray());
+            Broadcast(w.ToArray());
         }
 
         // ================================================================== client
 
-        public void Join(string address, int port)
+        public void Join(string address, int port) => Join(address, port, false);
+
+        void Join(string address, int port, bool reconnect)
         {
-            Leave();
+            if (!reconnect) { Leave(); reconnectToken = 0; reconnectTries = 0; }
+            lastAddress = address;
+            lastPort = port;
             connector = new NetConnector();
             connector.Begin(address, port);
             if (connector.Error != null)
@@ -466,6 +585,8 @@ namespace Cubed.Net
         public void Leave()
         {
             if (IsHosting) StopHost();
+            reconnectTries = 0;
+            reconnectToken = 0;
             if (!IsClient) return;
             connector?.Cancel();
             connector = null;
@@ -490,6 +611,18 @@ namespace Cubed.Net
         public void SendPickHighlight(int playerIndex, int cardIndex) =>
             host?.Send(new NetWriter(Msg.PickHighlight).Byte(playerIndex).Byte(cardIndex).ToArray());
 
+        void UpdateReconnect()
+        {
+            if (!Reconnecting || IsClient) return;
+            reconnectTimer -= Time.unscaledDeltaTime;
+            if (reconnectTimer > 0f) return;
+            reconnectTimer = 3f;
+            reconnectTries++;
+            if (reconnectTries > 6) { LastError = "Could not reconnect to the host."; return; }
+            Status = "Reconnecting (attempt " + (reconnectTries - 1) + ")...";
+            Join(lastAddress, lastPort, true);
+        }
+
         void ClientUpdate()
         {
             if (connector != null)
@@ -505,8 +638,15 @@ namespace Cubed.Net
                 }
                 host = connector.Connection;
                 connector = null;
+                helloSent = false;
+            }
+            if (host == null) return;
+            if (!helloSent && host.Connected)
+            {
+                helloSent = true;
                 Status = "Connected, waiting for the host...";
-                host.Send(new NetWriter(Msg.Hello).Int(NetConst.Protocol).Str(CubedAPI.GameVersion).Str(Gm.Settings.onlineName).Str(Profile.Current.hat).ToArray());
+                host.Send(new NetWriter(Msg.Hello).Int(NetConst.Protocol).Str(CubedAPI.GameVersion).Str(Gm.Settings.onlineName)
+                    .Str(Profile.Current.hat).Int(reconnectToken).Str(ContentHash()).ToArray());
             }
             if (host == null) return;
 
@@ -521,6 +661,13 @@ namespace Cubed.Net
             if (!host.Connected)
             {
                 if (string.IsNullOrEmpty(LastError)) LastError = "Disconnected: " + host.CloseReason;
+                // Dropped mid-match (not rejected/kicked): try to get back in with our token.
+                if (Gm.NetClientMode && reconnectToken != 0 && host.CloseReason != "rejected")
+                {
+                    reconnectTries = 1;
+                    reconnectTimer = 2f;
+                    Toasts.Show("Connection lost", "Reconnecting...", UIKit.Bad);
+                }
                 var wasInGame = Gm.NetClientMode || Gm.State == GameState.Lobby;
                 host = null;
                 Role = NetRole.Offline;
@@ -536,9 +683,22 @@ namespace Cubed.Net
             switch (m.Type)
             {
                 case Msg.Welcome:
+                {
                     MyId = m.Int();
+                    reconnectToken = m.Int();
+                    bool same = m.Bool();
+                    int hostCards = m.Int();
                     Status = "In lobby";
+                    if (!same)
+                        Toasts.Show("Mods differ from the host", "Host has " + hostCards + " cards, you have " + CardRegistry.All.Count + ". Missing cards show as placeholders.", UIKit.Bad);
                     break;
+                }
+                case Msg.Pong:
+                {
+                    float sample = Time.unscaledTime - m.Float();
+                    Rtt = Rtt <= 0f ? sample : Mathf.Lerp(Rtt, sample, 0.25f);
+                    break;
+                }
 
                 case Msg.Reject:
                     LastError = m.Str();
@@ -562,6 +722,7 @@ namespace Cubed.Net
                     var map = string.IsNullOrEmpty(mapJson) ? null : MapData.FromJson(mapJson);
                     int n = m.Byte();
                     var infos = new List<GameManager.NetPlayerInfo>();
+                    var cards = new List<List<string>>();
                     for (int i = 0; i < n; i++)
                     {
                         var info = new GameManager.NetPlayerInfo { Index = m.Byte(), Name = m.Str(), Team = m.Byte() };
@@ -570,9 +731,24 @@ namespace Cubed.Net
                         info.Hat = m.Str();
                         info.Local = owner >= 0 && owner == MyId;
                         infos.Add(info);
+                        var list = new List<string>();
+                        int cc = m.Byte();
+                        for (int k = 0; k < cc; k++) list.Add(m.Str());
+                        cards.Add(list);
                     }
+                    int round = m.UShort();
+                    var scores = new int[Teams.Max];
+                    for (int i = 0; i < Teams.Max; i++) scores[i] = m.Byte();
                     ClearBulletViews();
                     Gm.ClientStartMatch(rules, infos, map);
+                    for (int i = 0; i < infos.Count; i++)
+                    {
+                        var p = FindPlayer(infos[i].Index);
+                        if (p != null) foreach (var id in cards[i]) p.ApplyCard(ResolveCard(id), false);
+                    }
+                    Gm.ClientSetState(GameState.RoundIntro, 0f, round, 0f, -1, -1, scores, false);
+                    reconnectTries = 0;
+                    if (!infos.Any(x => x.Local)) Toasts.Show("Spectating", "You'll join the fight next round.");
                     break;
                 }
 
@@ -650,6 +826,11 @@ namespace Cubed.Net
             for (int i = 0; i < Teams.Max; i++) scores[i] = m.Byte();
             bool paused = m.Bool();
             float shrink = m.Float();
+            int holder = m.SByte();
+            var hill = new float[Teams.Max];
+            var teamKills = new int[Teams.Max];
+            for (int i = 0; i < Teams.Max; i++) { hill[i] = m.Float(); teamKills[i] = m.Byte(); }
+            Gm.ClientSetModeState(holder, hill, teamKills);
             Gm.ClientSetState(state, stateTime, round, roundTime, lastWinner, matchWinner, scores, paused);
             if (Gm.Map != null) Gm.Map.SetShrink(shrink);
 
@@ -779,7 +960,14 @@ namespace Cubed.Net
 
         void ClientLateUpdate()
         {
-            if (host == null || !Gm.NetClientMode) return;
+            if (host == null) return;
+            pingTimer -= Time.unscaledDeltaTime;
+            if (pingTimer <= 0f)
+            {
+                pingTimer = 1f;
+                host.Send(new NetWriter(Msg.Ping).Float(Time.unscaledTime).ToArray());
+            }
+            if (!Gm.NetClientMode) return;
             var local = Gm.Players.FirstOrDefault(p => p.Input is HumanInput);
             if (local == null) return;
             var hi = (HumanInput)local.Input;
@@ -795,7 +983,7 @@ namespace Cubed.Net
             inputTimer = 1f / 60f;
             int buttons = pendingButtons | (!blocked && hi.FireHeld ? NetworkInput.FireBit : 0);
             pendingButtons = 0;
-            host.Send(new NetWriter(Msg.Input).Vec3(blocked ? Vector3.zero : hi.Move).Vec3(hi.AimPoint).Byte(buttons).ToArray());
+            host.Send(new NetWriter(Msg.Input).Vec3(blocked ? Vector3.zero : hi.Move).Vec3(hi.AimPoint).Byte(buttons).Float(Rtt).ToArray());
         }
 
         // ================================================================== loop
@@ -805,6 +993,7 @@ namespace Cubed.Net
             if (Gm == null) return;
             if (IsHosting && server != null) HostUpdate();
             else if (IsClient) ClientUpdate();
+            else UpdateReconnect();
             if (Gm.State == GameState.Online) Lan.Listen();
         }
 

@@ -12,6 +12,7 @@ namespace Cubed.Net
         Input,
         PickChoice,
         PickHighlight,
+        Ping,
         // host -> client
         Welcome = 32,
         Reject,
@@ -23,6 +24,7 @@ namespace Cubed.Net
         PickState,
         Fx,
         MatchAbort,
+        Pong,
     }
 
     public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake }
@@ -30,7 +32,7 @@ namespace Cubed.Net
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 4;
+        public const int Protocol = 5;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }
@@ -97,6 +99,8 @@ namespace Cubed.Net
         public const byte FireBit = 1, JumpBit = 2, BlockBit = 4, ReloadBit = 8;
 
         public int Owner;
+        /// <summary>Round-trip time reported by the client (seconds).</summary>
+        public float Rtt;
         public Vector3 Move { get; private set; }
         public Vector3 AimPoint { get; private set; }
         public bool JumpPressed { get; private set; }

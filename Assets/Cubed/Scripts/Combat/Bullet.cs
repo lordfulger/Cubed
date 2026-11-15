@@ -207,9 +207,21 @@ namespace Cubed
             Active.Clear();
         }
 
-        void Update()
+        void Update() => Step(Time.deltaTime);
+
+        /// <summary>Fast-forward a newly fired bullet (compensates a remote shooter's latency).</summary>
+        public void Advance(float seconds)
         {
-            float dt = Time.deltaTime;
+            const float slice = 1f / 60f;
+            while (seconds > 0f && !dead)
+            {
+                Step(Mathf.Min(slice, seconds));
+                seconds -= slice;
+            }
+        }
+
+        public void Step(float dt)
+        {
             if (dt <= 0f || dead) return;
 
             Lifetime -= dt;

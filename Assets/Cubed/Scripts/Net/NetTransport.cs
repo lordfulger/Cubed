@@ -5,15 +5,27 @@ using System.Net.Sockets;
 
 namespace Cubed.Net
 {
+    /// <summary>A message connection to one peer (TCP here; Steam relay in the optional Steam module).</summary>
+    public interface INetLink
+    {
+        int Id { get; set; }
+        bool Connected { get; }
+        string CloseReason { get; }
+        string EndPoint { get; }
+        void Send(byte[] message);
+        void Poll(List<byte[]> messages);
+        void Close(string reason = "closed");
+    }
+
     /// <summary>
     /// One TCP connection with length-prefixed framing. Non-blocking: call <see cref="Poll"/> every frame
     /// from the main thread; no background threads are used. (No UnityEngine dependency.)
     /// </summary>
-    public class NetConnection
+    public class NetConnection : INetLink
     {
         public const int MaxMessage = 4 * 1024 * 1024;
 
-        public int Id;
+        public int Id { get; set; }
         public string Name = "";
         public object Tag;
         public Socket Socket { get; private set; }

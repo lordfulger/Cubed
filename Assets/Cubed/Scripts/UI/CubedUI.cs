@@ -280,7 +280,9 @@ namespace Cubed
             if (Net.IsHosting)
             {
                 string info = "<color=#7dff8a>Hosting</color> on port " + Net.Port + "  -  " + Net.ClientCount + " connected  -  your IP: " + localIps;
-                UIKit.Text(new Rect(panel.x + 260f, panel.y + 14f, W - 280f, 40f), info, UIKit.Label, Color.white);
+                UIKit.Text(new Rect(panel.x + 260f, panel.y + 14f, W - 480f, 40f), info, UIKit.Label, Color.white);
+                if (SteamIntegration.Available && UIKit.Btn(new Rect(panel.xMax - 200f, panel.y + 14f, 180f, 36f), "Invite friends", true))
+                    SteamIntegration.InviteFriends();
             }
 
             // ---- Footer
@@ -548,6 +550,8 @@ namespace Cubed
             }
             if (UIKit.Btn(new Rect(panel.x + 500f, by, 280f, 46f), "Open content folder"))
                 Application.OpenURL("file://" + ContentLoader.UserContentFolder);
+            if (UIKit.Btn(new Rect(panel.x + 800f, by, 220f, 46f), "Open logs"))
+                CrashLog.OpenFolder();
         }
 
         // ------------------------------------------------------------------ profile
@@ -690,6 +694,19 @@ namespace Cubed
             GUI.enabled = true;
             if (connecting && UIKit.Btn(new Rect(x + 660f, y + 48f, 140f, 38f), "Cancel", true)) Net.Leave();
             y += 128f;
+
+            // Steam (only in builds made with CUBED_STEAM)
+            if (SteamIntegration.Available)
+            {
+                UIKit.Fill(new Rect(x, y, w, 64f), UIKit.Panel);
+                UIKit.Text(new Rect(x + 14f, y + 16f, 220f, 32f), "Steam", UIKit.Header, UIKit.Accent);
+                if (UIKit.Btn(new Rect(x + 140f, y + 14f, 260f, 36f), "Host Steam lobby", true) && int.TryParse(portText, out int sport))
+                {
+                    if (Net.StartHost(sport)) { SteamIntegration.HostLobby(); gm.GoToMenu(GameState.Setup); }
+                }
+                UIKit.Text(new Rect(x + 420f, y + 14f, w - 440f, 36f), SteamIntegration.Status + "  -  friends join from their Steam friends list", UIKit.Small, UIKit.Muted);
+                y += 76f;
+            }
 
             // LAN
             UIKit.Fill(new Rect(x, y, w, H - (y - panel.y) - 90f), UIKit.Panel);

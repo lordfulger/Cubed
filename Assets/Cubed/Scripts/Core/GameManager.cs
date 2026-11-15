@@ -88,6 +88,10 @@ namespace Cubed
             Options.Current.Apply(false);
             Controllers.Changed += OnControllerChanged;
             Achievements.Hook();
+            CrashLog.Init();
+            Cubed.Net.SteamIntegration.Init();
+            if (Cubed.Net.SteamIntegration.PlayerName != null && (Settings.onlineName == "Player" || string.IsNullOrWhiteSpace(Settings.onlineName)))
+                Settings.onlineName = Cubed.Net.SteamIntegration.PlayerName;
             Sfx.Init(gameObject);
             Sfx.Volume = Settings.volume;
             gameObject.AddComponent<AudioListener>();
@@ -140,6 +144,12 @@ namespace Cubed
             fill.color = new Color(0.55f, 0.65f, 1f);
             fill.shadows = LightShadows.None;
             fill.transform.rotation = Quaternion.Euler(25f, 150f, 0f);
+        }
+
+        void OnApplicationQuit()
+        {
+            Profile.Current.Save();
+            Cubed.Net.SteamIntegration.Shutdown();
         }
 
         void OnDestroy()
@@ -395,6 +405,7 @@ namespace Cubed
         {
             RoundNumber++;
             if (RoundNumber > 1 || Map == null) LoadMapForRound(false);
+            AddLateJoiners();
             Bullet.ClearAll();
             Fx.Clear();
             Map.SetShrink(0f);
@@ -575,6 +586,7 @@ namespace Cubed
             Controllers.Poll();
             Rumble.Update();
             Achievements.Tick(udt);
+            Cubed.Net.SteamIntegration.Update();
             HandlePause();
             if (NetClientMode)
             {
@@ -755,7 +767,7 @@ namespace Cubed
                 var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control, hat = info.Local ? Profile.Current.hat : info.Hat };
                 IPlayerInput input = info.Local ? new HumanInput(control) : null;
                 var p = Player.Create(slot, info.Index, input);
-                p.MakePuppet();
+                p.MakePuppet(info.Local);
                 p.Frozen = true;
                 Players.Add(p);
                 if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
@@ -771,6 +783,7 @@ namespace Cubed
             Fx.Clear();
             ReplaceMap(map);
             CurrentMapId = "net";
+            BuildHill();
             foreach (var p in Players)
             {
                 p.NetResetForRound();

@@ -397,9 +397,11 @@ namespace Cubed
         /// Turn this player into a display-only puppet (network client). The CharacterController is replaced
         /// by a plain capsule so positions can be set directly while bullets/aim rays still hit the player.
         /// </summary>
-        public void MakePuppet()
+        public void MakePuppet(bool predictLocally = false)
         {
             NetworkPuppet = true;
+            Predicted = predictLocally;
+            if (predictLocally) return; // keeps its CharacterController to simulate movement locally
             Controller.enabled = false;
             if (puppetCollider == null)
             {
@@ -408,6 +410,25 @@ namespace Cubed
                 puppetCollider.radius = 0.45f;
                 puppetCollider.height = 1.4f;
             }
+        }
+
+        /// <summary>Network client's own player: movement is simulated locally and corrected toward the host.</summary>
+        public bool Predicted { get; private set; }
+        Vector3 correction;
+        readonly Vector3[] historyPos = new Vector3[64];
+        readonly float[] historyTime = new float[64];
+        int historyHead;
+
+        Vector3 HistoryAt(float time)
+        {
+            int best = historyHead;
+            float bestDiff = float.MaxValue;
+            for (int i = 0; i < historyTime.Length; i++)
+            {
+                float d = Mathf.Abs(historyTime[i] - time);
+                if (d < bestDiff) { bestDiff = d; best = i; }
+            }
+            return bestDiff == float.MaxValue || historyTime[best] == 0f ? transform.position : historyPos[best];
         }
 
         Vector3 netPosition;
@@ -422,6 +443,23 @@ namespace Cubed
                 if (flashTimer <= 0f) SetBodyMaterial(null);
             }
             Input?.Tick(this, dt);
+            if (Predicted && IsAlive && !Frozen && Controller.enabled)
+            {
+                UpdateAim();
+                UpdateMovement(dt);
+                if (correction.sqrMagnitude > 0.0001f)
+                {
+                    Vector3 step = correction * Mathf.Min(1f, dt * 6f);
+                    Controller.Move(step);
+                    correction -= step;
+                    for (int i = 0; i < historyPos.Length; i++) historyPos[i] += step;
+                }
+                historyHead = (historyHead + 1) % historyPos.Length;
+                historyPos[historyHead] = transform.position;
+                historyTime[historyHead] = Time.time;
+                UpdateShield();
+                return;
+            }
             if (Input != null) UpdateAim();
             else
             {
@@ -447,11 +485,23 @@ namespace Cubed
             stunTimer = stunned ? 0.2f : 0f;
             Barrier = barrier;
             if (alive != IsAlive) NetSetAlive(alive, position);
-            if (!netHasState) transform.position = position;
+            if (Predicted && alive && !Frozen && netHasState)
+            {
+                // Compare the host's position with where we predicted we were one round trip ago.
+                float rtt = Net.NetSession.Instance != null ? Net.NetSession.Instance.Rtt : 0.1f;
+                Vector3 err = position - HistoryAt(Time.time - rtt - 0.5f / Net.NetConst.SnapshotRate);
+                if (err.sqrMagnitude > 12f) { Teleport(transform.position + err); correction = Vector3.zero; }
+                else correction = err;
+                if ((velocity - Velocity).sqrMagnitude > 80f) Velocity = velocity; // knockback, bounces
+            }
+            else
+            {
+                if (!netHasState || Predicted) Teleport(position);
+                Velocity = velocity;
+            }
             netHasState = true;
             netPosition = position;
             netTime = Time.time;
-            Velocity = velocity;
             netYaw = yaw;
             netPitch = pitch;
             if (netHealth >= 0f && health < netHealth - 0.01f && alive) Flash();
@@ -851,6 +901,7 @@ namespace Cubed
         /// <summary>Applies damage. Returns true if any damage was dealt.</summary>
         public bool TakeDamage(DamageInfo info)
         {
+            if (NetworkPuppet) return false; // only the host applies damage
             if (!IsAlive || info == null || info.Amount <= 0f) return false;
             var s = Settings;
             if (info.Source != null && info.Source != this && info.Source.Team == Team && !s.friendlyFire) return false;
