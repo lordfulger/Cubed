@@ -97,6 +97,7 @@ namespace Cubed
         public float gamepadSensitivity = 160f;
         public bool invertY;
         public float volume = 0.6f;
+        public float musicVolume = 0.45f;
 
         // Online
         public string onlineName = "Player";
@@ -112,6 +113,7 @@ namespace Cubed
             gamepadSensitivity = o.gamepadSensitivity;
             invertY = o.invertY;
             volume = o.volume;
+            musicVolume = o.musicVolume;
             onlineName = o.onlineName;
             onlinePort = o.onlinePort;
             lastJoinAddress = o.lastJoinAddress;

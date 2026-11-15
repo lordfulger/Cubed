@@ -14,7 +14,9 @@ namespace Cubed
             if (radius <= 0f) return;
             Fx.Pulse(center, new Color(color.r, color.g, color.b, 0.55f), radius * 0.4f, radius * 2f, 0.3f);
             Fx.Burst(center, color, Mathf.Clamp(Mathf.RoundToInt(radius * 5f), 4, 24), radius * 4f, 0.14f, 0.45f);
-            Sfx.Play("explode", Mathf.Clamp01(0.3f + radius * 0.12f));
+            Sfx.PlayAt("explode", center, Mathf.Clamp01(0.4f + radius * 0.12f));
+            Fx.Light(center, Color.Lerp(color, new Color(1f, 0.7f, 0.3f), 0.5f), radius * 3f + 4f, 5f, 0.35f);
+            CameraShake.Impulse(center, 0.25f + radius * 0.08f, radius * 4f + 10f);
 
             int n = Physics.OverlapSphereNonAlloc(center, radius, buffer, ~(1 << 2), QueryTriggerInteraction.Ignore);
             var damaged = new HashSet<Player>();

@@ -113,7 +113,10 @@ namespace Cubed
         /// <summary>Sphere + trail look shared by simulated bullets and network bullet views.</summary>
         public static Transform CreateVisual(GameObject host, float radius, Color color)
         {
-            var visual = Prim.Sphere("Visual", host.transform, Vector3.zero, Mathf.Max(0.08f, radius * 2f), Mats.Solid(color)).transform;
+            // Bright unlit core plus a soft halo reads as a glowing projectile.
+            var core = Color.Lerp(color, Color.white, 0.45f);
+            var visual = Prim.Sphere("Visual", host.transform, Vector3.zero, Mathf.Max(0.08f, radius * 2f), Mats.Transparent(new Color(core.r, core.g, core.b, 1f))).transform;
+            Prim.Sphere("Halo", visual, Vector3.zero, 2.6f, Mats.Transparent(new Color(color.r, color.g, color.b, 0.22f)));
             var trail = host.GetComponent<TrailRenderer>();
             if (trail == null) trail = host.AddComponent<TrailRenderer>();
             trail.time = 0.12f;

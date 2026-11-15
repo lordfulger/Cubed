@@ -240,6 +240,30 @@ namespace Cubed
     {
         static Transform root;
 
+        /// <summary>
+        /// Set while spawning purely cosmetic effects that every machine generates itself (animation dust,
+        /// footsteps) so the host doesn't also mirror them to clients.
+        /// </summary>
+        public static bool LocalOnly;
+        static bool Mirror => !LocalOnly && Net.NetSession.Mirroring;
+
+        /// <summary>A short point-light flash. Mirrored online.</summary>
+        public static void Light(Vector3 pos, Color color, float range, float intensity, float life)
+        {
+            if (Mirror) Net.NetSession.Instance.MirrorLight(pos, color, range, intensity, life);
+            var go = new GameObject("flash");
+            go.transform.SetParent(Root, false);
+            go.transform.position = pos;
+            var l = go.AddComponent<UnityEngine.Light>();
+            l.type = LightType.Point;
+            l.color = color;
+            l.range = range;
+            l.intensity = intensity;
+            l.shadows = LightShadows.None;
+            l.renderMode = LightRenderMode.ForceVertex;
+            go.AddComponent<FxLight>().Life = life;
+        }
+
         static Transform Root
         {
             get
@@ -258,7 +282,7 @@ namespace Cubed
 
         public static void Burst(Vector3 pos, Color color, int count, float speed, float size = 0.15f, float life = 0.6f, float gravity = 20f)
         {
-            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBurst(pos, color, count, speed, size, life, gravity);
+            if (Mirror) Net.NetSession.Instance.MirrorBurst(pos, color, count, speed, size, life, gravity);
             var mat = Mats.Solid(color);
             for (int i = 0; i < count; i++)
             {
@@ -274,7 +298,7 @@ namespace Cubed
 
         public static void Pulse(Vector3 pos, Color color, float fromDiameter, float toDiameter, float life)
         {
-            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorPulse(pos, color, fromDiameter, toDiameter, life);
+            if (Mirror) Net.NetSession.Instance.MirrorPulse(pos, color, fromDiameter, toDiameter, life);
             var go = Prim.Sphere("pulse", Root, pos, fromDiameter, Mats.Transparent(color));
             var p = go.AddComponent<FxPulse>();
             p.From = fromDiameter;
@@ -285,7 +309,7 @@ namespace Cubed
 
         public static void Line(Vector3 a, Vector3 b, Color color, float width = 0.08f, float life = 0.2f)
         {
-            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorLine(a, b, color, width, life);
+            if (Mirror) Net.NetSession.Instance.MirrorLine(a, b, color, width, life);
             var go = new GameObject("line");
             go.transform.SetParent(Root, false);
             var lr = go.AddComponent<LineRenderer>();
@@ -306,7 +330,7 @@ namespace Cubed
         /// <summary>A temporary cube visual (no collider), mirrored to online clients.</summary>
         public static GameObject Box(Vector3 pos, Quaternion rot, Vector3 size, Color color, float life, bool mirror = true)
         {
-            if (mirror && Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBox(pos, rot, size, color, life);
+            if (mirror && Mirror) Net.NetSession.Instance.MirrorBox(pos, rot, size, color, life);
             var mat = color.a < 0.99f ? Mats.Transparent(color) : Mats.Solid(color);
             var go = Prim.Cube("box", Root, pos, size, mat);
             go.transform.rotation = rot;

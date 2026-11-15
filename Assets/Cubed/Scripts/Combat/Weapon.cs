@@ -112,7 +112,8 @@ namespace Cubed
             Ammo--;
             ShotsFired++;
             Cooldown = owner.GetStat(Stat.AttackCooldown);
-            Sfx.Play("shoot", owner.IsHuman ? 0.45f : 0.25f);
+            Sfx.PlayAt("shoot", muzzle, owner.IsHuman ? 0.5f : 0.35f);
+            Fx.Light(muzzle, Color.Lerp(owner.Color, Color.white, 0.5f), 4.5f, 2.2f, 0.07f);
             Fx.Burst(muzzle, Color.Lerp(owner.Color, Color.white, 0.6f), 3, 3f, 0.08f, 0.15f, 0f);
         }
     }

@@ -12,7 +12,70 @@ namespace Cubed
         public Vector3 ShoulderOffset = new Vector3(0.85f, 0.35f, 0f);
         public Player Following { get; private set; }
 
+        /// <summary>All live player cameras (used for shake and positional audio).</summary>
+        public static readonly System.Collections.Generic.List<PlayerCamera> Active = new System.Collections.Generic.List<PlayerCamera>();
+
+        // Feedback state read by the HUD.
+        public float HitMarker { get; private set; }
+        public float DamageFlash { get; private set; }
+        public bool LowHealth => Target != null && Target.IsAlive && Target.Health < Target.MaxHealth * 0.3f;
+
+        float trauma, fovKick, baseFov = 70f, heartbeat;
+        float lastHealth = -1f, lastDealt;
+        int lastAmmo = -1;
+        bool lastGrounded = true;
+        float lastVy;
+
         static readonly RaycastHit[] buffer = new RaycastHit[24];
+
+        void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
+        void OnDisable() { Active.Remove(this); }
+
+        public void AddTrauma(float amount) => trauma = Mathf.Clamp01(trauma + amount);
+
+        /// <summary>Set the resting field of view (split-screen layouts use wider FOVs).</summary>
+        public void SetBaseFov(float fov) { baseFov = fov; Cam.fieldOfView = fov; }
+
+        void Monitor(float dt)
+        {
+            var p = Target;
+            if (p == null) return;
+            if (lastHealth >= 0f && p.IsAlive && p.Health < lastHealth - 0.5f)
+            {
+                float lost = lastHealth - p.Health;
+                AddTrauma(Mathf.Clamp(lost / 70f, 0.12f, 0.6f));
+                DamageFlash = Mathf.Clamp01(DamageFlash + lost / 40f + 0.25f);
+            }
+            lastHealth = p.Health;
+            if (p.DamageDealt > lastDealt + 0.5f)
+            {
+                HitMarker = 0.18f;
+                Sfx.Play("hitmark", 0.5f, 0.05f);
+            }
+            lastDealt = p.DamageDealt;
+            int ammo = p.Weapon.Ammo;
+            if (lastAmmo >= 0 && ammo < lastAmmo && p.IsAlive)
+            {
+                fovKick = Mathf.Min(fovKick + 2.2f, 5f);
+                AddTrauma(0.05f);
+            }
+            lastAmmo = ammo;
+            if (p.Grounded && !lastGrounded && lastVy < -12f) AddTrauma(Mathf.Clamp01((-lastVy - 12f) / 40f) + 0.08f);
+            lastGrounded = p.Grounded;
+            lastVy = p.Velocity.y;
+
+            if (LowHealth)
+            {
+                heartbeat -= dt;
+                if (heartbeat <= 0f)
+                {
+                    heartbeat = 0.85f;
+                    Sfx.Play("heartbeat", 0.6f, 0f);
+                }
+            }
+            HitMarker = Mathf.Max(0f, HitMarker - dt);
+            DamageFlash = Mathf.Max(0f, DamageFlash - dt * 1.6f);
+        }
 
         public static PlayerCamera Create(Player target, HumanInput input)
         {
@@ -50,6 +113,8 @@ namespace Cubed
         void LateUpdate()
         {
             if (Target == null || InputSource == null) return;
+            float dt = Time.unscaledDeltaTime;
+            Monitor(dt);
             Following = PickFollow();
             float size = Following.Size;
             Quaternion rot = Quaternion.Euler(InputSource.Pitch, InputSource.Yaw, 0f);
@@ -73,7 +138,17 @@ namespace Cubed
                 }
                 desired = pivot + dir * Mathf.Max(0.3f, closest - 0.05f);
             }
-            transform.SetPositionAndRotation(desired, rot);
+            // Screen shake (trauma squared feels natural) and firing FOV kick.
+            float shake = trauma * trauma;
+            float time = Time.unscaledTime * 22f;
+            var shakeRot = Quaternion.Euler(
+                (Mathf.PerlinNoise(time, 1f) - 0.5f) * 6f * shake,
+                (Mathf.PerlinNoise(2f, time) - 0.5f) * 6f * shake,
+                (Mathf.PerlinNoise(time, 3f) - 0.5f) * 8f * shake);
+            transform.SetPositionAndRotation(desired + rot * new Vector3(Mathf.PerlinNoise(time, 5f) - 0.5f, Mathf.PerlinNoise(6f, time) - 0.5f, 0f) * 0.35f * shake, rot * shakeRot);
+            trauma = Mathf.Max(0f, trauma - dt * 1.5f);
+            fovKick = Mathf.Lerp(fovKick, 0f, 1f - Mathf.Exp(-dt * 12f));
+            Cam.fieldOfView = baseFov + fovKick;
         }
 
         /// <summary>The world point under the crosshair, ignoring the player and anything behind them.</summary>

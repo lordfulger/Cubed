@@ -29,7 +29,7 @@ namespace Cubed
             var size = transform.lossyScale;
             int count = Mathf.Clamp(Mathf.RoundToInt(size.x * size.y * size.z * 3f), 4, 30);
             Fx.Burst(transform.position, Type != null ? Type.Color : Color.gray, count, 7f, 0.25f, 0.9f);
-            Sfx.Play("hit", 0.6f);
+            Sfx.PlayAt("hit", transform.position, 0.6f);
             Destroy(gameObject);
         }
     }
@@ -59,6 +59,12 @@ namespace Cubed
         Transform blockRoot, spawnRoot, borderRoot;
         readonly Transform[] walls = new Transform[6];
 
+        void OnDestroy()
+        {
+            foreach (var m in animated.Values) if (m != null) Destroy(m);
+            foreach (var m in wallMats) if (m != null) Destroy(m);
+        }
+
         public static MapRuntime Build(MapData data, bool editorMode)
         {
             data.Validate();
@@ -82,6 +88,7 @@ namespace Cubed
 
             map.BuildBorders();
             map.RefreshBounds();
+            map.BuildAtmosphere();
             GameEvents.RaiseMapLoaded(data);
             return map;
         }
@@ -99,14 +106,119 @@ namespace Cubed
                 c = new Color(c.r * shade, c.g * shade, c.b * shade, c.a);
                 c = Quantize(c);
             }
-            var mat = type.Transparent ? Mats.Transparent(c) : Mats.Solid(c);
-            var go = Prim.Cube("Block_" + type.Id, blockRoot, b.Center, b.Size, mat, true);
+            Material mat;
+            if (type.Transparent) mat = Mats.Transparent(c);
+            else if (type.DamagePerSecond > 0f) mat = AnimatedMaterial(type, 0);
+            else if (type.BounceSpeed > 0f) mat = AnimatedMaterial(type, 1);
+            else mat = Looks.Block(c);
+            // Tiled mesh: the bevel texture repeats once per cell regardless of the block's size.
+            var go = Prim.Create(type.Transparent ? Prim.CubeMesh : Looks.TiledBox(b.W, b.H, b.D), "Block_" + type.Id, blockRoot, b.Center, b.Size, mat);
+            go.AddComponent<BoxCollider>();
             if (type.Transparent) go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             var info = go.AddComponent<BlockInfo>();
             info.Data = b;
             info.Type = type;
             info.Hp = type.Health * Mathf.Max(1f, b.W * b.H * b.D * 0.5f);
             return info;
+        }
+
+        // ---- animated hazard / bouncer materials (one instance per type per map)
+        readonly Dictionary<string, Material> animated = new Dictionary<string, Material>();
+        readonly List<(Material mat, Color baseColor, int kind)> animatedList = new List<(Material, Color, int)>();
+
+        Material AnimatedMaterial(BlockType type, int kind)
+        {
+            if (animated.TryGetValue(type.Id, out var m)) return m;
+            m = new Material(Looks.Block(type.Color)) { name = "Animated_" + type.Id };
+            animated[type.Id] = m;
+            animatedList.Add((m, type.Color, kind));
+            return m;
+        }
+
+        Material[] wallMats = new Material[6];
+        Color[] wallBase = new Color[6];
+        Transform sky;
+
+        void Update()
+        {
+            float t = Time.time;
+            foreach (var (mat, c, kind) in animatedList)
+            {
+                if (mat == null) continue;
+                if (kind == 0) // lava: slow churning glow
+                {
+                    float k = 0.5f + 0.5f * Mathf.Sin(t * 2.2f) * Mathf.Sin(t * 0.7f + 1f);
+                    mat.color = Color.Lerp(c * 0.85f, Color.Lerp(c, new Color(1f, 0.85f, 0.3f), 0.6f), k);
+                }
+                else // bouncer: rhythmic pulse
+                {
+                    float k = Mathf.Pow(0.5f + 0.5f * Mathf.Sin(t * 4f), 3f);
+                    mat.color = Color.Lerp(c, Color.white, k * 0.35f);
+                }
+                if (mat.HasProperty("_MainTex")) mat.mainTextureOffset = kind == 0 ? new Vector2(t * 0.05f, t * 0.03f) : Vector2.zero;
+            }
+
+            // Borders light up as players approach them.
+            var b = CurrentBounds;
+            for (int i = 0; i < 6; i++)
+            {
+                if (wallMats[i] == null) continue;
+                float nearest = 999f;
+                foreach (var p in Player.All)
+                {
+                    if (!p.IsAlive) continue;
+                    Vector3 c = p.Center;
+                    float d;
+                    switch (i)
+                    {
+                        case 0: d = c.y - b.min.y; break;
+                        case 1: d = b.max.y - c.y; break;
+                        case 2: d = c.x - b.min.x; break;
+                        case 3: d = b.max.x - c.x; break;
+                        case 4: d = c.z - b.min.z; break;
+                        default: d = b.max.z - c.z; break;
+                    }
+                    nearest = Mathf.Min(nearest, d);
+                }
+                var col = wallBase[i];
+                float glow = Mathf.Clamp01(1f - nearest / 7f);
+                float shrinkPulse = Shrink > 0f && Shrink < 1f ? 0.15f * (0.5f + 0.5f * Mathf.Sin(t * 6f)) : 0f;
+                col.a = Mathf.Clamp01(col.a + glow * 0.55f + shrinkPulse);
+                wallMats[i].color = col;
+            }
+            if (sky != null) sky.Rotate(0f, Time.deltaTime * 0.6f, 0f, Space.World);
+        }
+
+        void BuildAtmosphere()
+        {
+            var bg = Background;
+            Color.RGBToHSV(bg, out float h, out float s, out float v);
+            Color top = Color.HSVToRGB(h, s * 0.9f, Mathf.Clamp01(v * 0.6f));
+            Color horizon = Color.HSVToRGB(Mathf.Repeat(h + 0.04f, 1f), Mathf.Clamp01(s * 0.7f + 0.1f), Mathf.Clamp01(v * 2.6f + 0.08f));
+            Color bottom = Color.HSVToRGB(h, s, Mathf.Clamp01(v * 0.35f));
+            var center = FullBounds.center;
+            sky = new GameObject("Atmosphere").transform;
+            sky.SetParent(transform, false);
+            sky.position = center;
+            Looks.SkyDome(sky, center, top, horizon, bottom);
+
+            // Distant floating cubes give the void some depth and parallax.
+            var rng = new System.Random(Data.name.GetHashCode());
+            var far = Mats.Solid(Color.Lerp(bottom, horizon, 0.35f));
+            var farLight = Mats.Solid(Color.Lerp(horizon, top, 0.25f));
+            for (int i = 0; i < 70; i++)
+            {
+                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float dist = 120f + (float)rng.NextDouble() * 200f;
+                float y = ((float)rng.NextDouble() - 0.6f) * 160f;
+                float size = 4f + (float)rng.NextDouble() * 22f;
+                var go = Prim.Cube("FarCube", sky, center + new Vector3(Mathf.Cos(ang) * dist, y, Mathf.Sin(ang) * dist), Vector3.one * size, rng.NextDouble() < 0.3 ? farLight : far);
+                go.transform.rotation = Quaternion.Euler((float)rng.NextDouble() * 360f, (float)rng.NextDouble() * 360f, (float)rng.NextDouble() * 360f);
+                var r = go.GetComponent<MeshRenderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+            Looks.Motes(transform, FullBounds, Color.Lerp(horizon, Color.white, 0.5f) * new Color(1f, 1f, 1f, 0.5f));
         }
 
         static Color Quantize(Color c)
@@ -239,7 +351,13 @@ namespace Cubed
                 if (walls[i] != null) Destroy(walls[i].gameObject);
                 bool bottom = i == 0;
                 Color c = bottom ? new Color(1f, 0.25f, 0.2f, 0.28f) : new Color(1f, 0.3f, 0.25f, 0.1f);
-                var go = Prim.Cube(bottom ? "Border_Bottom" : "Border", borderRoot, Vector3.zero, Vector3.one, Mats.Transparent(c));
+                if (wallMats[i] == null)
+                {
+                    wallMats[i] = Mats.NewTransparent(c);
+                    wallMats[i].mainTexture = Looks.GridTexture;
+                }
+                wallBase[i] = c;
+                var go = Prim.Cube(bottom ? "Border_Bottom" : "Border", borderRoot, Vector3.zero, Vector3.one, wallMats[i]);
                 go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 walls[i] = go.transform;
             }
@@ -253,7 +371,8 @@ namespace Cubed
                 bool bottom = i == 0;
                 bool dmg = bottom ? bottomDamaging : sidesDamaging;
                 Color c = dmg ? new Color(1f, 0.3f, 0.25f, bottom ? 0.28f : 0.1f) : new Color(0.4f, 0.7f, 1f, bottom ? 0.22f : 0.06f);
-                if (walls[i] != null) walls[i].GetComponent<MeshRenderer>().sharedMaterial = Mats.Transparent(c);
+                wallBase[i] = c;
+                if (wallMats[i] != null) wallMats[i].color = c;
             }
         }
 
@@ -295,6 +414,12 @@ namespace Cubed
             if (walls[i] == null) return;
             walls[i].position = pos;
             walls[i].localScale = scale;
+            // One grid square per 2m on whichever two axes the wall spans.
+            if (wallMats[i] != null)
+            {
+                Vector2 tiling = i < 2 ? new Vector2(scale.x, scale.z) : i < 4 ? new Vector2(scale.z, scale.y) : new Vector2(scale.x, scale.y);
+                wallMats[i].mainTextureScale = tiling * 0.5f;
+            }
         }
     }
 }

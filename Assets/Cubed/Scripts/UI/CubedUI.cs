@@ -26,9 +26,27 @@ namespace Cubed
 
         NetSession Net => gm.Net;
 
+        int lastCountdown = -1;
+        GameState lastState;
+
+        /// <summary>Countdown beeps and the FIGHT stinger (runs on every machine, not mirrored).</summary>
+        void Announce()
+        {
+            if (gm.State == GameState.RoundIntro)
+            {
+                int n = Mathf.CeilToInt(GameManager.IntroDuration - gm.StateTime);
+                if (n != lastCountdown && n > 0 && n <= 3) Sfx.Play("tick", 0.7f, 0f);
+                lastCountdown = n;
+            }
+            else lastCountdown = -1;
+            if (gm.State == GameState.Fighting && lastState == GameState.RoundIntro) Sfx.Play("go", 0.8f, 0f);
+            lastState = gm.State;
+        }
+
         void Update()
         {
             if (gm == null) return;
+            Announce();
             UIKit.PollNavigation(!gm.InMatch && gm.State != GameState.Editor);
 
             // Couch co-op: press Start on any gamepad in Match Setup to join with it.
@@ -87,8 +105,19 @@ namespace Cubed
         {
             var s = UIKit.Size;
             UIKit.Fill(new Rect(0f, 0f, 460f, s.y), new Color(0.05f, 0.06f, 0.09f, 0.82f));
+            // Animated title: each letter bobs and cycles through the team colors.
             var title = new GUIStyle(UIKit.Huge) { alignment = TextAnchor.MiddleLeft, fontSize = 96 };
-            UIKit.Shadowed(new Rect(50f, 90f, 400f, 110f), "CUBED", title, Color.white);
+            float tx = 50f, now = Time.unscaledTime;
+            const string word = "CUBED";
+            for (int i = 0; i < word.Length; i++)
+            {
+                string ch = word[i].ToString();
+                float lw = title.CalcSize(new GUIContent(ch)).x;
+                float bob = Mathf.Sin(now * 2.2f + i * 0.7f) * 6f;
+                var col = Color.Lerp(Color.white, Teams.GetColor((i + Mathf.FloorToInt(now * 0.6f)) % Teams.Max), 0.35f + 0.25f * Mathf.Sin(now * 1.5f + i));
+                UIKit.Shadowed(new Rect(tx, 90f + bob, lw + 10f, 110f), ch, title, col);
+                tx += lw - 4f;
+            }
             UIKit.Text(new Rect(54f, 190f, 380f, 24f), "Fight. Pick cards. Get weird.", UIKit.Label, UIKit.Muted);
 
             float y = 260f;
@@ -231,7 +260,7 @@ namespace Cubed
             var right = new Rect(left.xMax + 20f, left.y, W - colW - 60f, left.height);
             UIKit.Fill(right, UIKit.Panel);
             var rview = new Rect(right.x + 8f, right.y + 8f, right.width - 16f, right.height - 16f);
-            var rcontent = new Rect(0f, 0f, rview.width - 20f, 1060f);
+            var rcontent = new Rect(0f, 0f, rview.width - 20f, 1110f);
             rulesScroll = GUI.BeginScrollView(rview, rulesScroll, rcontent);
             DrawRules(rcontent.width);
             GUI.EndScrollView();
@@ -341,9 +370,10 @@ namespace Cubed
             st.mouseSensitivity = UIKit.Stepper(Row(), "Mouse sensitivity", st.mouseSensitivity, 0.2f, 0.2f, 10f, "0.0");
             st.gamepadSensitivity = UIKit.Stepper(Row(), "Gamepad look speed", st.gamepadSensitivity, 20f, 40f, 400f);
             st.invertY = UIKit.CheckRow(Row(), "Invert Y", st.invertY);
-            float vol = UIKit.Stepper(Row(), "Volume", st.volume * 100f, 10f, 0f, 100f, "0", "%");
+            float vol = UIKit.Stepper(Row(), "Sound volume", st.volume * 100f, 10f, 0f, 100f, "0", "%");
             st.volume = vol / 100f;
             Sfx.Volume = st.volume;
+            st.musicVolume = UIKit.Stepper(Row(), "Music volume", st.musicVolume * 100f, 10f, 0f, 100f, "0", "%") / 100f;
         }
 
         // ------------------------------------------------------------------ card library
@@ -653,7 +683,7 @@ namespace Cubed
         {
             var s = UIKit.Size;
             UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.55f));
-            float w = 460f, h = 470f;
+            float w = 460f, h = 520f;
             var r = new Rect(s.x * 0.5f - w * 0.5f, s.y * 0.5f - h * 0.5f, w, h);
             UIKit.Fill(r, UIKit.Panel);
             UIKit.Text(new Rect(r.x, r.y + 16f, w, 40f), "Paused", UIKit.Title, Color.white);
@@ -661,9 +691,11 @@ namespace Cubed
             var st = gm.Settings;
             st.mouseSensitivity = UIKit.Stepper(new Rect(r.x + 20f, y, w - 40f, 36f), "Mouse sensitivity", st.mouseSensitivity, 0.2f, 0.2f, 10f, "0.0");
             y += 42f;
-            float vol = UIKit.Stepper(new Rect(r.x + 20f, y, w - 40f, 36f), "Volume", st.volume * 100f, 10f, 0f, 100f, "0", "%");
+            float vol = UIKit.Stepper(new Rect(r.x + 20f, y, w - 40f, 36f), "Sound volume", st.volume * 100f, 10f, 0f, 100f, "0", "%");
             st.volume = vol / 100f;
             Sfx.Volume = st.volume;
+            y += 42f;
+            st.musicVolume = UIKit.Stepper(new Rect(r.x + 20f, y, w - 40f, 36f), "Music volume", st.musicVolume * 100f, 10f, 0f, 100f, "0", "%") / 100f;
             y += 42f;
             st.invertY = UIKit.CheckRow(new Rect(r.x + 20f, y, w - 40f, 36f), "Invert Y", st.invertY);
             y += 56f;

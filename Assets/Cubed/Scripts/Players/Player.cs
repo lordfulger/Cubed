@@ -75,6 +75,11 @@ namespace Cubed
         BlockInfo bounceBlock, hazardBlock, groundBlock;
 
         GameObject shield;
+        Transform rig, footL, footR, gunRoot, eyeL, eyeR, pupilL, pupilR, shieldRing;
+        static readonly Vector3 GunRest = new Vector3(0.52f, -0.25f, 0.35f);
+        float walkPhase, squash, squashVel, recoil, blinkTimer = 2f, blinkTime, spawnAnim = 1f, shieldPop = 1f, lastStepSign = 1f, animLastVy;
+        bool animGrounded = true, wasBlocking;
+        int animLastAmmo = -1;
         Renderer[] bodyRenderers;
         Material bodyMaterial;
         static Material flashMaterial;
@@ -135,30 +140,48 @@ namespace Cubed
 
             Model = new GameObject("Model").transform;
             Model.SetParent(transform, false);
-            bodyMaterial = Mats.Solid(Color);
+            rig = new GameObject("Rig").transform;
+            rig.SetParent(Model, false);
+            bodyMaterial = Looks.Block(Color);
             var dark = Mats.Solid(Color.Lerp(Color, Color.black, 0.55f));
+            var light = Looks.Block(Color.Lerp(Color, Color.white, 0.35f));
             var white = Mats.Solid(new Color(0.95f, 0.95f, 0.97f));
             var black = Mats.Solid(new Color(0.06f, 0.06f, 0.08f));
+            var visor = Mats.Solid(new Color(0.08f, 0.09f, 0.13f));
 
-            Prim.Cube("Body", Model, new Vector3(0f, 0.62f, 0f), new Vector3(0.9f, 1.1f, 0.9f), bodyMaterial);
-            Prim.Cube("Base", Model, new Vector3(0f, 0.08f, 0f), new Vector3(0.95f, 0.16f, 0.95f), dark);
+            Prim.Cube("Body", rig, new Vector3(0f, 0.68f, 0f), new Vector3(0.9f, 1.02f, 0.9f), bodyMaterial);
+            Prim.Cube("Cap", rig, new Vector3(0f, 1.22f, 0f), new Vector3(0.76f, 0.1f, 0.76f), light);
+            Prim.Cube("Pack", rig, new Vector3(0f, 0.72f, -0.5f), new Vector3(0.58f, 0.56f, 0.16f), dark);
+            footL = Prim.Cube("FootL", rig, new Vector3(-0.22f, 0.09f, 0f), new Vector3(0.3f, 0.18f, 0.42f), dark).transform;
+            footR = Prim.Cube("FootR", rig, new Vector3(0.22f, 0.09f, 0f), new Vector3(0.3f, 0.18f, 0.42f), dark).transform;
 
             Head = new GameObject("Head").transform;
-            Head.SetParent(Model, false);
+            Head.SetParent(rig, false);
             Head.localPosition = new Vector3(0f, 0.95f, 0f);
-            Prim.Cube("EyeL", Head, new Vector3(-0.18f, 0.05f, 0.45f), new Vector3(0.18f, 0.22f, 0.04f), white);
-            Prim.Cube("EyeR", Head, new Vector3(0.18f, 0.05f, 0.45f), new Vector3(0.18f, 0.22f, 0.04f), white);
-            Prim.Cube("PupilL", Head, new Vector3(-0.18f, 0.03f, 0.475f), new Vector3(0.09f, 0.11f, 0.02f), black);
-            Prim.Cube("PupilR", Head, new Vector3(0.18f, 0.03f, 0.475f), new Vector3(0.09f, 0.11f, 0.02f), black);
-            Prim.Cube("Gun", Head, new Vector3(0.52f, -0.25f, 0.3f), new Vector3(0.16f, 0.16f, 0.75f), dark);
-            Prim.Cube("GunTip", Head, new Vector3(0.52f, -0.25f, 0.7f), new Vector3(0.2f, 0.2f, 0.08f), bodyMaterial);
+            Prim.Cube("Visor", Head, new Vector3(0f, 0.04f, 0.452f), new Vector3(0.8f, 0.34f, 0.02f), visor);
+            eyeL = Prim.Cube("EyeL", Head, new Vector3(-0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), white).transform;
+            eyeR = Prim.Cube("EyeR", Head, new Vector3(0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), white).transform;
+            pupilL = Prim.Cube("PupilL", Head, new Vector3(-0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
+            pupilR = Prim.Cube("PupilR", Head, new Vector3(0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
+
+            gunRoot = new GameObject("Gun").transform;
+            gunRoot.SetParent(Head, false);
+            gunRoot.localPosition = GunRest;
+            Prim.Cube("Barrel", gunRoot, new Vector3(0f, 0f, 0f), new Vector3(0.16f, 0.16f, 0.75f), dark);
+            Prim.Cube("Grip", gunRoot, new Vector3(0f, -0.14f, -0.18f), new Vector3(0.12f, 0.2f, 0.14f), dark);
+            Prim.Cube("GunTip", gunRoot, new Vector3(0f, 0f, 0.4f), new Vector3(0.2f, 0.2f, 0.08f), bodyMaterial);
+            Prim.Cube("GunStripe", gunRoot, new Vector3(0f, 0.085f, 0.05f), new Vector3(0.1f, 0.02f, 0.4f), light);
             Muzzle = new GameObject("Muzzle").transform;
-            Muzzle.SetParent(Head, false);
-            Muzzle.localPosition = new Vector3(0.52f, -0.25f, 0.8f);
+            Muzzle.SetParent(gunRoot, false);
+            Muzzle.localPosition = new Vector3(0f, 0f, 0.5f);
 
             Color sc = Color;
-            sc.a = 0.32f;
+            sc.a = 0.28f;
             shield = Prim.Sphere("Shield", transform, new Vector3(0f, 0.7f, 0f), 2.1f, Mats.Transparent(sc));
+            Color rc = Color.Lerp(Color, Color.white, 0.5f);
+            rc.a = 0.35f;
+            shieldRing = Prim.Sphere("Ring", shield.transform, Vector3.zero, 1f, Mats.Transparent(rc)).transform;
+            shieldRing.localScale = new Vector3(1.08f, 0.04f, 1.08f);
             shield.SetActive(false);
 
             bodyRenderers = Model.GetComponentsInChildren<Renderer>();
@@ -279,6 +302,8 @@ namespace Cubed
             transform.rotation = Quaternion.LookRotation(AimDirection);
             Head.localRotation = Quaternion.identity;
             shield.SetActive(false);
+            PlaySpawnAnimation();
+            Fx.Pulse(transform.position + Vector3.up * 0.7f, new Color(Color.r, Color.g, Color.b, 0.45f), 0.5f, 3f, 0.4f);
             Input?.OnSpawn(this, AimDirection);
             ForEachEffect(e => e.OnRoundStart());
             GameEvents.RaisePlayerSpawned(this);
@@ -440,6 +465,7 @@ namespace Cubed
             {
                 transform.position = position;
                 netHealth = -1f;
+                PlaySpawnAnimation();
             }
         }
 
@@ -498,7 +524,7 @@ namespace Cubed
                 Velocity.y = Mathf.Max(bounceBlock.Type.BounceSpeed, -preVy * 0.85f);
                 Grounded = false;
                 airJumpsUsed = 0;
-                Sfx.Play("bounce", 0.7f);
+                Sfx.PlayAt("bounce", transform.position, 0.7f);
                 Fx.Burst(transform.position, bounceBlock.Type.Color, 6, 5f, 0.12f, 0.4f);
             }
             else if (Grounded)
@@ -590,7 +616,7 @@ namespace Cubed
             Velocity.y = Mathf.Sqrt(2f * Gravity * GetStat(Stat.JumpHeight));
             Grounded = false;
             lastGroundedTime = -10f;
-            Sfx.Play("jump", 0.4f);
+            Sfx.PlayAt("jump", transform.position, 0.4f);
         }
 
         // ------------------------------------------------------------------ borders
@@ -634,7 +660,8 @@ namespace Cubed
             bool damaging = kind == BorderKind.Bottom ? s.fallDamage : s.damagingBorders;
             Vector3 contact = Center - normal * Radius;
             Fx.Burst(contact, damaging ? new Color(1f, 0.35f, 0.25f) : new Color(0.5f, 0.75f, 1f), 12, 8f, 0.14f, 0.5f);
-            Sfx.Play("border", damaging ? 0.8f : 0.4f);
+            Sfx.PlayAt("border", contact, damaging ? 0.8f : 0.4f);
+            CameraShake.Impulse(contact, damaging ? 0.3f : 0.12f, 6f);
             if (!damaging) return;
             TakeDamage(new DamageInfo
             {
@@ -653,7 +680,7 @@ namespace Cubed
             if (!IsAlive || BlockCooldownTimer > 0f) return false;
             BlockTimer = GetStat(Stat.BlockDuration);
             BlockCooldownTimer = GetStat(Stat.BlockCooldown);
-            Sfx.Play("block", 0.5f, 0.03f);
+            Sfx.PlayAt("block", Center, 0.5f, 0.03f);
             ForEachEffect(e => e.OnBlock());
             GameEvents.RaisePlayerBlocked(this);
             return true;
@@ -666,14 +693,115 @@ namespace Cubed
             if (on)
             {
                 float pulse = 1f + Mathf.Sin(Time.time * 30f) * 0.04f;
-                shield.transform.localScale = Vector3.one * 2.1f * pulse;
+                shield.transform.localScale = Vector3.one * 2.1f * pulse * EaseOutBack(shieldPop);
+                shieldRing.localRotation = Quaternion.Euler(Mathf.Sin(Time.time * 3f) * 35f, Time.time * 240f, Mathf.Cos(Time.time * 2.3f) * 35f);
             }
+        }
+
+        static float EaseOutBack(float t)
+        {
+            const float c1 = 1.70158f, c3 = c1 + 1f;
+            t = Mathf.Clamp01(t) - 1f;
+            return 1f + c3 * t * t * t + c1 * t * t;
+        }
+
+        /// <summary>Pop the model in (spawns, revives).</summary>
+        public void PlaySpawnAnimation() => spawnAnim = 0f;
+
+        void LateUpdate()
+        {
+            float dt = Time.deltaTime;
+            if (dt > 0f && IsAlive) Animate(dt);
+        }
+
+        /// <summary>Procedural animation: walk cycle, lean, squash and stretch, recoil, blinking, pops.</summary>
+        void Animate(float dt)
+        {
+            if (rig == null || !Model.gameObject.activeSelf) return;
+            Vector3 hv = new Vector3(Velocity.x, 0f, Velocity.z);
+            float speed = hv.magnitude;
+            bool moving = Grounded && speed > 0.6f;
+            float amp = moving ? Mathf.Clamp01(speed / 8f) : 0f;
+            if (moving) walkPhase += dt * (4f + speed * 1.3f);
+            else walkPhase = Mathf.MoveTowards(walkPhase, Mathf.Round(walkPhase / Mathf.PI) * Mathf.PI, dt * 8f);
+            float s = Mathf.Sin(walkPhase), c = Mathf.Cos(walkPhase);
+
+            if (Grounded)
+            {
+                footL.localPosition = new Vector3(-0.22f, 0.09f + Mathf.Max(0f, c) * 0.12f * amp, s * 0.24f * amp);
+                footR.localPosition = new Vector3(0.22f, 0.09f + Mathf.Max(0f, -c) * 0.12f * amp, -s * 0.24f * amp);
+            }
+            else
+            {
+                footL.localPosition = Vector3.Lerp(footL.localPosition, new Vector3(-0.22f, 0.17f, 0.1f), dt * 12f);
+                footR.localPosition = Vector3.Lerp(footR.localPosition, new Vector3(0.22f, 0.12f, -0.08f), dt * 12f);
+            }
+
+            float sign = Mathf.Sign(s);
+            if (moving && speed > 2f && sign != lastStepSign) Sfx.PlayAt("step", transform.position, 0.16f, 0.15f);
+            lastStepSign = sign;
+
+            // Landing squash with dust, take-off stretch.
+            if (Grounded && !animGrounded)
+            {
+                float impact = Mathf.Clamp01(-animLastVy / 30f);
+                squashVel -= 3f + impact * 9f;
+                Fx.LocalOnly = true;
+                Fx.Burst(transform.position + Vector3.up * 0.05f, new Color(0.75f, 0.75f, 0.8f), 3 + Mathf.RoundToInt(impact * 8f), 2f + impact * 4f, 0.12f, 0.45f, 3f);
+                Fx.LocalOnly = false;
+                if (impact > 0.25f) Sfx.PlayAt("land", transform.position, 0.3f + impact * 0.5f);
+            }
+            if (!Grounded && animGrounded && Velocity.y > 2f) squashVel += 4f;
+            animGrounded = Grounded;
+            animLastVy = Velocity.y;
+
+            squashVel += (-squash * 220f - squashVel * 16f) * dt;
+            squash = Mathf.Clamp(squash + squashVel * dt, -0.4f, 0.4f);
+            float airStretch = Grounded ? 0f : Mathf.Clamp(Mathf.Abs(Velocity.y) / 60f, 0f, 0.12f);
+            float sy = 1f + squash + airStretch;
+            float sxz = 1f / Mathf.Sqrt(Mathf.Max(0.3f, sy));
+            if (spawnAnim < 1f) spawnAnim = Mathf.Min(1f, spawnAnim + dt / 0.4f);
+            rig.localScale = new Vector3(sxz, sy, sxz) * Mathf.Max(0.01f, EaseOutBack(spawnAnim));
+
+            Vector3 local = transform.InverseTransformDirection(hv);
+            rig.localPosition = new Vector3(0f, moving ? Mathf.Abs(s) * 0.06f * amp : 0f, 0f);
+            float wobble = IsStunned ? Mathf.Sin(Time.time * 25f) * 8f : 0f;
+            var lean = Quaternion.Euler(Mathf.Clamp(local.z * 1.1f, -12f, 12f), wobble, Mathf.Clamp(-local.x * 1.4f, -14f, 14f) + (moving ? s * 3f * amp : 0f));
+            rig.localRotation = Quaternion.Slerp(rig.localRotation, lean, 1f - Mathf.Exp(-dt * 10f));
+
+            // Gun recoil on every shot, spin while reloading.
+            int ammo = Weapon.Ammo;
+            if (animLastAmmo >= 0 && ammo < animLastAmmo) recoil = 1f;
+            animLastAmmo = ammo;
+            recoil = Mathf.MoveTowards(recoil, 0f, dt * 7f);
+            gunRoot.localPosition = GunRest + new Vector3(0f, recoil * 0.03f, -recoil * 0.2f);
+            gunRoot.localRotation = Weapon.Reloading
+                ? Quaternion.Euler(-Weapon.ReloadProgress * 360f, 0f, 0f)
+                : Quaternion.Euler(-recoil * 14f, 0f, 0f);
+
+            // Blinking (eyes squint while stunned).
+            blinkTimer -= dt;
+            if (blinkTimer <= 0f)
+            {
+                blinkTime = 0.12f;
+                blinkTimer = UnityEngine.Random.Range(2f, 5f);
+            }
+            float eye = 1f;
+            if (blinkTime > 0f) { blinkTime -= dt; eye = 0.12f; }
+            if (IsStunned) eye = 0.35f;
+            eyeL.localScale = eyeR.localScale = new Vector3(0.18f, 0.22f * eye, 0.03f);
+            pupilL.localScale = pupilR.localScale = new Vector3(0.09f, 0.11f * eye, 0.02f);
+
+            if (IsBlocking && !wasBlocking) shieldPop = 0f;
+            wasBlocking = IsBlocking;
+            shieldPop = Mathf.Min(1f, shieldPop + dt / 0.14f);
         }
 
         void OnBlockedDamage(DamageInfo info)
         {
             Fx.Pulse(Center, new Color(Color.r, Color.g, Color.b, 0.5f), 1.6f, 3.2f, 0.25f);
-            Sfx.Play("block", 0.8f, 0.05f);
+            Sfx.PlayAt("block", Center, 0.8f, 0.05f);
+            Fx.Light(Center, Color.Lerp(Color, Color.white, 0.5f), 5f, 2.5f, 0.15f);
             ForEachEffect(e => e.OnBlockedDamage(info));
             GameEvents.RaiseDamageBlocked(this, info);
         }
@@ -734,7 +862,7 @@ namespace Cubed
                 Barrier -= absorbed;
                 info.Amount -= absorbed;
                 Fx.Burst(Center, new Color(0.85f, 0.95f, 1f), 4, 4f, 0.1f, 0.3f);
-                if (info.Amount <= 0f) { Sfx.Play("block", 0.4f); return false; }
+                if (info.Amount <= 0f) { Sfx.PlayAt("block", Center, 0.4f); return false; }
             }
             Health -= info.Amount;
             LastDamagedTime = Time.time;
@@ -745,7 +873,7 @@ namespace Cubed
             }
 
             Flash();
-            Sfx.Play("hit", 0.55f);
+            Sfx.PlayAt("hit", Center, 0.55f);
             CubedHud.AddDamageNumber(Top, info.Amount, info.Source != null ? info.Source.Color : new Color(1f, 0.5f, 0.3f));
 
             var source = info.Source;
@@ -786,7 +914,8 @@ namespace Cubed
                 Health = MaxHealth;
                 InvulnerableTimer = 1.5f;
                 Fx.Pulse(Center, new Color(1f, 0.95f, 0.6f, 0.6f), 1f, 6f, 0.5f);
-                Sfx.Play("pick", 0.7f);
+                Sfx.PlayAt("revive", Center, 0.8f);
+                PlaySpawnAnimation();
                 ForEachEffect(e => e.OnRevive());
                 return;
             }
@@ -803,7 +932,9 @@ namespace Cubed
             }
             Fx.Burst(Center, Color, 22, 11f, 0.28f, 1.1f);
             Fx.Pulse(Center, new Color(Color.r, Color.g, Color.b, 0.5f), 0.5f, 4f, 0.4f);
-            Sfx.Play("death", 0.8f);
+            Sfx.PlayAt("death", Center, 0.8f);
+            Fx.Light(Center, Color, 8f, 4f, 0.35f);
+            CameraShake.Impulse(Center, 0.35f, 15f);
             Model.gameObject.SetActive(false);
             shield.SetActive(false);
             Controller.enabled = false;

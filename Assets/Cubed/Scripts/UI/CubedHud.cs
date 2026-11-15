@@ -144,6 +144,17 @@ namespace Cubed
             var p = cam.Target;
             if (p == null) return;
 
+            // Damage / low-health vignette.
+            float vig = cam.DamageFlash * 0.75f;
+            if (cam.LowHealth) vig = Mathf.Max(vig, 0.35f + 0.2f * Mathf.Sin(Time.unscaledTime * 7f));
+            if (vig > 0.01f)
+            {
+                var old = GUI.color;
+                GUI.color = new Color(0.9f, 0.05f, 0.05f, Mathf.Clamp01(vig));
+                GUI.DrawTexture(v, Looks.Vignette, ScaleMode.StretchToFill);
+                GUI.color = old;
+            }
+
             // Crosshair.
             if (p.IsAlive)
             {
@@ -154,6 +165,18 @@ namespace Cubed
                 UIKit.Fill(new Rect(c.x + 5f, c.y - 1f, 6f, 2f), col);
                 UIKit.Fill(new Rect(c.x - 1f, c.y - 11f, 2f, 6f), col);
                 UIKit.Fill(new Rect(c.x - 1f, c.y + 5f, 2f, 6f), col);
+                if (cam.HitMarker > 0f)
+                {
+                    // Diagonal hit marker built from small squares.
+                    var hm = new Color(1f, 0.95f, 0.85f, Mathf.Clamp01(cam.HitMarker / 0.18f));
+                    for (int k = 4; k <= 10; k += 2)
+                    {
+                        UIKit.Fill(new Rect(c.x + k - 1f, c.y + k - 1f, 2.5f, 2.5f), hm);
+                        UIKit.Fill(new Rect(c.x - k - 1f, c.y + k - 1f, 2.5f, 2.5f), hm);
+                        UIKit.Fill(new Rect(c.x + k - 1f, c.y - k - 1f, 2.5f, 2.5f), hm);
+                        UIKit.Fill(new Rect(c.x - k - 1f, c.y - k - 1f, 2.5f, 2.5f), hm);
+                    }
+                }
                 if (p.Weapon.Reloading)
                     UIKit.Bar(new Rect(c.x - 20f, c.y + 16f, 40f, 4f), p.Weapon.ReloadProgress, Color.white, new Color(0f, 0f, 0f, 0.5f));
             }
@@ -387,7 +410,8 @@ namespace Cubed
                 float age = now - feed[i].Time;
                 if (age > 6f) continue;
                 float a = Mathf.Clamp01(6f - age);
-                var r = new Rect(UIKit.Size.x - 330f, y, 318f, 24f);
+                float slide = Mathf.Pow(1f - Mathf.Clamp01(age * 5f), 3f) * 160f;
+                var r = new Rect(UIKit.Size.x - 330f + slide, y, 318f, 24f);
                 UIKit.Fill(r, new Color(0f, 0f, 0f, 0.45f * a));
                 UIKit.Text(new Rect(r.x + 8f, r.y, r.width - 16f, r.height), feed[i].Text, UIKit.Small, new Color(1f, 1f, 1f, a));
                 y += 28f;

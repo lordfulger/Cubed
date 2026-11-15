@@ -84,6 +84,8 @@ Load errors are shown on the in-game Mods screen and written to the Unity/BepInE
 
 Code mods can register more.
 
+The 320 generated cards (`cubed.gen.000`-`cubed.gen.319`, tagged `generated`) are built deterministically by `CardGenerator`. Every machine gets the same ids, which online play needs. Patch `CardGenerator.Generate` or call `CardRegistry.Unregister` to change the pool.
+
 ### Block types
 
 ```json
@@ -223,6 +225,7 @@ CubedAPI.RemoveCard("cubed.brittle_fury");            // remove a built-in card
 CubedAPI.AddMenuButton("My Mod Settings", () => ...); // main-menu button
 CubedAPI.AddGuiDrawer(() => GUI.Label(...));          // IMGUI overlay (pixel coordinates)
 CubedAPI.RegisterSound("shoot", myClip);              // replace a synthesized sound
+MusicPlayer.TrackOverride = state => myClip;           // custom music per game state
 CubedAPI.Players / CubedAPI.Map / CubedAPI.Settings / CubedAPI.Game
 Teams.SetTeam(0, "Crimson", new Color(.8f, 0, .2f));
 player.ApplyStun(0.5f); player.AddBarrier(30f, 4f); player.ApplySlow(0.4f, 1f); player.ApplyPoison(6f, 3f, source);

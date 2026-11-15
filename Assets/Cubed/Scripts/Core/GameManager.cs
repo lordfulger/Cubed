@@ -100,6 +100,7 @@ namespace Cubed
             MapRegistry.RefreshUserMaps();
 
             Net = gameObject.AddComponent<Net.NetSession>();
+            gameObject.AddComponent<MusicPlayer>();
             gameObject.AddComponent<CubedUI>();
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
@@ -121,6 +122,20 @@ namespace Cubed
             RenderSettings.ambientGroundColor = new Color(0.18f, 0.17f, 0.21f);
             RenderSettings.fog = false;
             QualitySettings.shadowDistance = 90f;
+            QualitySettings.shadowCascades = 2;
+            QualitySettings.shadows = ShadowQuality.All;
+            QualitySettings.shadowResolution = ShadowResolution.High;
+            QualitySettings.antiAliasing = 4;
+            QualitySettings.pixelLightCount = 6;
+
+            // Cool fill light from the opposite side so shadowed faces keep their shape.
+            var fill = new GameObject("Fill").AddComponent<Light>();
+            fill.transform.SetParent(transform, false);
+            fill.type = LightType.Directional;
+            fill.intensity = 0.35f;
+            fill.color = new Color(0.55f, 0.65f, 1f);
+            fill.shadows = LightShadows.None;
+            fill.transform.rotation = Quaternion.Euler(25f, 150f, 0f);
         }
 
         void OnDestroy()
@@ -317,7 +332,7 @@ namespace Cubed
             {
                 Cameras[i].SetViewport(cells[Mathf.Min(i, cells.Length - 1)]);
                 Cameras[i].Cam.depth = 1 + i;
-                Cameras[i].Cam.fieldOfView = n == 2 ? 75f : n > 4 ? 78f : 70f;
+                Cameras[i].SetBaseFov(n == 2 ? 75f : n > 4 ? 78f : 70f);
             }
             // Spectator view fills the screen with no humans, or the first empty split-screen cell.
             OverviewCamera.enabled = n == 0 || cells.Length > n;
@@ -403,6 +418,12 @@ namespace Cubed
                 Bullet.ClearAll();
                 SetState(GameState.MatchEnd);
                 Sfx.Play("win", 1f, 0f);
+                foreach (var p in Players)
+                {
+                    if (p.Team != w) continue;
+                    for (int k = 0; k < 4; k++)
+                        Fx.Burst(p.Top + Vector3.up, Teams.GetColor(UnityEngine.Random.Range(0, Teams.Max)), 25, 12f, 0.14f, 2.5f, 6f);
+                }
                 GameEvents.RaiseMatchEnded(w);
                 return;
             }

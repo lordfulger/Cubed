@@ -25,12 +25,12 @@ namespace Cubed.Net
         MatchAbort,
     }
 
-    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box }
+    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake }
 
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 3;
+        public const int Protocol = 4;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }

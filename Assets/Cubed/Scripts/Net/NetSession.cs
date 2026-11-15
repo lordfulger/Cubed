@@ -408,8 +408,17 @@ namespace Cubed.Net
         public void MirrorLine(Vector3 a, Vector3 b, Color c, float width, float life) =>
             FxWriter.Byte((int)FxKind.Line).Vec3(a).Vec3(b).Color(c).Float(width).Float(life);
 
-        public void MirrorSound(string id, float volume) =>
-            FxWriter.Byte((int)FxKind.Sound).Str(id).Float(volume);
+        public void MirrorSound(string id, float volume, Vector3? position)
+        {
+            var w = FxWriter.Byte((int)FxKind.Sound).Str(id).Float(volume).Bool(position.HasValue);
+            if (position.HasValue) w.Vec3(position.Value);
+        }
+
+        public void MirrorLight(Vector3 pos, Color c, float range, float intensity, float life) =>
+            FxWriter.Byte((int)FxKind.Light).Vec3(pos).Color(c).Float(range).Float(intensity).Float(life);
+
+        public void MirrorShake(Vector3 pos, float strength) =>
+            FxWriter.Byte((int)FxKind.Shake).Vec3(pos).Float(strength);
 
         public void MirrorDamageNumber(Vector3 pos, float amount, Color c) =>
             FxWriter.Byte((int)FxKind.DamageNumber).Vec3(pos).Float(amount).Color(c);
@@ -722,7 +731,21 @@ namespace Cubed.Net
                     case FxKind.Sound:
                     {
                         string id = m.Str();
-                        Sfx.Play(id, m.Float());
+                        float vol = m.Float();
+                        if (m.Bool()) Sfx.PlayAt(id, m.Vec3(), vol);
+                        else Sfx.Play(id, vol);
+                        break;
+                    }
+                    case FxKind.Light:
+                    {
+                        var pos = m.Vec3(); var c = m.Color(); float range = m.Float(), intensity = m.Float(), life = m.Float();
+                        Fx.Light(pos, c, range, intensity, life);
+                        break;
+                    }
+                    case FxKind.Shake:
+                    {
+                        var pos = m.Vec3();
+                        CameraShake.Impulse(pos, m.Float());
                         break;
                     }
                     case FxKind.DamageNumber:

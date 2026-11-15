@@ -154,7 +154,7 @@ namespace Cubed
             }
             if (best == null) return;
             Fx.Zap(Player.Top, best.Center, new Color(0.75f, 0.6f, 1f, 0.9f));
-            Sfx.Play("zap", 0.5f);
+            Sfx.PlayAt("zap", best.Center, 0.6f);
             best.TakeDamage(new DamageInfo
             {
                 Amount = Damage,
