@@ -386,8 +386,7 @@ namespace Cubed
             // Big cube icon.
             float icon = Mathf.Min(r.width * 0.32f, 56f);
             var iconRect = new Rect(r.center.x - icon * 0.5f, y, icon, icon);
-            Fill(iconRect, new Color(c.Color.r, c.Color.g, c.Color.b, 0.9f * alpha));
-            Fill(new Rect(iconRect.x + icon * 0.15f, iconRect.y + icon * 0.15f, icon * 0.3f, icon * 0.3f), new Color(1f, 1f, 1f, 0.35f * alpha));
+            CardIcons.Draw(iconRect, c, alpha);
             y += icon + 10f;
 
             var wrap = new GUIStyle(WrapCenter) { fontSize = r.width < 170f ? 13 : 15 };

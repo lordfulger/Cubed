@@ -38,6 +38,11 @@ namespace Cubed
         Vector3 aimDir = Vector3.forward;
         float retargetTimer, strafeTimer, strafeDir = 1f, jumpCooldown, envBlockCooldown, commitJumpTimer, losTimer;
         bool hasLos;
+        List<(Vector3 pos, NavGraph.Edge via)> path;
+        int pathIndex;
+        float pathTimer;
+        /// <summary>True while the bot is following a navigation path (for debugging/mods).</summary>
+        public bool FollowingPath { get; private set; }
         readonly float noiseSeed = Random.value * 100f;
         readonly HashSet<Bullet> rolled = new HashSet<Bullet>();
         static readonly RaycastHit[] buffer = new RaycastHit[16];
@@ -130,7 +135,38 @@ namespace Cubed
             Vector3 move = Vector3.zero;
             bool wantJump = false;
 
-            if (Target != null)
+            FollowingPath = false;
+            if (Target != null && map != null && (!hasLos || Mathf.Abs(Target.transform.position.y - pos.y) > 2.5f))
+            {
+                // Can't see or reach them directly: route through the navigation graph.
+                pathTimer -= Time.deltaTime;
+                if (pathTimer <= 0f || path == null)
+                {
+                    pathTimer = Random.Range(0.8f, 1.2f);
+                    path = NavGraph.For(map)?.FindPath(pos, Target.transform.position);
+                    pathIndex = 0;
+                }
+                if (path != null && pathIndex < path.Count)
+                {
+                    var (wp, via) = path[pathIndex];
+                    Vector3 d = wp - pos;
+                    Vector3 flat = new Vector3(d.x, 0f, d.z);
+                    if (flat.magnitude < 0.6f && Mathf.Abs(d.y) < 1.3f)
+                    {
+                        pathIndex++;
+                    }
+                    else
+                    {
+                        FollowingPath = true;
+                        move = flat.normalized;
+                        if (via.LeavesGround) commitJumpTimer = Mathf.Max(commitJumpTimer, 0.4f);
+                        if (via.Jump && self.Grounded && (d.y > 0.4f || flat.magnitude > 1.5f)) wantJump = true;
+                        if (!self.Grounded && d.y > 0.5f && self.Velocity.y < 0f && self.CanAirJump) wantJump = true;
+                    }
+                }
+            }
+
+            if (Target != null && !FollowingPath)
             {
                 Vector3 to = Target.transform.position - pos;
                 float height = to.y;
@@ -144,7 +180,7 @@ namespace Cubed
                 move += Vector3.Cross(Vector3.up, toN) * strafeDir * 0.75f;
                 if (height > 2.2f && dist < 14f) wantJump = true;
             }
-            else if (map != null)
+            else if (map != null && !FollowingPath)
             {
                 Vector3 toCenter = map.FullBounds.center - pos;
                 toCenter.y = 0f;

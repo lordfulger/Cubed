@@ -240,7 +240,7 @@ namespace Cubed
                 {
                     if (cy > v.yMax - 110f) break;
                     var c = g.Key;
-                    UIKit.Fill(new Rect(v.x + 12f, cy + 3f, 10f, 10f), c.Color);
+                    CardIcons.Draw(new Rect(v.x + 10f, cy + 1f, 14f, 14f), c, 0.9f);
                     string label = c.Title + (g.Count() > 1 ? " x" + g.Count() : "");
                     UIKit.Shadowed(new Rect(v.x + 28f, cy, 220f, 16f), label, UIKit.Small, new Color(1f, 1f, 1f, 0.75f));
                     cy += 17f;
