@@ -134,6 +134,8 @@ namespace Cubed.EditorTools
         static void ConfigurePlayerSettings()
         {
             PlayerSettings.productName = "Cubed";
+            // Linear lighting + HDR is what the post-processing stack is tuned for.
+            if (PlayerSettings.colorSpace != ColorSpace.Linear) PlayerSettings.colorSpace = ColorSpace.Linear;
             if (PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Cubed";
 #if UNITY_2021_2_OR_NEWER
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);

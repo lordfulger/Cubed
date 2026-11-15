@@ -72,6 +72,72 @@ namespace Cubed
             return m;
         }
 
+        static Shader glowShader, shieldShader;
+        static bool glowChecked;
+        static readonly Dictionary<long, Material> glow = new Dictionary<long, Material>();
+        static Material hdrTrail;
+
+        static void CheckShaders()
+        {
+            if (glowChecked) return;
+            glowChecked = true;
+            glowShader = Shader.Find("Cubed/Glow");
+            if (glowShader != null && !glowShader.isSupported) glowShader = null;
+            shieldShader = Shader.Find("Cubed/Shield");
+            if (shieldShader != null && !shieldShader.isSupported) shieldShader = null;
+        }
+
+        public static bool GlowAvailable { get { CheckShaders(); return glowShader != null; } }
+
+        /// <summary>Additive HDR glow (feeds bloom). soft = edge falloff for spheres, 0 for flat glow.</summary>
+        public static Material Glow(Color c, float intensity = 2f, float soft = 1.5f)
+        {
+            CheckShaders();
+            long key = ((long)Key(c) << 16) ^ (Mathf.RoundToInt(intensity * 20f) << 8) ^ Mathf.RoundToInt(soft * 20f);
+            if (glow.TryGetValue(key, out var m) && m != null) return m;
+            m = NewGlow(c, intensity, soft);
+            glow[key] = m;
+            return m;
+        }
+
+        public static Material NewGlow(Color c, float intensity = 2f, float soft = 1.5f)
+        {
+            CheckShaders();
+            if (glowShader == null)
+            {
+                var fallback = NewTransparent(new Color(Mathf.Min(1f, c.r * 1.3f), Mathf.Min(1f, c.g * 1.3f), Mathf.Min(1f, c.b * 1.3f), c.a * 0.8f));
+                return fallback;
+            }
+            var m = new Material(glowShader) { name = "Cubed_Glow", color = c };
+            m.SetFloat("_Intensity", intensity);
+            m.SetFloat("_Soft", soft);
+            m.renderQueue = 3100;
+            return m;
+        }
+
+        /// <summary>Energy-shield material (one per player so hit flashes are individual).</summary>
+        public static Material NewShield(Color c)
+        {
+            CheckShaders();
+            if (shieldShader == null) return NewTransparent(new Color(c.r, c.g, c.b, 0.28f));
+            var m = new Material(shieldShader) { name = "Cubed_Shield", color = new Color(c.r, c.g, c.b, 0.85f) };
+            return m;
+        }
+
+        /// <summary>Bright (HDR) trail material so bullet trails bloom.</summary>
+        public static Material HdrTrail
+        {
+            get
+            {
+                if (hdrTrail == null)
+                {
+                    hdrTrail = NewTransparent(Color.white);
+                    hdrTrail.color = new Color(2.2f, 2.2f, 2.2f, 1f);
+                }
+                return hdrTrail;
+            }
+        }
+
         /// <summary>Material for GL line drawing.</summary>
         public static Material Lines
         {
@@ -181,12 +247,14 @@ namespace Cubed
     {
         public float From = 0.5f, To = 3f, Life = 0.35f;
         public Color Color = Color.white;
+        public bool Glow;
+        public float GlowIntensity = 2.5f;
         float t;
         Material mat;
 
         void Start()
         {
-            mat = Mats.NewTransparent(Color);
+            mat = Glow ? Mats.NewGlow(Color, GlowIntensity, 1.2f) : Mats.NewTransparent(Color);
             GetComponent<Renderer>().sharedMaterial = mat;
             transform.localScale = Vector3.one * From;
         }
@@ -198,6 +266,42 @@ namespace Cubed
             transform.localScale = Vector3.one * Mathf.Lerp(From, To, 1f - (1f - k) * (1f - k));
             var c = Color;
             c.a *= 1f - k;
+            mat.color = c;
+            if (k >= 1f) Destroy(gameObject);
+        }
+
+        void OnDestroy()
+        {
+            if (mat != null) Destroy(mat);
+        }
+    }
+
+    /// <summary>A soft smoke puff.</summary>
+    public class FxSmoke : MonoBehaviour
+    {
+        public Vector3 Velocity;
+        public float Life = 1.5f, Growth = 1f;
+        public Color Color = new Color(0.3f, 0.3f, 0.32f, 0.5f);
+        float t, start;
+        Material mat;
+
+        void Start()
+        {
+            mat = Mats.NewTransparent(Color);
+            GetComponent<Renderer>().sharedMaterial = mat;
+            start = transform.localScale.x;
+        }
+
+        void Update()
+        {
+            float dt = Time.deltaTime;
+            t += dt;
+            float k = Mathf.Clamp01(t / Life);
+            transform.position += Velocity * dt;
+            Velocity *= 1f - dt * 1.2f;
+            transform.localScale = Vector3.one * (start + Growth * Mathf.Sqrt(k));
+            var c = Color;
+            c.a *= (1f - k) * Mathf.Clamp01(t * 8f);
             mat.color = c;
             if (k >= 1f) Destroy(gameObject);
         }
@@ -327,11 +431,17 @@ namespace Cubed
             }
         }
 
-        public static void Pulse(Vector3 pos, Color color, float fromDiameter, float toDiameter, float life)
+        public static void Pulse(Vector3 pos, Color color, float fromDiameter, float toDiameter, float life) =>
+            Pulse(pos, color, fromDiameter, toDiameter, life, false);
+
+        /// <summary>Expanding sphere; glow = additive HDR (bright, blooms).</summary>
+        public static void Pulse(Vector3 pos, Color color, float fromDiameter, float toDiameter, float life, bool glow, float intensity = 2.5f)
         {
-            if (Mirror) Net.NetSession.Instance.MirrorPulse(pos, color, fromDiameter, toDiameter, life);
+            if (Mirror) Net.NetSession.Instance.MirrorPulse(pos, color, fromDiameter, toDiameter, life, glow, intensity);
             var go = Prim.Sphere("pulse", Root, pos, fromDiameter, Mats.Transparent(color));
             var p = go.AddComponent<FxPulse>();
+            p.Glow = glow;
+            p.GlowIntensity = intensity;
             p.From = fromDiameter;
             p.To = toDiameter;
             p.Life = life;
@@ -349,13 +459,75 @@ namespace Cubed
             lr.SetPosition(1, b);
             lr.startWidth = width;
             lr.endWidth = width;
-            lr.sharedMaterial = Mats.Transparent(Color.white);
+            lr.sharedMaterial = Mats.HdrTrail;
             lr.startColor = color;
             lr.endColor = color;
             lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             var l = go.AddComponent<FxLine>();
             l.Life = life;
             l.Color = color;
+        }
+
+        static Mesh quad;
+        static readonly List<Transform> decals = new List<Transform>();
+        static int nextDecal;
+        const int MaxDecals = 160;
+
+        static Mesh Quad
+        {
+            get
+            {
+                if (quad != null) return quad;
+                quad = new Mesh { name = "FxQuad" };
+                quad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f) };
+                quad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f) };
+                quad.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+                quad.RecalculateNormals();
+                quad.RecalculateBounds();
+                return quad;
+            }
+        }
+
+        /// <summary>A scorch/impact mark on a surface (ring buffer, mirrored online).</summary>
+        public static void Decal(Vector3 point, Vector3 normal, float size, Color color)
+        {
+            if (Mirror) Net.NetSession.Instance.MirrorDecal(point, normal, size, color);
+            decals.RemoveAll(d => d == null);
+            Transform t;
+            if (decals.Count < MaxDecals)
+            {
+                var mat = Mats.NewTransparent(color);
+                mat.mainTexture = Looks.Glow;
+                mat.renderQueue = 2990;
+                var go = Prim.Create(Quad, "decal", Root, Vector3.zero, Vector3.one, mat);
+                go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                t = go.transform;
+                decals.Add(t);
+            }
+            else
+            {
+                t = decals[nextDecal % decals.Count];
+                nextDecal++;
+                t.GetComponent<MeshRenderer>().sharedMaterial.color = color;
+            }
+            t.position = point + normal * 0.012f;
+            t.rotation = Quaternion.LookRotation(-normal) * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
+            t.localScale = Vector3.one * size;
+        }
+
+        /// <summary>Rising, expanding, fading smoke puffs (mirrored online).</summary>
+        public static void Smoke(Vector3 pos, int count, float size, Color color)
+        {
+            if (Mirror) Net.NetSession.Instance.MirrorSmoke(pos, count, size, color);
+            for (int i = 0; i < count; i++)
+            {
+                var go = Prim.Sphere("smoke", Root, pos + Random.insideUnitSphere * size * 0.6f, size * Random.Range(0.6f, 1.1f), Mats.Transparent(color));
+                var s = go.AddComponent<FxSmoke>();
+                s.Color = color;
+                s.Velocity = Vector3.up * Random.Range(0.8f, 2.2f) + Random.insideUnitSphere * 1.2f;
+                s.Life = Random.Range(1.2f, 2.2f);
+                s.Growth = size * Random.Range(0.8f, 1.6f);
+            }
         }
 
         /// <summary>A temporary cube visual (no collider), mirrored to online clients.</summary>

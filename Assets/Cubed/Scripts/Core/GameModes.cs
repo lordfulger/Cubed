@@ -80,7 +80,7 @@ namespace Cubed
             Physics.SyncTransforms();
             HillCenter = Physics.Raycast(new Vector3(b.center.x, b.max.y - 0.5f, b.center.z), Vector3.down, out var hit, b.size.y, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)
                 ? hit.point : b.center;
-            hillMaterial = Mats.NewTransparent(new Color(1f, 1f, 1f, 0.25f));
+            hillMaterial = Mats.GlowAvailable ? Mats.NewGlow(new Color(1f, 1f, 1f, 0.25f), 2f, 0.8f) : Mats.NewTransparent(new Color(1f, 1f, 1f, 0.25f));
             hillVisual = Prim.Sphere("Hill", Map.transform, HillCenter, 1f, hillMaterial);
             hillVisual.transform.localScale = new Vector3(HillRadius * 2f, 0.4f, HillRadius * 2f);
             var beam = Prim.Cube("HillBeam", hillVisual.transform, new Vector3(0f, 12f, 0f), new Vector3(0.08f, 60f, 0.08f), hillMaterial);

@@ -27,12 +27,12 @@ namespace Cubed.Net
         Pong,
     }
 
-    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake }
+    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke }
 
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 5;
+        public const int Protocol = 6;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }

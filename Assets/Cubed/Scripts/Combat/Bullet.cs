@@ -145,14 +145,20 @@ namespace Cubed
             else UpdateVisual(visual, gameObject, Radius, Color);
         }
 
+        static Material CoreMaterial(Color core) =>
+            Mats.GlowAvailable ? Mats.Glow(new Color(core.r, core.g, core.b, 1f), 3.2f, 0f) : Mats.Transparent(new Color(core.r, core.g, core.b, 1f));
+
+        static Material HaloMaterial(Color c) =>
+            Mats.GlowAvailable ? Mats.Glow(new Color(c.r, c.g, c.b, 0.55f), 1.6f, 2.2f) : Mats.Transparent(new Color(c.r, c.g, c.b, 0.22f));
+
         /// <summary>Re-color and re-size an existing visual made by CreateVisual.</summary>
         public static void UpdateVisual(Transform visual, GameObject host, float radius, Color color)
         {
             var core = Color.Lerp(color, Color.white, 0.45f);
             visual.localScale = Vector3.one * Mathf.Max(0.08f, radius * 2f);
-            visual.GetComponent<MeshRenderer>().sharedMaterial = Mats.Transparent(new Color(core.r, core.g, core.b, 1f));
+            visual.GetComponent<MeshRenderer>().sharedMaterial = CoreMaterial(core);
             var halo = visual.childCount > 0 ? visual.GetChild(0).GetComponent<MeshRenderer>() : null;
-            if (halo != null) halo.sharedMaterial = Mats.Transparent(new Color(color.r, color.g, color.b, 0.22f));
+            if (halo != null) halo.sharedMaterial = HaloMaterial(color);
             var trail = host.GetComponent<TrailRenderer>();
             if (trail != null)
             {
@@ -167,14 +173,14 @@ namespace Cubed
         {
             // Bright unlit core plus a soft halo reads as a glowing projectile.
             var core = Color.Lerp(color, Color.white, 0.45f);
-            var visual = Prim.Sphere("Visual", host.transform, Vector3.zero, Mathf.Max(0.08f, radius * 2f), Mats.Transparent(new Color(core.r, core.g, core.b, 1f))).transform;
-            Prim.Sphere("Halo", visual, Vector3.zero, 2.6f, Mats.Transparent(new Color(color.r, color.g, color.b, 0.22f)));
+            var visual = Prim.Sphere("Visual", host.transform, Vector3.zero, Mathf.Max(0.08f, radius * 2f), CoreMaterial(core)).transform;
+            Prim.Sphere("Halo", visual, Vector3.zero, 2.8f, HaloMaterial(color));
             var trail = host.GetComponent<TrailRenderer>();
             if (trail == null) trail = host.AddComponent<TrailRenderer>();
             trail.time = 0.12f;
             trail.startWidth = Mathf.Max(0.06f, radius * 1.6f);
             trail.endWidth = 0f;
-            trail.sharedMaterial = Mats.Transparent(Color.white);
+            trail.sharedMaterial = Mats.HdrTrail;
             trail.startColor = new Color(color.r, color.g, color.b, 0.7f);
             trail.endColor = new Color(color.r, color.g, color.b, 0f);
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -421,7 +427,11 @@ namespace Cubed
             var block = hit.collider.GetComponent<BlockInfo>();
             if (Owner != null) Owner.ForEachEffect(e => e.OnBulletHitTerrain(this, hit));
             if (dead) return;
-            if (block != null) block.Damage(Damage);
+            if (block != null)
+            {
+                block.Damage(Damage);
+                Fx.Decal(hit.point, hit.normal, Mathf.Max(0.28f, Radius * 3.2f), new Color(0.04f, 0.04f, 0.05f, 0.55f));
+            }
 
             if (BouncesLeft > 0)
             {

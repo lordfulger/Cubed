@@ -518,8 +518,14 @@ namespace Cubed.Net
         public void MirrorBurst(Vector3 pos, Color c, int count, float speed, float size, float life, float gravity) =>
             FxWriter.Byte((int)FxKind.Burst).Vec3(pos).Color(c).Byte(count).Float(speed).Float(size).Float(life).Float(gravity);
 
-        public void MirrorPulse(Vector3 pos, Color c, float from, float to, float life) =>
-            FxWriter.Byte((int)FxKind.Pulse).Vec3(pos).Color(c).Float(from).Float(to).Float(life);
+        public void MirrorPulse(Vector3 pos, Color c, float from, float to, float life, bool glow, float intensity) =>
+            FxWriter.Byte((int)FxKind.Pulse).Vec3(pos).Color(c).Float(from).Float(to).Float(life).Bool(glow).Float(intensity);
+
+        public void MirrorDecal(Vector3 point, Vector3 normal, float size, Color c) =>
+            FxWriter.Byte((int)FxKind.Decal).Vec3(point).Vec3(normal).Float(size).Color(c);
+
+        public void MirrorSmoke(Vector3 pos, int count, float size, Color c) =>
+            FxWriter.Byte((int)FxKind.Smoke).Vec3(pos).Byte(count).Float(size).Color(c);
 
         public void MirrorLine(Vector3 a, Vector3 b, Color c, float width, float life) =>
             FxWriter.Byte((int)FxKind.Line).Vec3(a).Vec3(b).Color(c).Float(width).Float(life);
@@ -901,7 +907,9 @@ namespace Cubed.Net
                     {
                         var pos = m.Vec3(); var c = m.Color();
                         float from = m.Float(), to = m.Float(), life = m.Float();
-                        Fx.Pulse(pos, c, from, to, life);
+                        bool glow = m.Bool();
+                        float intensity = m.Float();
+                        Fx.Pulse(pos, c, from, to, life, glow, intensity);
                         break;
                     }
                     case FxKind.Line:
@@ -941,6 +949,18 @@ namespace Cubed.Net
                     {
                         var pos = m.Vec3(); var euler = m.Vec3(); var size = m.Vec3(); var c = m.Color(); float life = m.Float();
                         Fx.Box(pos, Quaternion.Euler(euler), size, c, life, false);
+                        break;
+                    }
+                    case FxKind.Decal:
+                    {
+                        var p = m.Vec3(); var nrm = m.Vec3(); float size = m.Float(); var c = m.Color();
+                        Fx.Decal(p, nrm, size, c);
+                        break;
+                    }
+                    case FxKind.Smoke:
+                    {
+                        var p = m.Vec3(); int count = m.Byte(); float size = m.Float(); var c = m.Color();
+                        Fx.Smoke(p, count, size, c);
                         break;
                     }
                     case FxKind.Feed:

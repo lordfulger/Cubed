@@ -89,6 +89,7 @@ namespace Cubed
             pc.Cam.fieldOfView = 70f;
             pc.Cam.nearClipPlane = 0.08f;
             pc.Cam.farClipPlane = 600f;
+            CubedPostFX.Attach(pc.Cam);
             pc.Target = target;
             pc.InputSource = input;
             input.Camera = pc;

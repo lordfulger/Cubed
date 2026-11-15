@@ -78,7 +78,8 @@ namespace Cubed
                     Header("Graphics");
                     o.quality = UIKit.Cycle(Row(), "Quality", o.quality, Options.QualityNames);
                     o.ambientParticles = UIKit.CheckRow(Row(), "Ambient particles", o.ambientParticles);
-                    UIKit.Text(Row(24f), "Low disables shadows and anti-aliasing for older GPUs and 8-way split-screen.", UIKit.Small, UIKit.Muted);
+                    o.postFx = UIKit.CheckRow(Row(), "Post-processing (bloom, AO, fog)", o.postFx);
+                    UIKit.Text(Row(24f), "Low: no shadows/post. Medium: bloom + grading. High: + ambient occlusion and fog. Ultra: max detail.", UIKit.Small, UIKit.Muted);
                     break;
 
                 case 2:

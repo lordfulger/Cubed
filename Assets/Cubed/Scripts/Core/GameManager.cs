@@ -103,6 +103,7 @@ namespace Cubed
             OverviewCamera.fieldOfView = 55f;
             OverviewCamera.farClipPlane = 800f;
             OverviewCamera.depth = 0f;
+            CubedPostFX.Attach(OverviewCamera);
 
             ContentLoader.LoadAll();
             MapRegistry.RefreshUserMaps();

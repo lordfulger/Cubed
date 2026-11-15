@@ -91,6 +91,7 @@ namespace Cubed
             cam.fieldOfView = 65f;
             cam.farClipPlane = 800f;
             cam.depth = 5f;
+            CubedPostFX.Attach(cam);
             FrameMap();
 
             ghostMat = Mats.NewTransparent(new Color(1f, 1f, 1f, 0.35f));

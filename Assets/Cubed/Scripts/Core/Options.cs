@@ -18,6 +18,8 @@ namespace Cubed
         public int quality = 2;                   // 0 low, 1 medium, 2 high, 3 ultra
         public float fovOffset;
         public bool ambientParticles = true;
+        /// <summary>Bloom, ambient occlusion, fog and color grading (detail scales with Quality).</summary>
+        public bool postFx = true;
 
         // Feel & accessibility
         public float uiScale = 1f;

@@ -75,6 +75,8 @@ namespace Cubed
         BlockInfo bounceBlock, hazardBlock, groundBlock;
 
         GameObject shield;
+        Material shieldMat;
+        float shieldFlash;
         Transform hatRoot;
 
         /// <summary>Swap the cosmetic hat.</summary>
@@ -171,8 +173,10 @@ namespace Cubed
             Head.SetParent(rig, false);
             Head.localPosition = new Vector3(0f, 0.95f, 0f);
             Prim.Cube("Visor", Head, new Vector3(0f, 0.04f, 0.452f), new Vector3(0.8f, 0.34f, 0.02f), visor);
-            eyeL = Prim.Cube("EyeL", Head, new Vector3(-0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), white).transform;
-            eyeR = Prim.Cube("EyeR", Head, new Vector3(0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), white).transform;
+            // Eyes glow softly (they bloom with post-processing on).
+            var eyeMat = Mats.GlowAvailable ? Mats.Glow(new Color(0.95f, 0.97f, 1f, 1f), 1.7f, 0f) : white;
+            eyeL = Prim.Cube("EyeL", Head, new Vector3(-0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), eyeMat).transform;
+            eyeR = Prim.Cube("EyeR", Head, new Vector3(0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), eyeMat).transform;
             pupilL = Prim.Cube("PupilL", Head, new Vector3(-0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
             pupilR = Prim.Cube("PupilR", Head, new Vector3(0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
 
@@ -181,7 +185,13 @@ namespace Cubed
             gunRoot.localPosition = GunRest;
             Prim.Cube("Barrel", gunRoot, new Vector3(0f, 0f, 0f), new Vector3(0.16f, 0.16f, 0.75f), dark);
             Prim.Cube("Grip", gunRoot, new Vector3(0f, -0.14f, -0.18f), new Vector3(0.12f, 0.2f, 0.14f), dark);
-            Prim.Cube("GunTip", gunRoot, new Vector3(0f, 0f, 0.4f), new Vector3(0.2f, 0.2f, 0.08f), bodyMaterial);
+            Prim.Cube("GunTip", gunRoot, new Vector3(0f, 0f, 0.4f), new Vector3(0.2f, 0.2f, 0.08f), Mats.GlowAvailable ? Mats.Glow(Color, 2.2f, 0f) : bodyMaterial);
+            if (Mats.GlowAvailable)
+            {
+                // Team-colored light strip: readable team identity from any angle.
+                var strip = Prim.Cube("TeamStrip", rig, new Vector3(0f, 0.44f, 0f), new Vector3(0.93f, 0.07f, 0.93f), Mats.Glow(Color, 2.4f, 0f));
+                strip.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
             Prim.Cube("GunStripe", gunRoot, new Vector3(0f, 0.085f, 0.05f), new Vector3(0.1f, 0.02f, 0.4f), light);
             Muzzle = new GameObject("Muzzle").transform;
             Muzzle.SetParent(gunRoot, false);
@@ -194,10 +204,11 @@ namespace Cubed
 
             Color sc = Color;
             sc.a = 0.28f;
-            shield = Prim.Sphere("Shield", transform, new Vector3(0f, 0.7f, 0f), 2.1f, Mats.Transparent(sc));
+            shieldMat = Mats.NewShield(Color);
+            shield = Prim.Sphere("Shield", transform, new Vector3(0f, 0.7f, 0f), 2.1f, shieldMat);
             Color rc = Color.Lerp(Color, Color.white, 0.5f);
             rc.a = 0.35f;
-            shieldRing = Prim.Sphere("Ring", shield.transform, Vector3.zero, 1f, Mats.Transparent(rc)).transform;
+            shieldRing = Prim.Sphere("Ring", shield.transform, Vector3.zero, 1f, Mats.GlowAvailable ? Mats.Glow(rc, 2f, 0.6f) : Mats.Transparent(rc)).transform;
             shieldRing.localScale = new Vector3(1.08f, 0.04f, 1.08f);
             shield.SetActive(false);
 
@@ -211,6 +222,7 @@ namespace Cubed
         void OnDestroy()
         {
             All.Remove(this);
+            if (shieldMat != null) Destroy(shieldMat);
             foreach (var e in Effects.ToArray()) SafeEffect(e, x => x.OnRemoved());
         }
 
@@ -320,7 +332,7 @@ namespace Cubed
             Head.localRotation = Quaternion.identity;
             shield.SetActive(false);
             PlaySpawnAnimation();
-            Fx.Pulse(transform.position + Vector3.up * 0.7f, new Color(Color.r, Color.g, Color.b, 0.45f), 0.5f, 3f, 0.4f);
+            Fx.Pulse(transform.position + Vector3.up * 0.7f, new Color(Color.r, Color.g, Color.b, 0.7f), 0.5f, 3.2f, 0.45f, true, 2.5f);
             Input?.OnSpawn(this, AimDirection);
             ForEachEffect(e => e.OnRoundStart());
             GameEvents.RaisePlayerSpawned(this);
@@ -762,6 +774,8 @@ namespace Cubed
                 float pulse = 1f + Mathf.Sin(Time.time * 30f) * 0.04f;
                 shield.transform.localScale = Vector3.one * 2.1f * pulse * EaseOutBack(shieldPop);
                 shieldRing.localRotation = Quaternion.Euler(Mathf.Sin(Time.time * 3f) * 35f, Time.time * 240f, Mathf.Cos(Time.time * 2.3f) * 35f);
+                shieldFlash = Mathf.Max(0f, shieldFlash - Time.deltaTime * 5f);
+                if (shieldMat != null && shieldMat.HasProperty("_Flash")) shieldMat.SetFloat("_Flash", shieldFlash);
             }
         }
 
@@ -866,6 +880,7 @@ namespace Cubed
 
         void OnBlockedDamage(DamageInfo info)
         {
+            shieldFlash = 1f;
             Fx.Pulse(Center, new Color(Color.r, Color.g, Color.b, 0.5f), 1.6f, 3.2f, 0.25f);
             Sfx.PlayAt("block", Center, 0.8f, 0.05f);
             Fx.Light(Center, Color.Lerp(Color, Color.white, 0.5f), 5f, 2.5f, 0.15f);
@@ -999,7 +1014,7 @@ namespace Cubed
                 killer.ForEachEffect(e => e.OnKill(victim));
             }
             Fx.Burst(Center, Color, 22, 11f, 0.28f, 1.1f);
-            Fx.Pulse(Center, new Color(Color.r, Color.g, Color.b, 0.5f), 0.5f, 4f, 0.4f);
+            Fx.Pulse(Center, new Color(Color.r, Color.g, Color.b, 0.8f), 0.5f, 4.5f, 0.45f, true, 3f);
             Sfx.PlayAt("death", Center, 0.8f);
             Fx.Light(Center, Color, 8f, 4f, 0.35f);
             CameraShake.Impulse(Center, 0.35f, 15f);

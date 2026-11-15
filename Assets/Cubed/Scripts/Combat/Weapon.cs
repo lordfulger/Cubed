@@ -116,6 +116,7 @@ namespace Cubed
             Cooldown = owner.GetStat(Stat.AttackCooldown);
             Sfx.PlayAt("shoot", muzzle, owner.IsHuman ? 0.5f : 0.35f);
             Fx.Light(muzzle, Color.Lerp(owner.Color, Color.white, 0.5f), 4.5f, 2.2f, 0.07f);
+            Fx.Pulse(muzzle, Color.Lerp(owner.Color, Color.white, 0.6f), 0.15f, 0.65f, 0.07f, true, 4f);
             Fx.Burst(muzzle, Color.Lerp(owner.Color, Color.white, 0.6f), 3, 3f, 0.08f, 0.15f, 0f);
         }
     }

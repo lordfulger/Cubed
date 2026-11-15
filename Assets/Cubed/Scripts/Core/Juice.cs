@@ -179,7 +179,7 @@ namespace Cubed
                 {
                     float b = 2f * Mathf.PI * x / lon;
                     verts.Add(new Vector3(Mathf.Sin(a) * Mathf.Cos(b), h, Mathf.Sin(a) * Mathf.Sin(b)) * radius);
-                    cols.Add(c);
+                    cols.Add(QualitySettings.activeColorSpace == ColorSpace.Linear ? c.linear : c);
                 }
             }
             for (int y = 0; y < lat; y++)
@@ -201,6 +201,53 @@ namespace Cubed
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             r.receiveShadows = false;
             return go;
+        }
+
+        /// <summary>A star field and a soft sun glow on the sky (single draw call for the stars).</summary>
+        public static void StarsAndSun(Transform parent, Vector3 center, Color tint)
+        {
+            if (!Mats.GlowAvailable) return;
+            var rng = new System.Random(5);
+            var verts = new List<Vector3>(); var uvs = new List<Vector2>(); var normals = new List<Vector3>(); var tris = new List<int>();
+            for (int i = 0; i < 260; i++)
+            {
+                // Upper hemisphere, biased toward the horizon band.
+                float a = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float y = Mathf.Pow((float)rng.NextDouble(), 0.7f) * 0.95f + 0.03f;
+                var dir = new Vector3(Mathf.Cos(a) * Mathf.Sqrt(1f - y * y), y, Mathf.Sin(a) * Mathf.Sqrt(1f - y * y));
+                var p = dir * 380f;
+                float s = 0.6f + (float)rng.NextDouble() * 1.8f;
+                var right = Vector3.Cross(Vector3.up, dir).normalized * s;
+                var up = Vector3.Cross(dir, right).normalized * s;
+                int b = verts.Count;
+                verts.Add(p - right - up); verts.Add(p + right - up); verts.Add(p + right + up); verts.Add(p - right + up);
+                uvs.Add(new Vector2(0, 0)); uvs.Add(new Vector2(1, 0)); uvs.Add(new Vector2(1, 1)); uvs.Add(new Vector2(0, 1));
+                for (int k = 0; k < 4; k++) normals.Add(-dir);
+                tris.AddRange(new[] { b, b + 2, b + 1, b, b + 3, b + 2 });
+            }
+            var mesh = new Mesh { name = "Stars" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1000f);
+            var mat = Mats.NewGlow(new Color(tint.r, tint.g, tint.b, 0.8f), 1.6f, 0f);
+            mat.mainTexture = Glow;
+            mat.renderQueue = 1001;
+            var stars = Prim.Create(mesh, "Stars", parent, Vector3.zero, Vector3.one, mat);
+            stars.transform.position = center;
+            stars.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            // Sun glow opposite the light direction.
+            var sunDir = -(Quaternion.Euler(52f, -35f, 0f) * Vector3.forward);
+            var sunMat = Mats.NewGlow(new Color(1f, 0.85f, 0.6f, 0.9f), 3f, 0f);
+            sunMat.mainTexture = Glow;
+            sunMat.renderQueue = 1002;
+            var sun = Prim.Create(Prim.CubeMesh, "SunGlow", parent, Vector3.zero, Vector3.one, sunMat);
+            sun.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            sun.transform.position = center + sunDir * 360f;
+            sun.transform.rotation = Quaternion.LookRotation(sunDir);
+            sun.transform.localScale = new Vector3(70f, 70f, 0.1f);
         }
 
         /// <summary>Floating motes drifting through the arena.</summary>

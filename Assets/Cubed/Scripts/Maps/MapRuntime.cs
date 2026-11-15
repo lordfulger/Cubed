@@ -55,6 +55,8 @@ namespace Cubed
         public float MinShrinkFraction = 0.3f;
 
         public Color Background = new Color(0.07f, 0.08f, 0.12f);
+        /// <summary>Horizon color used for distance fog (set when the atmosphere is built).</summary>
+        public Color FogColor = new Color(0.2f, 0.23f, 0.36f);
 
         Transform blockRoot, spawnRoot, borderRoot;
         readonly Transform[] walls = new Transform[6];
@@ -62,6 +64,7 @@ namespace Cubed
         void OnDestroy()
         {
             foreach (var m in animated.Values) if (m != null) Destroy(m);
+            foreach (var m in glowOverlays.Values) if (m != null) Destroy(m);
             foreach (var m in wallMats) if (m != null) Destroy(m);
         }
 
@@ -115,6 +118,15 @@ namespace Cubed
             var go = Prim.Create(type.Transparent ? Prim.CubeMesh : Looks.TiledBox(b.W, b.H, b.D), "Block_" + type.Id, blockRoot, b.Center, b.Size, mat);
             go.AddComponent<BoxCollider>();
             if (type.Transparent) go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (!type.Transparent && (type.DamagePerSecond > 0f || type.BounceSpeed > 0f) && Mats.GlowAvailable)
+            {
+                // Emissive skin so lava and bouncers bloom.
+                bool lava = type.DamagePerSecond > 0f;
+                var glow = GlowOverlay(type, lava);
+                var skin = Prim.Create(Prim.CubeMesh, "Glow", go.transform, lava ? Vector3.zero : new Vector3(0f, 0.5f, 0f),
+                    lava ? Vector3.one * 1.01f : new Vector3(1.01f, 0.06f / b.H, 1.01f), glow);
+                skin.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
             var info = go.AddComponent<BlockInfo>();
             info.Data = b;
             info.Type = type;
@@ -135,6 +147,18 @@ namespace Cubed
             return m;
         }
 
+        readonly Dictionary<string, Material> glowOverlays = new Dictionary<string, Material>();
+
+        Material GlowOverlay(BlockType type, bool lava)
+        {
+            if (glowOverlays.TryGetValue(type.Id, out var m)) return m;
+            var c = lava ? Color.Lerp(type.Color, new Color(1f, 0.6f, 0.1f), 0.5f) : type.Color;
+            m = Mats.NewGlow(new Color(c.r, c.g, c.b, lava ? 0.55f : 0.8f), lava ? 2.2f : 2.6f, 0f);
+            glowOverlays[type.Id] = m;
+            animatedList.Add((m, new Color(c.r, c.g, c.b, lava ? 0.55f : 0.8f), lava ? 2 : 3));
+            return m;
+        }
+
         Material[] wallMats = new Material[6];
         Color[] wallBase = new Color[6];
         Transform sky;
@@ -145,6 +169,12 @@ namespace Cubed
             foreach (var (mat, c, kind) in animatedList)
             {
                 if (mat == null) continue;
+                if (kind >= 2)
+                {
+                    float pulse = kind == 2 ? 0.75f + 0.25f * Mathf.Sin(t * 2.6f) * Mathf.Sin(t * 0.9f + 2f) : 0.6f + 0.4f * Mathf.Pow(0.5f + 0.5f * Mathf.Sin(t * 4f), 3f);
+                    mat.color = new Color(c.r, c.g, c.b, c.a * pulse);
+                    continue;
+                }
                 if (kind == 0) // lava: slow churning glow
                 {
                     float k = 0.5f + 0.5f * Mathf.Sin(t * 2.2f) * Mathf.Sin(t * 0.7f + 1f);
@@ -197,6 +227,7 @@ namespace Cubed
             Color horizon = Color.HSVToRGB(Mathf.Repeat(h + 0.04f, 1f), Mathf.Clamp01(s * 0.7f + 0.1f), Mathf.Clamp01(v * 2.6f + 0.08f));
             Color bottom = Color.HSVToRGB(h, s, Mathf.Clamp01(v * 0.35f));
             var center = FullBounds.center;
+            FogColor = Color.Lerp(horizon, bottom, 0.25f);
             sky = new GameObject("Atmosphere").transform;
             sky.SetParent(transform, false);
             sky.position = center;
@@ -218,6 +249,7 @@ namespace Cubed
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 r.receiveShadows = false;
             }
+            Looks.StarsAndSun(sky, center, Color.Lerp(horizon, Color.white, 0.6f));
             if (Options.Current.ambientParticles) Looks.Motes(transform, FullBounds, Color.Lerp(horizon, Color.white, 0.5f) * new Color(1f, 1f, 1f, 0.5f));
         }
 
