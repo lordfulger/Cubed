@@ -227,7 +227,7 @@ namespace Cubed
             Color horizon = Color.HSVToRGB(Mathf.Repeat(h + 0.04f, 1f), Mathf.Clamp01(s * 0.7f + 0.1f), Mathf.Clamp01(v * 2.6f + 0.08f));
             Color bottom = Color.HSVToRGB(h, s, Mathf.Clamp01(v * 0.35f));
             var center = FullBounds.center;
-            FogColor = Color.Lerp(horizon, bottom, 0.25f);
+            FogColor = Color.Lerp(horizon, bottom, 0.45f);
             sky = new GameObject("Atmosphere").transform;
             sky.SetParent(transform, false);
             sky.position = center;

@@ -16,7 +16,7 @@ namespace Cubed
         Camera cam;
         readonly RenderTexture[] mips = new RenderTexture[8];
 
-        public static float BloomIntensity = 0.85f;
+        public static float BloomIntensity = 0.65f;
         public static float Exposure = 1.05f;
         public static float Contrast = 1.07f;
         public static float Saturation = 1.12f;
@@ -109,7 +109,7 @@ namespace Cubed
             if (high && map != null)
             {
                 float size = Mathf.Max(map.FullBounds.size.x, map.FullBounds.size.z);
-                mat.SetVector("_FogParams", new Vector4(size * 0.45f, size * 3.2f, 0.65f, 0f));
+                mat.SetVector("_FogParams", new Vector4(size * 0.8f, size * 4.5f, 0.45f, 0f));
                 var fc = map.FogColor;
                 mat.SetColor("_FogColor", QualitySettings.activeColorSpace == ColorSpace.Linear ? fc.linear : fc);
                 mat.EnableKeyword("CUBED_FOG");
