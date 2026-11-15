@@ -32,7 +32,7 @@ namespace Cubed.Net
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 6;
+        public const int Protocol = 7;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }

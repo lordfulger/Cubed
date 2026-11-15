@@ -159,14 +159,15 @@ namespace Cubed
             GameEvents.CardPicked += (p, card) =>
             {
                 var gm = GameManager.Instance;
-                if (gm == null || p != Tracked(gm) || gm.IsTraining) return;
+                // Clients get cards re-applied by syncs; their picks are counted once in RecordMatch.
+                if (gm == null || p != Tracked(gm) || gm.IsTraining || gm.NetClientMode) return;
                 var pr = Profile.Current;
                 pr.AddCard(card);
                 if (pr.cardsPicked >= 50) pr.Unlock("card_shark");
                 if (pr.DistinctCards >= 100) pr.Unlock("collector");
                 if (card.Rarity == Rarity.Legendary) pr.Unlock("gambler");
                 if (p.Cards.Count >= 12) pr.Unlock("stacked");
-                if (card.Source != "Cubed") pr.Unlock("modded");
+                if (card.Source != "Cubed" && card.Source != "Missing mod") pr.Unlock("modded");
             };
             GameEvents.PlayerDamaged += (p, info) =>
             {
@@ -187,6 +188,7 @@ namespace Cubed
         }
 
         static int environmentBlocks;
+        static string lastRecorded;
 
         /// <summary>Record a finished match for the local player (also called on network clients).</summary>
         public static void RecordMatch(int winner, bool online)
@@ -194,6 +196,10 @@ namespace Cubed
             var gm = GameManager.Instance;
             var me = gm != null ? Tracked(gm) : null;
             if (me == null || gm.IsTraining) return;
+            // Guard against recording the same finished match twice (re-syncs on the end screen).
+            string key = winner + ":" + gm.RoundNumber + ":" + string.Join(",", gm.TeamScores) + ":" + me.Kills + ":" + Mathf.RoundToInt(me.DamageDealt);
+            if (key == lastRecorded) return;
+            lastRecorded = key;
             var pr = Profile.Current;
             pr.matchesPlayed++;
             pr.damageDealt += me.DamageDealt;

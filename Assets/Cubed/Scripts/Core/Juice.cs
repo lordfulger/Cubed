@@ -321,7 +321,7 @@ namespace Cubed
         /// <summary>Shake every player camera near a point (explosions, impacts). Mirrored online.</summary>
         public static void Impulse(Vector3 position, float strength, float radius = 25f)
         {
-            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorShake(position, strength);
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorShake(position, strength, radius);
             foreach (var cam in PlayerCamera.Active)
             {
                 if (cam == null || cam.Target == null) continue;

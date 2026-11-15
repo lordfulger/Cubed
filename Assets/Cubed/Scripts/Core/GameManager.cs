@@ -315,6 +315,7 @@ namespace Cubed
         {
             Time.timeScale = 1f;
             Paused = false;
+            ResetModeState();
             Bullet.ClearAll();
             Fx.Clear();
             // Deactivate first: Destroy is deferred and stale colliders/updates would leak into this frame.
@@ -666,17 +667,17 @@ namespace Cubed
 
         void HandlePause()
         {
-            if (!InMatch) return;
-            bool pressed = Input.GetKeyDown(KeyCode.Escape);
-            // Poll pause buttons directly: player input isn't ticked while time is stopped.
+            // Poll pause buttons directly (player input isn't ticked while time is stopped), and keep
+            // edge state current outside matches so a held Start doesn't pause the moment a match begins.
             var binds = InputBindings.Current;
-            if (binds.KeyDown(GameAction.Pause)) pressed = true;
+            bool pressed = Input.GetKeyDown(KeyCode.Escape) || binds.KeyDown(GameAction.Pause);
             for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
             {
                 bool held = Controllers.IsConnected(j) && binds.PadHeld(GameAction.Pause, j, Controllers.Profile(j));
                 if (held && !pausePrev[j]) pressed = true;
                 pausePrev[j] = held;
             }
+            if (!InMatch) return;
             if (pressed) SetPaused(!Paused);
         }
 

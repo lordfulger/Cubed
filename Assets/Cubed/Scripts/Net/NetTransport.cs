@@ -12,6 +12,8 @@ namespace Cubed.Net
         bool Connected { get; }
         string CloseReason { get; }
         string EndPoint { get; }
+        /// <summary>Seconds since anything was received (used for silence timeouts).</summary>
+        double IdleSeconds { get; }
         void Send(byte[] message);
         void Poll(List<byte[]> messages);
         void Close(string reason = "closed");
@@ -39,6 +41,10 @@ namespace Cubed.Net
         byte[] outgoing = new byte[64 * 1024];
         int outgoingCount;
 
+        public const int MaxOutgoing = 8 * 1024 * 1024;
+        DateTime lastReceive = DateTime.UtcNow;
+        public double IdleSeconds => (DateTime.UtcNow - lastReceive).TotalSeconds;
+
         public NetConnection(Socket socket)
         {
             Socket = socket;
@@ -53,6 +59,7 @@ namespace Cubed.Net
         public void Send(byte[] data, int offset, int count)
         {
             if (!Connected) return;
+            if (outgoingCount + count + 4 > MaxOutgoing) { Close("send buffer overflow (peer not reading)"); return; }
             EnsureCapacity(ref outgoing, outgoingCount + count + 4);
             outgoing[outgoingCount++] = (byte)count;
             outgoing[outgoingCount++] = (byte)(count >> 8);
@@ -98,6 +105,7 @@ namespace Cubed.Net
                     if (err == SocketError.WouldBlock) break;
                     if (err != SocketError.Success) { Close("receive failed: " + err); break; }
                     if (n == 0) { Close("remote closed the connection"); break; }
+                    lastReceive = DateTime.UtcNow;
                     EnsureCapacity(ref incoming, incomingCount + n);
                     Buffer.BlockCopy(readBuffer, 0, incoming, incomingCount, n);
                     incomingCount += n;

@@ -43,6 +43,8 @@ namespace Cubed
         public readonly Dictionary<string, object> Data = new Dictionary<string, object>();
 
         public Vector3 Position => transform.position;
+        /// <summary>True once the bullet has been killed (it may already be back in the pool).</summary>
+        public bool IsDead => dead;
 
         static readonly RaycastHit[] hitBuffer = new RaycastHit[24];
         static readonly Collider[] overlapBuffer = new Collider[8];

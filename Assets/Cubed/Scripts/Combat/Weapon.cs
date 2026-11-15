@@ -105,10 +105,10 @@ namespace Cubed
                 }
                 Vector3 dir = Quaternion.AngleAxis(yaw, up) * (Quaternion.AngleAxis(pitch, right) * baseDir);
                 var bullet = Bullet.Spawn(owner, muzzle, dir * speed);
-                // Favor the shooter: a remote player's bullet starts where it would be by the time they saw it fire.
-                if (owner.Input is Net.NetworkInput ni && ni.Rtt > 0.02f) bullet.Advance(Mathf.Min(ni.Rtt * 0.5f, 0.12f));
                 owner.ForEachEffect(e => e.OnFire(bullet));
                 GameEvents.RaiseBulletFired(owner, bullet);
+                // Favor the shooter: a remote player's bullet starts where it would be by the time they saw it fire.
+                if (!bullet.IsDead && owner.Input is Net.NetworkInput ni && ni.Rtt > 0.02f) bullet.Advance(Mathf.Min(ni.Rtt * 0.5f, 0.12f));
             }
 
             Ammo--;

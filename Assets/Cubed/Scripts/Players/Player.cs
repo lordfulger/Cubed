@@ -304,7 +304,8 @@ namespace Cubed
 
         // ------------------------------------------------------------------ round lifecycle
 
-        public void ResetForRound(Vector3 position, Vector3 lookDirection)
+        /// <param name="newRound">False for mid-round respawns: keeps per-round card state and extra lives.</param>
+        public void ResetForRound(Vector3 position, Vector3 lookDirection, bool newRound = true)
         {
             IsAlive = true;
             Model.gameObject.SetActive(true);
@@ -313,7 +314,7 @@ namespace Cubed
             Teleport(position);
             Velocity = Vector3.zero;
             Health = MaxHealth;
-            LivesRemaining = GetStatInt(Stat.ExtraLives);
+            if (newRound) LivesRemaining = GetStatInt(Stat.ExtraLives);
             Weapon.Reset();
             BlockTimer = 0f;
             BlockCooldownTimer = 0f;
@@ -334,7 +335,7 @@ namespace Cubed
             PlaySpawnAnimation();
             Fx.Pulse(transform.position + Vector3.up * 0.7f, new Color(Color.r, Color.g, Color.b, 0.7f), 0.5f, 3.2f, 0.45f, true, 2.5f);
             Input?.OnSpawn(this, AimDirection);
-            ForEachEffect(e => e.OnRoundStart());
+            if (newRound) ForEachEffect(e => e.OnRoundStart());
             GameEvents.RaisePlayerSpawned(this);
         }
 
@@ -431,6 +432,14 @@ namespace Cubed
         readonly float[] historyTime = new float[64];
         int historyHead;
 
+        bool wasPredicting;
+
+        void ClearHistory()
+        {
+            System.Array.Clear(historyTime, 0, historyTime.Length);
+            correction = Vector3.zero;
+        }
+
         Vector3 HistoryAt(float time)
         {
             int best = historyHead;
@@ -455,7 +464,11 @@ namespace Cubed
                 if (flashTimer <= 0f) SetBodyMaterial(null);
             }
             Input?.Tick(this, dt);
-            if (Predicted && IsAlive && !Frozen && Controller.enabled)
+            var gm = GameManager.Instance;
+            bool predicting = Predicted && IsAlive && !Frozen && Controller.enabled && (gm == null || (!gm.Paused && !gm.HostPaused));
+            if (predicting != wasPredicting) ClearHistory();
+            wasPredicting = predicting;
+            if (predicting)
             {
                 UpdateAim();
                 UpdateMovement(dt);
@@ -466,9 +479,13 @@ namespace Cubed
                     correction -= step;
                     for (int i = 0; i < historyPos.Length; i++) historyPos[i] += step;
                 }
-                historyHead = (historyHead + 1) % historyPos.Length;
-                historyPos[historyHead] = transform.position;
-                historyTime[historyHead] = Time.time;
+                // Time-based sampling (~60 Hz) so the buffer covers ~1 s regardless of frame rate.
+                if (Time.time - historyTime[historyHead] >= 1f / 60f)
+                {
+                    historyHead = (historyHead + 1) % historyPos.Length;
+                    historyPos[historyHead] = transform.position;
+                    historyTime[historyHead] = Time.time;
+                }
                 UpdateShield();
                 return;
             }
@@ -502,7 +519,12 @@ namespace Cubed
                 // Compare the host's position with where we predicted we were one round trip ago.
                 float rtt = Net.NetSession.Instance != null ? Net.NetSession.Instance.Rtt : 0.1f;
                 Vector3 err = position - HistoryAt(Time.time - rtt - 0.5f / Net.NetConst.SnapshotRate);
-                if (err.sqrMagnitude > 12f) { Teleport(transform.position + err); correction = Vector3.zero; }
+                if (err.sqrMagnitude > 12f)
+                {
+                    Teleport(transform.position + err);
+                    correction = Vector3.zero;
+                    for (int i = 0; i < historyPos.Length; i++) historyPos[i] += err;
+                }
                 else correction = err;
                 if ((velocity - Velocity).sqrMagnitude > 80f) Velocity = velocity; // knockback, bounces
             }
@@ -536,6 +558,7 @@ namespace Cubed
         void NetSetAlive(bool alive, Vector3 position)
         {
             IsAlive = alive;
+            ClearHistory();
             Model.gameObject.SetActive(alive);
             if (puppetCollider != null) puppetCollider.enabled = alive;
             else Controller.enabled = alive;
@@ -551,6 +574,7 @@ namespace Cubed
         /// <summary>Reset puppet interpolation (new round on a network client).</summary>
         public void NetResetForRound()
         {
+            ClearHistory();
             netHasState = false;
             netHealth = -1f;
             RecalculateStats();

@@ -139,6 +139,8 @@ namespace Cubed.Net
         public bool Connected { get; private set; }
         public string CloseReason { get; private set; }
         public string EndPoint { get; set; } = "steam";
+        System.DateTime lastReceive = System.DateTime.UtcNow;
+        public double IdleSeconds => (System.DateTime.UtcNow - lastReceive).TotalSeconds;
 
         public void Opened() => Connected = true;
 
@@ -153,6 +155,7 @@ namespace Cubed.Net
             var bytes = new byte[size];
             System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
             inbox.Enqueue(bytes);
+            lastReceive = System.DateTime.UtcNow;
         }
 
         public void Send(byte[] message)

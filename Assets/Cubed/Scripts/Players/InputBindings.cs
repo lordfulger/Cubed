@@ -115,6 +115,8 @@ namespace Cubed
         static readonly PadProfile XboxLinux = new PadProfile { Name = "Xbox", Layout = PadLayout.Xbox, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, Select = 6, Start = 7, LS = 9, RS = 10, RX = 4, RY = 5, LT = 3, RT = 6, DX = 7, DY = 8, TriggersFromMinusOne = true };
         static readonly PadProfile XboxMac = new PadProfile { Name = "Xbox", Layout = PadLayout.Xbox, South = 16, East = 17, West = 18, North = 19, LB = 13, RB = 14, Select = 10, Start = 9, LS = 11, RS = 12, RX = 3, RY = 4, LT = 5, RT = 6, TriggersFromMinusOne = true };
         static readonly PadProfile PlayStationDesktop = new PadProfile { Name = "PlayStation", Layout = PadLayout.PlayStation, West = 0, South = 1, East = 2, North = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 10, RS = 11, RX = 3, RY = 6, LT = 4, RT = 5, DX = 7, DY = 8, TriggersFromMinusOne = true, InvertDY = true };
+        // Linux hid-playstation driver order (best effort; players can force a layout and rebind).
+        static readonly PadProfile PlayStationLinux = new PadProfile { Name = "PlayStation", Layout = PadLayout.PlayStation, South = 0, East = 1, North = 2, West = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 11, RS = 12, RX = 4, RY = 5, LT = 3, RT = 6, DX = 7, DY = 8, TriggersFromMinusOne = true };
         static readonly PadProfile SwitchDesktop = new PadProfile { Name = "Switch Pro", Layout = PadLayout.Switch, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 10, RS = 11, RX = 4, RY = 5 };
 
         /// <summary>Called every frame from the game manager; raises Changed on hot-plug.</summary>
@@ -155,7 +157,7 @@ namespace Cubed
             var layout = InputBindings.Current.ForcedLayout >= 0 ? (PadLayout)InputBindings.Current.ForcedLayout : DetectLayout(joystick);
             switch (layout)
             {
-                case PadLayout.PlayStation: return PlayStationDesktop;
+                case PadLayout.PlayStation: return IsWindows || IsMac ? PlayStationDesktop : PlayStationLinux;
                 case PadLayout.Switch: return SwitchDesktop;
                 default: return IsWindows ? XboxWindows : IsMac ? XboxMac : XboxLinux;
             }

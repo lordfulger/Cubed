@@ -112,9 +112,13 @@ namespace Cubed
             if (Settings.roundTimeLimit <= 0f || RoundTime < Settings.roundTimeLimit) return true;
             int best = -1;
             float bestScore = -1f;
+            bool tie = false;
             foreach (int t in ActiveTeams)
-                if (score[t] > bestScore) { bestScore = score[t]; best = t; }
-            EndRound(best);
+            {
+                if (score[t] > bestScore) { bestScore = score[t]; best = t; tie = false; }
+                else if (Mathf.Approximately(score[t], bestScore)) tie = true;
+            }
+            EndRound(tie ? -1 : best);
             return true;
         }
 
@@ -151,7 +155,7 @@ namespace Cubed
                 float d = enemies.Count == 0 ? Random.value : enemies.Min(e => (e - o).sqrMagnitude);
                 if (d > bestDist) { bestDist = d; best = o; }
             }
-            p.ResetForRound(best + Vector3.up * 0.05f, Map.FullBounds.center - best);
+            p.ResetForRound(best + Vector3.up * 0.05f, Map.FullBounds.center - best, false);
             p.InvulnerableTimer = 1.2f;
         }
 
@@ -203,6 +207,17 @@ namespace Cubed
                 }
             }
         }
+
+        /// <summary>Forget per-match mode state (called whenever a match is cleared).</summary>
+        void ResetModeState()
+        {
+            lateJoiners.Clear();
+            practicePickReturn = false;
+            practiceSelectPrev = false;
+            respawnAt.Clear();
+        }
+
+        bool practiceSelectPrev;
 
         // ------------------------------------------------------------------ late joiners
 
@@ -269,7 +284,9 @@ namespace Cubed
             Tutorial?.Update(me, this);
             var h = (HumanInput)me.Input;
             var binds = InputBindings.Current;
-            bool open = h.IsKeyboard ? Input.GetKeyDown(KeyCode.C) : Controllers.Held(h.Joystick, Controllers.Profile(h.Joystick), PadButton.Select);
+            bool select = !h.IsKeyboard && Controllers.Held(h.Joystick, Controllers.Profile(h.Joystick), PadButton.Select);
+            bool open = h.IsKeyboard ? Input.GetKeyDown(KeyCode.C) : select && !practiceSelectPrev;
+            practiceSelectPrev = select;
             if (open && State == GameState.Fighting) OpenPracticeCardPicker();
         }
 

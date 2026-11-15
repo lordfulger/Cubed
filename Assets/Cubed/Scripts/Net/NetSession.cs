@@ -26,7 +26,7 @@ namespace Cubed.Net
 
         /// <summary>Host: every Fx/Sfx call during a match is mirrored to clients.</summary>
         public static bool Mirroring =>
-            Instance != null && Instance.Role == NetRole.Host && Instance.remotes.Count > 0 &&
+            Instance != null && Instance.Role == NetRole.Host && Instance.remotes.Values.Any(r => r.Welcomed) &&
             GameManager.Instance != null && GameManager.Instance.InMatch;
 
         public static readonly HashSet<string> MirroredSounds = new HashSet<string>
@@ -41,6 +41,9 @@ namespace Cubed.Net
             public string Name = "";
             public bool Welcomed;
             public int Token;
+            /// <summary>Kicked/rejected: don't offer a reconnect, close after a short grace period.</summary>
+            public bool Removed;
+            public float CloseAt = -1f;
         }
 
         /// <summary>Reconnect token → player index for clients that dropped mid-match.</summary>
@@ -155,7 +158,9 @@ namespace Cubed.Net
         {
             if (!IsHosting || !remotes.TryGetValue(owner, out var r)) return;
             SendReject(r.Conn, "Removed by host");
-            r.Conn.Close("kicked");
+            // Give the Reject time to arrive before closing (closing with unread data can reset the socket).
+            r.Removed = true;
+            r.CloseAt = Time.unscaledTime + 0.4f;
         }
 
         static void SendReject(INetLink c, string reason)
@@ -171,6 +176,9 @@ namespace Cubed.Net
 
             foreach (var r in remotes.Values.ToList())
             {
+                if (r.CloseAt > 0f && Time.unscaledTime >= r.CloseAt) r.Conn.Close("removed by host");
+                // Half-open connections: clients send input at 60 Hz and pings at 1 Hz.
+                if (r.Conn.Connected && r.Conn.IdleSeconds > (r.Welcomed ? 8.0 : 15.0)) r.Conn.Close("timed out");
                 inbox.Clear();
                 r.Conn.Poll(inbox);
                 foreach (var m in inbox)
@@ -200,7 +208,7 @@ namespace Cubed.Net
             remotes.Remove(r.Conn.Id);
             if (!r.Welcomed) return;
             int id = r.Conn.Id;
-            if (Gm.InMatch)
+            if (Gm.InMatch && !r.Removed)
                 foreach (var p in Gm.Players)
                     if (p.Input is NetworkInput ni && ni.Owner == id) droppedPlayers[r.Token] = p.Index;
             Gm.Settings.slots.RemoveAll(s => s.IsOnline && s.netOwner == id);
@@ -393,8 +401,9 @@ namespace Cubed.Net
             {
                 int owner = p.Input is NetworkInput ni ? ni.Owner : -1;
                 w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.hat : "");
-                w.Byte(p.Cards.Count);
-                foreach (var c in p.Cards) w.Str(c.Id);
+                int cardCount = Mathf.Min(p.Cards.Count, 255);
+                w.Byte(cardCount);
+                for (int k = 0; k < cardCount; k++) w.Str(p.Cards[k].Id);
             }
             w.UShort(Gm.RoundNumber);
             for (int i = 0; i < Teams.Max; i++) w.Byte(Gm.TeamScores[i]);
@@ -420,7 +429,7 @@ namespace Cubed.Net
         void Broadcast(byte[] message)
         {
             foreach (var r in remotes.Values)
-                if (r.Conn.Connected) r.Conn.Send(message);
+                if (r.Welcomed && r.Conn.Connected && !r.Removed) r.Conn.Send(message);
         }
 
         int nextLinkId = 100000;
@@ -443,9 +452,13 @@ namespace Cubed.Net
             Status = "Connecting via " + description + "...";
             MyId = -1;
             helloSent = false;
+            rejected = false;
+            lastAddress = null; // relay links can't be retried over TCP
+            linkConnectTimeout = 15f;
         }
 
-        bool helloSent;
+        bool helloSent, rejected;
+        float linkConnectTimeout;
 
         public void BroadcastMatchAbort()
         {
@@ -539,8 +552,8 @@ namespace Cubed.Net
         public void MirrorLight(Vector3 pos, Color c, float range, float intensity, float life) =>
             FxWriter.Byte((int)FxKind.Light).Vec3(pos).Color(c).Float(range).Float(intensity).Float(life);
 
-        public void MirrorShake(Vector3 pos, float strength) =>
-            FxWriter.Byte((int)FxKind.Shake).Vec3(pos).Float(strength);
+        public void MirrorShake(Vector3 pos, float strength, float radius) =>
+            FxWriter.Byte((int)FxKind.Shake).Vec3(pos).Float(strength).Float(radius);
 
         public void MirrorDamageNumber(Vector3 pos, float amount, Color c) =>
             FxWriter.Byte((int)FxKind.DamageNumber).Vec3(pos).Float(amount).Color(c);
@@ -572,6 +585,7 @@ namespace Cubed.Net
             if (!reconnect) { Leave(); reconnectToken = 0; reconnectTries = 0; }
             lastAddress = address;
             lastPort = port;
+            rejected = false;
             connector = new NetConnector();
             connector.Begin(address, port);
             if (connector.Error != null)
@@ -647,6 +661,15 @@ namespace Cubed.Net
                 helloSent = false;
             }
             if (host == null) return;
+            if (!helloSent && !host.Connected && host.CloseReason == null)
+            {
+                // Relay links connect asynchronously: wait (with a timeout) instead of treating this as a drop.
+                linkConnectTimeout -= Time.unscaledDeltaTime;
+                if (linkConnectTimeout > 0f) return;
+                LastError = "Connection timed out";
+                host.Close("connect timeout");
+            }
+            if (helloSent && host.Connected && host.IdleSeconds > 10.0) host.Close("host stopped responding");
             if (!helloSent && host.Connected)
             {
                 helloSent = true;
@@ -668,7 +691,7 @@ namespace Cubed.Net
             {
                 if (string.IsNullOrEmpty(LastError)) LastError = "Disconnected: " + host.CloseReason;
                 // Dropped mid-match (not rejected/kicked): try to get back in with our token.
-                if (Gm.NetClientMode && reconnectToken != 0 && host.CloseReason != "rejected")
+                if (Gm.NetClientMode && reconnectToken != 0 && !rejected && !string.IsNullOrEmpty(lastAddress))
                 {
                     reconnectTries = 1;
                     reconnectTimer = 2f;
@@ -692,6 +715,7 @@ namespace Cubed.Net
                 {
                     MyId = m.Int();
                     reconnectToken = m.Int();
+                    reconnectTries = 0;
                     bool same = m.Bool();
                     int hostCards = m.Int();
                     Status = "In lobby";
@@ -708,6 +732,7 @@ namespace Cubed.Net
 
                 case Msg.Reject:
                     LastError = m.Str();
+                    rejected = true;
                     host.Close("rejected");
                     break;
 
@@ -923,7 +948,13 @@ namespace Cubed.Net
                     {
                         string id = m.Str();
                         float vol = m.Float();
-                        if (m.Bool()) Sfx.PlayAt(id, m.Vec3(), vol);
+                        if (m.Bool())
+                        {
+                            var at = m.Vec3();
+                            var me = Gm.Players.FirstOrDefault(p => p.Predicted);
+                            bool own = me != null && (id == "jump" || id == "bounce") && (me.transform.position - at).sqrMagnitude < 4f;
+                            if (!own) Sfx.PlayAt(id, at, vol);
+                        }
                         else Sfx.Play(id, vol);
                         break;
                     }
@@ -936,7 +967,8 @@ namespace Cubed.Net
                     case FxKind.Shake:
                     {
                         var pos = m.Vec3();
-                        CameraShake.Impulse(pos, m.Float());
+                        float strength = m.Float();
+                        CameraShake.Impulse(pos, strength, m.Float());
                         break;
                     }
                     case FxKind.DamageNumber:
