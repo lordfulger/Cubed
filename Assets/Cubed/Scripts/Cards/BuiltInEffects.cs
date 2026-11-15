@@ -14,12 +14,13 @@ namespace Cubed
             CardEffectRegistry.Register<FrostTipsEffect>("frost_tips", "Hits slow the target.");
             CardEffectRegistry.Register<VenomEffect>("venom", "Hits poison the target.");
             CardEffectRegistry.Register<ArcCoilEffect>("arc_coil", "Periodically zaps a nearby enemy.");
-            CardEffectRegistry.Register<RicochetBoostEffect>("ricochet_boost", "Bounces increase bullet damage.");
+            CardEffectRegistry.Register<RicochetBoostEffect>("rebound_boost", "Bounces increase bullet damage.");
             CardEffectRegistry.Register<SplitterEffect>("splitter", "Bullets split when hitting terrain.");
             CardEffectRegistry.Register<AdrenalineEffect>("adrenaline", "Faster when low on health.");
-            CardEffectRegistry.Register<ScavengerEffect>("scavenger", "Hits refund ammo.");
+            CardEffectRegistry.Register<ScavengerEffect>("ammo_refund", "Hits refund ammo.");
             CardEffectRegistry.Register<ThornsEffect>("thorns", "Reflects part of bullet damage to the attacker.");
             CardEffectRegistry.Register<OverchargeEffect>("overcharge", "Every 4th shot is supercharged.");
+            ExpansionEffects.RegisterAll();
         }
     }
 

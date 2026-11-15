@@ -355,11 +355,12 @@ namespace Cubed.Net
                 float yaw = Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg;
                 float pitch = -Mathf.Asin(Mathf.Clamp(aim.y, -1f, 1f)) * Mathf.Rad2Deg;
                 int flags = (p.IsAlive ? 1 : 0) | (p.IsBlocking ? 2 : 0) | (p.Grounded ? 4 : 0) | (p.IsSlowed ? 8 : 0)
-                            | (p.IsPoisoned ? 16 : 0) | (p.InvulnerableTimer > 0f ? 32 : 0) | (p.Weapon.Reloading ? 64 : 0);
+                            | (p.IsPoisoned ? 16 : 0) | (p.InvulnerableTimer > 0f ? 32 : 0) | (p.Weapon.Reloading ? 64 : 0)
+                            | (p.IsStunned ? 128 : 0);
                 float cd = p.BlockCooldownTimer / Mathf.Max(0.01f, p.GetStat(Stat.BlockCooldown));
                 w.Byte(p.Index).Vec3(p.transform.position).Vec3(p.Velocity).Float(yaw).Float(pitch).Float(p.Health)
                  .Byte(flags).Byte(p.Weapon.Ammo).Unit(p.Weapon.ReloadProgress).Unit(cd).Byte(p.LivesRemaining)
-                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt);
+                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt).Float(p.Barrier);
             }
 
             int count = Mathf.Min(Bullet.Active.Count, 400);
@@ -412,6 +413,9 @@ namespace Cubed.Net
 
         public void MirrorDamageNumber(Vector3 pos, float amount, Color c) =>
             FxWriter.Byte((int)FxKind.DamageNumber).Vec3(pos).Float(amount).Color(c);
+
+        public void MirrorBox(Vector3 pos, Quaternion rot, Vector3 size, Color c, float life) =>
+            FxWriter.Byte((int)FxKind.Box).Vec3(pos).Vec3(rot.eulerAngles).Vec3(size).Color(c).Float(life);
 
         public void MirrorFeed(string text) =>
             FxWriter.Byte((int)FxKind.Feed).Str(text);
@@ -650,11 +654,13 @@ namespace Cubed.Net
                 float reload = m.Unit(), cd = m.Unit();
                 int lives = m.Byte(), kills = m.UShort(), deaths = m.UShort();
                 float dmg = m.Float();
+                float barrier = m.Float();
                 var p = FindPlayer(index);
                 if (p == null) continue;
                 p.Frozen = state != GameState.Fighting;
                 p.NetApply(pos, vel, yaw, pitch, health, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, (flags & 8) != 0,
-                    (flags & 16) != 0, (flags & 32) != 0, ammo, (flags & 64) != 0, reload, cd, lives, kills, deaths, dmg);
+                    (flags & 16) != 0, (flags & 32) != 0, ammo, (flags & 64) != 0, reload, cd, lives, kills, deaths, dmg,
+                    (flags & 128) != 0, barrier);
             }
 
             int bullets = m.UShort();
@@ -723,6 +729,12 @@ namespace Cubed.Net
                     {
                         var pos = m.Vec3(); float amount = m.Float(); var c = m.Color();
                         CubedHud.AddDamageNumber(pos, amount, c);
+                        break;
+                    }
+                    case FxKind.Box:
+                    {
+                        var pos = m.Vec3(); var euler = m.Vec3(); var size = m.Vec3(); var c = m.Color(); float life = m.Float();
+                        Fx.Box(pos, Quaternion.Euler(euler), size, c, life, false);
                         break;
                     }
                     case FxKind.Feed:

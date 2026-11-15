@@ -303,6 +303,17 @@ namespace Cubed
             l.Color = color;
         }
 
+        /// <summary>A temporary cube visual (no collider), mirrored to online clients.</summary>
+        public static GameObject Box(Vector3 pos, Quaternion rot, Vector3 size, Color color, float life, bool mirror = true)
+        {
+            if (mirror && Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBox(pos, rot, size, color, life);
+            var mat = color.a < 0.99f ? Mats.Transparent(color) : Mats.Solid(color);
+            var go = Prim.Cube("box", Root, pos, size, mat);
+            go.transform.rotation = rot;
+            if (life > 0f) go.AddComponent<TimedDestroy>().Seconds = life;
+            return go;
+        }
+
         /// <summary>A jagged lightning line made from several segments.</summary>
         public static void Zap(Vector3 a, Vector3 b, Color color)
         {

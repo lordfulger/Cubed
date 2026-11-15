@@ -82,6 +82,10 @@ namespace Cubed
         /// <summary>Called for each bullet the player fires.</summary>
         public virtual void OnFire(Bullet bullet) { }
         public virtual void OnBulletBounce(Bullet bullet, RaycastHit hit) { }
+        /// <summary>Called every frame for each of the player's live bullets.</summary>
+        public virtual void OnBulletUpdate(Bullet bullet, float dt) { }
+        /// <summary>Modify damage this player is about to deal (info.Amount is writable).</summary>
+        public virtual void OnBeforeDealDamage(Player target, DamageInfo info) { }
         public virtual void OnBulletHitTerrain(Bullet bullet, RaycastHit hit) { }
         /// <summary>Called after one of the player's bullets damages someone.</summary>
         public virtual void OnBulletHitPlayer(Bullet bullet, Player target, DamageInfo info) { }

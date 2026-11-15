@@ -14,7 +14,7 @@ so you can open it and press Play.
 
 | Area | What's in |
 |---|---|
-| **Rounds & cards** | First team to N round wins takes the match. After each round a pick phase deals each picker a hand of cards. 42 built-in cards adjust 29 stats or attach effects (reflect, shockwaves, walls, blink, poison, frost, chain zaps, splitting bullets...). |
+| **Rounds & cards** | First team to N round wins takes the match. After each round a pick phase deals each picker a hand of cards. 87 built-in cards (a base set plus an expansion) adjust 29 stats or attach 46 effects: reflect, shockwaves, walls, blink, poison, frost, echo/burst fire, turrets, mines, orbiting shields, auras, executes, stuns, wall-piercing, boomerang and homing bounces, barriers, last stands and more. |
 | **Card options** | Cards per hand (1-10), picks per round (0-5), picks before round 1, pick timer (off/5-120 s, picks the highlighted card when time runs out), who picks (losers / everyone / winners / nobody), new hand per pick or keep the same hand, and a Card Library to enable or disable individual cards. |
 | **Teams** | Up to 8 players on 4 teams, plus friendly fire on/off. Scoring is per team, spawns are per team, and eliminated players spectate their teammates. |
 | **Bots** | 4 difficulties. Bots lead their shots (accounting for bullet drop), strafe, avoid ledges and lava, jump gaps, block incoming bullets, and block before they hit borders or land hard. They also pick cards. You can watch a bots-only match. |

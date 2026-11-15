@@ -166,7 +166,9 @@ namespace Cubed
             var hpRect = new Rect(x, y, Mathf.Min(300f, v.width * 0.4f), 24f);
             UIKit.Fill(new Rect(hpRect.x - 4f, hpRect.y - 26f, hpRect.width + 8f, 58f), new Color(0f, 0f, 0f, 0.45f));
             UIKit.Bar(hpRect, p.Health / Mathf.Max(1f, p.MaxHealth), p.Color, new Color(0.15f, 0.15f, 0.2f, 0.9f));
-            UIKit.Shadowed(hpRect, Mathf.CeilToInt(Mathf.Max(0f, p.Health)) + " / " + Mathf.RoundToInt(p.MaxHealth), UIKit.LabelCenter, Color.white);
+            if (p.Barrier > 0f)
+                UIKit.Fill(new Rect(hpRect.x, hpRect.y, hpRect.width * Mathf.Clamp01(p.Barrier / Mathf.Max(1f, p.MaxHealth)), 6f), new Color(0.85f, 0.95f, 1f, 0.95f));
+            UIKit.Shadowed(hpRect, Mathf.CeilToInt(Mathf.Max(0f, p.Health)) + " / " + Mathf.RoundToInt(p.MaxHealth) + (p.Barrier > 0f ? "  +" + Mathf.CeilToInt(p.Barrier) : ""), UIKit.LabelCenter, Color.white);
             UIKit.Shadowed(new Rect(hpRect.x, hpRect.y - 24f, 200f, 22f), p.DisplayName, UIKit.Label, Color.Lerp(p.Color, Color.white, 0.5f));
             for (int i = 0; i < p.LivesRemaining; i++) UIKit.Fill(new Rect(hpRect.xMax - 14f - i * 16f, hpRect.y - 18f, 12f, 12f), new Color(1f, 0.9f, 0.5f));
 
@@ -195,6 +197,7 @@ namespace Cubed
 
             // Statuses.
             string status = "";
+            if (p.IsStunned) status += "<color=#ffe36a>STUNNED</color>  ";
             if (p.IsSlowed) status += "<color=#9fe3ff>SLOWED</color>  ";
             if (p.IsPoisoned) status += "<color=#8cff6a>POISONED</color>  ";
             if (p.InvulnerableTimer > 0f) status += "<color=#ffe680>REVIVED</color>  ";

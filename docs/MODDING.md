@@ -74,8 +74,15 @@ Load errors are shown on the in-game Mods screen and written to the Unity/BepInE
 
 **Built-in effect ids**:
 
-`pulse_guard`, `mirror_guard`, `cube_wall`, `phase_step`, `frost_tips`, `venom`, `arc_coil`,
-`ricochet_boost`, `splitter`, `adrenaline`, `scavenger`, `thorns`, `overcharge`, plus any effect a code mod registers.
+* Base set: `pulse_guard`, `mirror_guard`, `cube_wall`, `phase_step`, `frost_tips`, `venom`, `arc_coil`,
+  `rebound_boost`, `splitter`, `adrenaline`, `ammo_refund`, `thorns`, `overcharge`
+* Expansion: `echo_1`, `echo_2`, `recoil_jets`, `full_clip`, `riposte`, `growth_rounds`, `fuse_shells`,
+  `gravity_slug`, `chain_bounce`, `ghost_rounds`, `boomerang`, `stun_tips`, `hush_rounds`, `mending_guard`,
+  `barrier_cell`, `guard_burst`, `sentry_drop`, `mine_layer`, `orbit_cubes`, `last_stand`, `second_guard`,
+  `trophy`, `executioner`, `giant_slayer`, `backstab`, `close_quarters`, `long_shot`, `bloodletter`,
+  `momentum`, `steady_hands`, `frenzy`, `decay_field`, `field_medic`
+
+Code mods can register more.
 
 ### Block types
 
@@ -177,6 +184,8 @@ CubedAPI.RegisterCard(new CardDefinition("you.trophy", "Trophy Hunter", "Kills h
 | `OnUpdate(dt)` | Every frame while alive and not frozen |
 | `OnFire(bullet)` | For each bullet fired; you can change `bullet.Damage`, `Velocity`, `Radius` and so on |
 | `OnBulletBounce` / `OnBulletHitTerrain` | Bullet interactions with terrain |
+| `OnBulletUpdate(bullet, dt)` | Every frame for each of your bullets (steering, growth, fuses; `bullet.Age` and `SpawnPosition` help) |
+| `OnBeforeDealDamage(target, info)` | Change damage you're about to deal (executes, backstabs, range bonuses) |
 | `OnBulletHitPlayer(bullet, target, info)` | After one of your bullets damages someone |
 | `OnBlock` | When block is activated |
 | `OnBlockedDamage(info)` | A block negated something: a bullet, border, fall, lava or explosion |
@@ -216,6 +225,8 @@ CubedAPI.AddGuiDrawer(() => GUI.Label(...));          // IMGUI overlay (pixel co
 CubedAPI.RegisterSound("shoot", myClip);              // replace a synthesized sound
 CubedAPI.Players / CubedAPI.Map / CubedAPI.Settings / CubedAPI.Game
 Teams.SetTeam(0, "Crimson", new Color(.8f, 0, .2f));
+player.ApplyStun(0.5f); player.AddBarrier(30f, 4f); player.ApplySlow(0.4f, 1f); player.ApplyPoison(6f, 3f, source);
+bullet.TerrainPierceLeft++; bullet.SetRadius(r); Fx.Box(pos, rot, size, color, life);  // Fx.* is mirrored online
 Player.SafeLandingSpeed, Player.BottomBounceSpeed, Player.SideBounceSpeed  // fall/border tuning
 ```
 

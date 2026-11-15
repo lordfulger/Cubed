@@ -122,6 +122,7 @@ namespace Cubed
         {
             var type = BlockTypes.Get(typeId);
             var mat = type.Transparent ? Mats.Transparent(type.Color) : Mats.Solid(type.Color);
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBox(center, rotation, size, type.Color, lifetime);
             var go = Prim.Cube("TempBlock", blockRoot, center, size, mat, false);
             go.transform.rotation = rotation;
             go.AddComponent<BoxCollider>();

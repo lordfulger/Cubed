@@ -53,8 +53,8 @@ namespace Cubed
                     .Add(Stat.Homing, 1.2f).Mul(Stat.BulletSpeed, 0.85f),
                 C("drill_bits", "Drill Bits", "Bullets pass through two players.", Rarity.Uncommon, Bullets)
                     .Add(Stat.Pierce, 2),
-                C("ricochet_engine", "Ricochet Engine", "+1 bounce. Each bounce adds 30% damage.", Rarity.Uncommon, Bullets)
-                    .Add(Stat.Bounces, 1).Effect("ricochet_boost"),
+                C("rebound_engine", "Rebound Engine", "+1 bounce. Each bounce adds 30% damage.", Rarity.Uncommon, Bullets)
+                    .Add(Stat.Bounces, 1).Effect("rebound_boost"),
                 C("splitter", "Splitter", "Bullets split in two when they hit terrain.", Rarity.Rare, Bullets)
                     .Effect("splitter"),
                 C("frost_tips", "Frost Tips", "Hits slow the target for 1.5s.", Rarity.Uncommon, Bullets)
@@ -93,8 +93,8 @@ namespace Cubed
                     .Effect("phase_step").Mul(Stat.BlockCooldown, 0.9f),
                 C("arc_coil", "Arc Coil", "Periodically zaps the nearest enemy within 8m.", Rarity.Rare, Utility)
                     .Effect("arc_coil"),
-                C("scavenger", "Scavenger", "Hitting an enemy refunds one bullet.", Rarity.Common, Utility)
-                    .Effect("scavenger"),
+                C("recycler", "Recycler", "Hitting an enemy refunds one bullet.", Rarity.Common, Utility)
+                    .Effect("ammo_refund"),
                 C("collector", "Collector", "See one extra card in every hand.", Rarity.Uncommon, Utility)
                     .Add(Stat.HandSize, 1).Stacks(2),
 
@@ -114,6 +114,7 @@ namespace Cubed
             };
 
             foreach (var c in cards) CardRegistry.Register(c);
+            ExpansionCards.RegisterAll();
         }
     }
 }

@@ -265,6 +265,9 @@ namespace Cubed
             BlockCooldownTimer = 0f;
             InvulnerableTimer = 0f;
             slowTimer = poisonTimer = 0f;
+            stunTimer = 0f;
+            Barrier = 0f;
+            barrierTimer = 0f;
             airJumpsUsed = 0;
             borderCooldown = 0f;
             LastAttacker = null;
@@ -325,12 +328,13 @@ namespace Cubed
             InvulnerableTimer = Mathf.Max(0f, InvulnerableTimer - dt);
             borderCooldown = Mathf.Max(0f, borderCooldown - dt);
 
-            if (Input != null && Input.BlockPressed) TryBlock();
+            if (stunTimer > 0f) stunTimer -= dt;
+            if (Input != null && Input.BlockPressed && !IsStunned) TryBlock();
             UpdateMovement(dt);
             if (!IsAlive) return;
             CheckBorders();
             if (!IsAlive) return;
-            if (Input != null) Weapon.Tick(dt, Input.FireHeld, Input.ReloadPressed);
+            if (Input != null) Weapon.Tick(dt, Input.FireHeld && !IsStunned, Input.ReloadPressed);
             UpdateStatuses(dt);
             if (!IsAlive) return;
             for (int i = 0; i < Effects.Count; i++)
@@ -393,8 +397,11 @@ namespace Cubed
         /// <summary>Apply one player's state from a host snapshot (network clients only).</summary>
         public void NetApply(Vector3 position, Vector3 velocity, float yaw, float pitch, float health, bool alive,
             bool blocking, bool grounded, bool slowed, bool poisoned, bool invulnerable, int ammo, bool reloading,
-            float reloadProgress, float blockCooldownFraction, int lives, int kills, int deaths, float damageDealt)
+            float reloadProgress, float blockCooldownFraction, int lives, int kills, int deaths, float damageDealt,
+            bool stunned = false, float barrier = 0f)
         {
+            stunTimer = stunned ? 0.2f : 0f;
+            Barrier = barrier;
             if (alive != IsAlive) NetSetAlive(alive, position);
             if (!netHasState) transform.position = position;
             netHasState = true;
@@ -457,7 +464,7 @@ namespace Cubed
         void UpdateMovement(float dt)
         {
             float speed = GetStat(Stat.MoveSpeed) * SlowFactor;
-            Vector3 move = Input != null ? Input.Move : Vector3.zero;
+            Vector3 move = Input != null && !IsStunned ? Input.Move : Vector3.zero;
             move.y = 0f;
             if (move.sqrMagnitude > 1f) move.Normalize();
             Vector3 desired = move * speed;
@@ -474,7 +481,7 @@ namespace Cubed
 
             Velocity.y = Mathf.Max(Velocity.y - Gravity * dt, -70f);
 
-            if (Input != null && Input.JumpPressed) TryJump();
+            if (Input != null && Input.JumpPressed && !IsStunned) TryJump();
 
             float preVy = Velocity.y;
             bounceBlock = null;
@@ -707,6 +714,11 @@ namespace Cubed
                 return false;
             }
 
+            if (info.Source != null && info.Source != this)
+            {
+                var target = this;
+                info.Source.ForEachEffect(e => e.OnBeforeDealDamage(target, info));
+            }
             info.Amount *= GetStat(Stat.DamageTaken);
             if (info.IsEnvironmental) info.Amount *= GetStat(Stat.HazardDamageTaken);
             ForEachEffect(e => e.OnBeforeDamaged(info));
@@ -714,6 +726,14 @@ namespace Cubed
             GameEvents.RaisePlayerDamaging(args);
             if (args.Cancel || info.Amount <= 0f) return false;
 
+            if (Barrier > 0f)
+            {
+                float absorbed = Mathf.Min(Barrier, info.Amount);
+                Barrier -= absorbed;
+                info.Amount -= absorbed;
+                Fx.Burst(Center, new Color(0.85f, 0.95f, 1f), 4, 4f, 0.1f, 0.3f);
+                if (info.Amount <= 0f) { Sfx.Play("block", 0.4f); return false; }
+            }
             Health -= info.Amount;
             LastDamagedTime = Time.time;
             if (info.Knockback > 0f && info.Direction.sqrMagnitude > 0.0001f)
@@ -820,8 +840,31 @@ namespace Cubed
             poisonSource = source;
         }
 
+        float stunTimer, barrierTimer;
+        /// <summary>Temporary shield HP that absorbs damage before health.</summary>
+        public float Barrier;
+        public bool IsStunned => stunTimer > 0f;
+
+        public void ApplyStun(float duration)
+        {
+            if (duration <= 0f) return;
+            stunTimer = Mathf.Max(stunTimer, duration);
+            Fx.Burst(Top, new Color(1f, 0.95f, 0.4f), 6, 3f, 0.1f, 0.5f, -2f);
+        }
+
+        public void AddBarrier(float amount, float duration)
+        {
+            Barrier = Mathf.Max(Barrier, 0f) + amount;
+            barrierTimer = Mathf.Max(barrierTimer, duration);
+        }
+
         void UpdateStatuses(float dt)
         {
+            if (barrierTimer > 0f)
+            {
+                barrierTimer -= dt;
+                if (barrierTimer <= 0f) Barrier = 0f;
+            }
             if (slowTimer > 0f) slowTimer -= dt;
             float regen = GetStat(Stat.Regen);
             if (regen > 0f) Heal(regen * dt);

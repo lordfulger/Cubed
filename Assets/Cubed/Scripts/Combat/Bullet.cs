@@ -29,6 +29,11 @@ namespace Cubed
         public float Lifetime;
         public int BouncesLeft;
         public int PierceLeft;
+        /// <summary>How many walls the bullet may pass through.</summary>
+        public int TerrainPierceLeft;
+        /// <summary>Seconds since spawn.</summary>
+        public float Age;
+        public Vector3 SpawnPosition;
         public int BounceCount;
         /// <summary>Owner can be hit by their own bullet after it bounces.</summary>
         public bool CanHitOwner;
@@ -50,6 +55,7 @@ namespace Cubed
             go.transform.position = position;
             var b = go.AddComponent<Bullet>();
             b.NetId = ++nextNetId;
+            b.SpawnPosition = position;
             b.Owner = owner;
             b.Team = owner != null ? owner.Team : -1;
             b.Velocity = velocity;
@@ -120,6 +126,15 @@ namespace Cubed
             return visual;
         }
 
+        /// <summary>Change the radius and rescale the visual without rebuilding it.</summary>
+        public void SetRadius(float radius)
+        {
+            Radius = Mathf.Max(0.02f, radius);
+            if (visual != null) visual.localScale = Vector3.one * Mathf.Max(0.08f, Radius * 2f);
+            var trail = GetComponent<TrailRenderer>();
+            if (trail != null) trail.startWidth = Mathf.Max(0.06f, Radius * 1.6f);
+        }
+
         /// <summary>Refresh visuals after changing Radius or Color.</summary>
         public void RefreshVisual() => BuildVisual();
 
@@ -150,6 +165,17 @@ namespace Cubed
                 return;
             }
 
+            Age += dt;
+            if (Owner != null)
+            {
+                var fx = Owner.Effects;
+                for (int i = 0; i < fx.Count && !dead; i++)
+                {
+                    try { fx[i].OnBulletUpdate(this, dt); }
+                    catch (Exception e) { Debug.LogException(e); }
+                }
+                if (dead) return;
+            }
             if (Homing > 0f) ApplyHoming(dt);
             Velocity += Vector3.down * (Gravity * dt);
 
@@ -275,6 +301,14 @@ namespace Cubed
 
         void HandleTerrainHit(RaycastHit hit, ref Vector3 pos)
         {
+            if (TerrainPierceLeft > 0)
+            {
+                TerrainPierceLeft--;
+                Fx.Burst(hit.point, Color, 3, 2f, 0.08f, 0.2f);
+                pos = hit.point + Velocity.normalized * (Radius * 2f + 0.06f);
+                transform.position = pos;
+                return;
+            }
             var block = hit.collider.GetComponent<BlockInfo>();
             if (Owner != null) Owner.ForEachEffect(e => e.OnBulletHitTerrain(this, hit));
             if (dead) return;
