@@ -79,6 +79,7 @@ namespace Cubed
             if (gm.Cameras.Count > 1) DrawSplitLines(gm);
 
             DrawScoreboard(gm);
+            DrawModeInfo(gm);
             DrawFeed();
             DrawBanners(gm);
             if (gm.State == GameState.MatchEnd) DrawMatchEnd(gm);
@@ -400,6 +401,64 @@ namespace Cubed
             var map = gm.Map;
             if (gm.State == GameState.Fighting && map != null && map.Shrink > 0f && map.Shrink < 1f && Mathf.Repeat(Time.unscaledTime, 1f) < 0.65f)
                 UIKit.Shadowed(new Rect(0f, 78f, UIKit.Size.x, 22f), "BORDERS CLOSING IN", UIKit.LabelCenter, UIKit.Bad);
+        }
+
+        static void DrawModeInfo(GameManager gm)
+        {
+            float y = 100f;
+            var mode = gm.Settings.mode;
+            if (mode == GameMode.Deathmatch && gm.InMatch)
+            {
+                string text = "First to " + gm.Settings.killsToWinRound + " kills:  " + string.Join("   ", gm.ActiveTeams.Select(t =>
+                    "<color=#" + ColorUtility.ToHtmlStringRGB(Teams.GetColor(t)) + ">" + gm.RoundKills[t] + "</color>"));
+                UIKit.Shadowed(new Rect(0f, y, UIKit.Size.x, 24f), text, UIKit.LabelCenter, Color.white);
+            }
+            else if (mode == GameMode.KingOfTheHill && gm.InMatch)
+            {
+                float w = 300f, x = UIKit.Size.x * 0.5f - w * 0.5f;
+                foreach (int t in gm.ActiveTeams)
+                {
+                    UIKit.Bar(new Rect(x, y, w, 7f), gm.HillProgress[t] / Mathf.Max(1f, gm.Settings.hillSeconds), Teams.GetColor(t), new Color(0f, 0f, 0f, 0.5f));
+                    y += 10f;
+                }
+                string holder = gm.HillHolder >= 0 ? Teams.GetName(gm.HillHolder) + " holds the hill" : gm.HillHolder == -2 ? "Hill contested!" : "Hill is open";
+                UIKit.Shadowed(new Rect(0f, y + 2f, UIKit.Size.x, 22f), holder, UIKit.SmallCenter, gm.HillHolder >= 0 ? Teams.GetColor(gm.HillHolder) : Color.white);
+            }
+            else if (mode == GameMode.CardRush && gm.InMatch)
+                UIKit.Shadowed(new Rect(0f, y, UIKit.Size.x, 22f), "Card Rush: every kill draws a card", UIKit.SmallCenter, UIKit.Muted);
+
+            // Respawn countdown for local players.
+            foreach (var cam in gm.Cameras)
+            {
+                if (cam == null || cam.Target == null || cam.Target.IsAlive) continue;
+                float t = gm.RespawnIn(cam.Target);
+                if (t < 0f) continue;
+                var v = UIKit.FromPixels(cam.GuiRect);
+                UIKit.Shadowed(new Rect(v.x, v.yMax - 90f, v.width, 30f), "Respawning in " + Mathf.CeilToInt(t), UIKit.HeaderCenter, Color.white);
+            }
+
+            var tut = gm.Tutorial;
+            if (gm.IsTraining && tut != null)
+            {
+                var r = new Rect(16f, 300f, 380f, 60f + tut.Steps.Count * 26f);
+                UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.85f));
+                UIKit.Text(new Rect(r.x + 12f, r.y + 8f, r.width, 28f), tut.Complete ? "Training complete!" : "Training", UIKit.Header, UIKit.Accent);
+                float ty = r.y + 42f;
+                for (int i = 0; i < tut.Steps.Count; i++)
+                {
+                    var st = tut.Steps[i];
+                    string mark = i < tut.Index ? "<color=#7dff8a>[x]</color> " : i == tut.Index ? "<color=#ffd75e>[>]</color> " : "[ ] ";
+                    UIKit.Text(new Rect(r.x + 12f, ty, r.width - 20f, 24f), mark + st.Title, UIKit.Label, i == tut.Index ? Color.white : UIKit.Muted);
+                    ty += 26f;
+                }
+                if (!tut.Complete)
+                {
+                    var step = tut.Steps[tut.Index];
+                    float pulse = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 4f);
+                    UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.72f, UIKit.Size.x, 34f), step.Title + ":  " + step.Hint, UIKit.HeaderCenter, new Color(1f, 1f, 1f, pulse));
+                }
+                else UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.72f, UIKit.Size.x, 30f), "Press C (or Select) for more cards. Esc to leave training.", UIKit.LabelCenter, UIKit.Muted);
+            }
         }
 
         static void DrawFeed()

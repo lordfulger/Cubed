@@ -75,6 +75,18 @@ namespace Cubed
         BlockInfo bounceBlock, hazardBlock, groundBlock;
 
         GameObject shield;
+        Transform hatRoot;
+
+        /// <summary>Swap the cosmetic hat.</summary>
+        public void SetHat(string id)
+        {
+            if (hatRoot == null) return;
+            for (int i = hatRoot.childCount - 1; i >= 0; i--) Destroy(hatRoot.GetChild(i).gameObject);
+            if (string.IsNullOrEmpty(id)) return;
+            try { Hats.Get(id).Build(hatRoot, Color); }
+            catch (Exception e) { Debug.LogException(e); }
+            foreach (var r in hatRoot.GetComponentsInChildren<MeshRenderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+        }
         Transform rig, footL, footR, gunRoot, eyeL, eyeR, pupilL, pupilR, shieldRing;
         static readonly Vector3 GunRest = new Vector3(0.52f, -0.25f, 0.35f);
         float walkPhase, squash, squashVel, recoil, blinkTimer = 2f, blinkTime, spawnAnim = 1f, shieldPop = 1f, lastStepSign = 1f, animLastVy;
@@ -174,6 +186,11 @@ namespace Cubed
             Muzzle = new GameObject("Muzzle").transform;
             Muzzle.SetParent(gunRoot, false);
             Muzzle.localPosition = new Vector3(0f, 0f, 0.5f);
+
+            hatRoot = new GameObject("Hat").transform;
+            hatRoot.SetParent(Head, false);
+            hatRoot.localPosition = new Vector3(0f, 0.32f, 0f);
+            SetHat(Slot != null ? Slot.hat : "");
 
             Color sc = Color;
             sc.a = 0.28f;

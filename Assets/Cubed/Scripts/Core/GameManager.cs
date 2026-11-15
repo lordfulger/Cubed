@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Cubed
 {
-    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Options, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
+    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Options, ProfileScreen, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
 
     /// <summary>One player's progress through a card pick phase.</summary>
     public class PickState
@@ -30,7 +30,7 @@ namespace Cubed
     /// Owns the match: players, map, rounds, card pick phases, cameras and menu states.
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    public class GameManager : MonoBehaviour
+    public partial class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
         /// <summary>The arena currently in play (or being edited).</summary>
@@ -87,6 +87,7 @@ namespace Cubed
             Settings = MatchSettings.Load();
             Options.Current.Apply(false);
             Controllers.Changed += OnControllerChanged;
+            Achievements.Hook();
             Sfx.Init(gameObject);
             Sfx.Volume = Settings.volume;
             gameObject.AddComponent<AudioListener>();
@@ -163,6 +164,7 @@ namespace Cubed
 
         public void ReturnToMenu()
         {
+            EndTraining();
             if (NetClientMode) ClientExitMatch(GameState.MainMenu);
             if (Net != null && Net.IsHosting && InMatch)
             {
@@ -223,10 +225,10 @@ namespace Cubed
 
         public void SaveSettings()
         {
-            if (NetClientMode)
+            if (NetClientMode || trainingBackup != null)
             {
                 Sfx.Volume = Settings.volume;
-                return; // host rules are active; preferences are copied back on exit
+                return; // temporary rules are active; preferences are copied back on exit
             }
             Settings.Validate();
             Sfx.Volume = Settings.volume;
@@ -262,7 +264,10 @@ namespace Cubed
                 if (slot.control == ControlType.Bot) input = new BotBrain(slot.difficulty);
                 else if (slot.control == ControlType.Online) input = new Net.NetworkInput(slot.netOwner);
                 else input = new HumanInput(slot.control);
-                var p = Player.Create(slot.Clone(), index++, input);
+                var slotCopy = slot.Clone();
+                if (slotCopy.IsLocalHuman) slotCopy.hat = Profile.Current.hat;
+                else if (slotCopy.control == ControlType.Bot) slotCopy.hat = Hats.ForBot(slotCopy.name);
+                var p = Player.Create(slotCopy, index++, input);
                 Players.Add(p);
                 if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
             }
@@ -396,6 +401,7 @@ namespace Cubed
             SpawnPlayers();
             foreach (var p in Players) p.Frozen = true;
             RoundTime = 0f;
+            ModeRoundStart();
             SetState(GameState.RoundIntro);
             GameEvents.RaiseRoundStarted(RoundNumber);
         }
@@ -555,7 +561,8 @@ namespace Cubed
                 {
                     GameEvents.RaisePickPhaseEnded();
                     Picks.Clear();
-                    BeginRound();
+                    if (practicePickReturn) ResumePracticeAfterPick();
+                    else BeginRound();
                 }
             }
         }
@@ -567,6 +574,7 @@ namespace Cubed
             float udt = Time.unscaledDeltaTime;
             Controllers.Poll();
             Rumble.Update();
+            Achievements.Tick(udt);
             HandlePause();
             if (NetClientMode)
             {
@@ -591,6 +599,7 @@ namespace Cubed
                 case GameState.Fighting:
                     if (Paused) break;
                     RoundTime += Time.deltaTime;
+                    ModeUpdate(Time.deltaTime);
                     UpdateShrink();
                     CheckRoundOver();
                     break;
@@ -621,6 +630,7 @@ namespace Cubed
 
         void CheckRoundOver()
         {
+            if (ModeCheckRoundOver()) return;
             var aliveTeams = Players.Where(p => p.IsAlive).Select(p => p.Team).Distinct().ToList();
             if (aliveTeams.Count <= 1)
             {
@@ -718,7 +728,7 @@ namespace Cubed
         public struct NetPlayerInfo
         {
             public int Index, Team;
-            public string Name;
+            public string Name, Hat;
             public bool Bot, Local;
         }
 
@@ -742,7 +752,7 @@ namespace Cubed
             {
                 var control = info.Local ? localSettingsBackup.onlineControl : info.Bot ? ControlType.Bot : ControlType.Online;
                 if (info.Local && (control == ControlType.Bot || control == ControlType.Online || control == ControlType.None)) control = ControlType.KeyboardMouse;
-                var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control };
+                var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control, hat = info.Local ? Profile.Current.hat : info.Hat };
                 IPlayerInput input = info.Local ? new HumanInput(control) : null;
                 var p = Player.Create(slot, info.Index, input);
                 p.MakePuppet();
@@ -773,6 +783,7 @@ namespace Cubed
         public void ClientSetState(GameState state, float stateTime, int round, float roundTime, int lastWinner, int matchWinner, int[] scores, bool hostPaused)
         {
             if (state != State) Picks.RemoveAll(_ => state != GameState.CardPick);
+            if (state == GameState.MatchEnd && State != GameState.MatchEnd) Achievements.RecordMatch(matchWinner, true);
             State = state;
             StateTime = stateTime;
             RoundNumber = round;

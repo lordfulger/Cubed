@@ -80,6 +80,7 @@ namespace Cubed
                 case GameState.CardLibrary: DrawCardLibrary(); break;
                 case GameState.Mods: DrawMods(); break;
                 case GameState.Options: if (OptionsUI.Draw(gm)) gm.GoToMenu(GameState.MainMenu); break;
+                case GameState.ProfileScreen: DrawProfile(); break;
                 case GameState.Editor: gm.Editor.DrawGUI(); break;
                 default:
                     GUI.enabled = !gm.Paused;
@@ -125,7 +126,7 @@ namespace Cubed
             UIKit.Text(new Rect(54f, 190f, 380f, 24f), "Fight. Pick cards. Get weird.", UIKit.Label, UIKit.Muted);
 
             float y = 260f;
-            const float w = 340f, h = 50f, gap = 12f;
+            const float w = 340f, h = 44f, gap = 9f;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Play")) { setupError = null; gm.GoToMenu(GameState.Setup); }
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Quick Match vs Bot"))
@@ -136,11 +137,15 @@ namespace Cubed
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Online")) { Net.LastError = ""; gm.GoToMenu(GameState.Online); }
             y += h + gap;
+            if (UIKit.Btn(new Rect(50f, y, w, h), Profile.Current.trainingDone ? "Training" : "Training  <color=#ffd75e>(new!)</color>")) gm.StartTraining();
+            y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Map Editor")) gm.OpenEditor();
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Card Library")) gm.GoToMenu(GameState.CardLibrary);
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Options")) gm.GoToMenu(GameState.Options);
+            y += h + gap;
+            if (UIKit.Btn(new Rect(50f, y, w, h), "Profile & Hats")) gm.GoToMenu(GameState.ProfileScreen);
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Mods (" + (CubedAPI.Mods.Count + ContentLoader.Sources.Count) + ")")) gm.GoToMenu(GameState.Mods);
             y += h + gap;
@@ -266,7 +271,7 @@ namespace Cubed
             var right = new Rect(left.xMax + 20f, left.y, W - colW - 60f, left.height);
             UIKit.Fill(right, UIKit.Panel);
             var rview = new Rect(right.x + 8f, right.y + 8f, right.width - 16f, right.height - 16f);
-            var rcontent = new Rect(0f, 0f, rview.width - 20f, 1110f);
+            var rcontent = new Rect(0f, 0f, rview.width - 20f, 1260f);
             rulesScroll = GUI.BeginScrollView(rview, rulesScroll, rcontent);
             DrawRules(rcontent.width);
             GUI.EndScrollView();
@@ -326,9 +331,14 @@ namespace Cubed
                 UIKit.Text(new Rect(4f, y, w, 30f), name, UIKit.Header, UIKit.Accent);
                 y += 34f;
             }
-            Rect Row() { var r = new Rect(4f, y, w - 8f, h); y += h + 4f; return r; }
+            Rect Row(float rowH = h) { var r = new Rect(4f, y, w - 8f, rowH); y += rowH + 4f; return r; }
 
             Section("Match");
+            string[] modes = { "Elimination", "Deathmatch", "King of the Hill", "Card Rush" };
+            st.mode = (GameMode)UIKit.Cycle(Row(), "Mode", Mathf.Clamp((int)st.mode, 0, modes.Length - 1), modes);
+            UIKit.Text(Row(24f), GameManager.ModeDescription(st.mode), UIKit.Small, UIKit.Muted);
+            if (st.mode == GameMode.Deathmatch) st.killsToWinRound = UIKit.StepperInt(Row(), "   Kills to win a round", st.killsToWinRound, 1, 50);
+            if (st.mode == GameMode.KingOfTheHill) st.hillSeconds = UIKit.Stepper(Row(), "   Hill time to win", st.hillSeconds, 5f, 5f, 120f, "0", "s");
             st.roundsToWin = UIKit.StepperInt(Row(), "Rounds to win", st.roundsToWin, 1, 20);
             st.roundTimeLimit = UIKit.Stepper(Row(), "Round time limit", st.roundTimeLimit, 30f, 0f, 600f, "0", "s", "Off");
             st.friendlyFire = UIKit.CheckRow(Row(), "Friendly fire", st.friendlyFire);
@@ -538,6 +548,92 @@ namespace Cubed
             }
             if (UIKit.Btn(new Rect(panel.x + 500f, by, 280f, 46f), "Open content folder"))
                 Application.OpenURL("file://" + ContentLoader.UserContentFolder);
+        }
+
+        // ------------------------------------------------------------------ profile
+
+        Vector2 profileScroll;
+
+        void DrawProfile()
+        {
+            var s = UIKit.Size;
+            float W = Mathf.Min(1200f, s.x - 40f), H = Mathf.Min(800f, s.y - 40f);
+            var panel = new Rect(s.x * 0.5f - W * 0.5f, s.y * 0.5f - H * 0.5f, W, H);
+            UIKit.Fill(panel, UIKit.Bg);
+            var pr = Profile.Current;
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, 600f, 40f), "Profile", UIKit.Header, Color.white);
+
+            // Stats column
+            float x = panel.x + 24f, y = panel.y + 70f, cw = W * 0.32f;
+            UIKit.Fill(new Rect(x, y, cw, H - 160f), UIKit.Panel);
+            string[] lines =
+            {
+                "Matches: " + pr.matchesPlayed + "  (won " + pr.matchesWon + ")",
+                "Rounds won: " + pr.roundsWon,
+                "Kills: " + pr.kills + "   Deaths: " + pr.deaths,
+                "K/D: " + (pr.deaths > 0 ? (pr.kills / (float)pr.deaths).ToString("0.00") : pr.kills.ToString()),
+                "Damage dealt: " + Mathf.RoundToInt(pr.damageDealt),
+                "Successful blocks: " + pr.blocks,
+                "Cards picked: " + pr.cardsPicked + "  (" + pr.DistinctCards + " different)",
+                "Online matches: " + pr.onlineMatches,
+                "Play time: " + Mathf.FloorToInt(pr.playSeconds / 3600f) + "h " + Mathf.FloorToInt(pr.playSeconds / 60f % 60f) + "m",
+            };
+            float ly = y + 12f;
+            UIKit.Text(new Rect(x + 12f, ly, cw, 28f), "Stats", UIKit.Header, UIKit.Accent);
+            ly += 36f;
+            foreach (var l in lines) { UIKit.Text(new Rect(x + 12f, ly, cw - 24f, 26f), l, UIKit.Label, Color.white); ly += 28f; }
+            ly += 10f;
+            UIKit.Text(new Rect(x + 12f, ly, cw, 28f), "Favorite cards", UIKit.Header, UIKit.Accent);
+            ly += 34f;
+            foreach (var cc in pr.FavoriteCards(5))
+            {
+                var c = CardRegistry.Get(cc.id);
+                UIKit.Text(new Rect(x + 12f, ly, cw - 24f, 24f), (c != null ? c.Title : cc.id) + "  x" + cc.count, UIKit.Small, Color.white);
+                ly += 24f;
+            }
+
+            // Hats
+            float hx = x + cw + 16f, hw = W * 0.28f;
+            UIKit.Fill(new Rect(hx, y, hw, H - 160f), UIKit.Panel);
+            UIKit.Text(new Rect(hx + 12f, y + 12f, hw, 28f), "Hats", UIKit.Header, UIKit.Accent);
+            float hy = y + 50f;
+            foreach (var hat in Hats.All)
+            {
+                bool unlocked = Hats.Unlocked(hat.Id);
+                bool on = pr.hat == hat.Id || (hat.Id == "none" && string.IsNullOrEmpty(pr.hat));
+                var unlockBy = Achievements.All.FirstOrDefault(a => a.Hat == hat.Id);
+                string label = unlocked ? hat.Name : "<color=#777c8f>" + hat.Name + "  (" + unlockBy?.Title + ")</color>";
+                GUI.enabled = unlocked;
+                if (UIKit.Toggle(new Rect(hx + 12f, hy, hw - 24f, 32f), label, on, true)) { pr.hat = hat.Id; pr.Save(); }
+                GUI.enabled = true;
+                hy += 36f;
+            }
+
+            // Achievements
+            float ax = hx + hw + 16f, aw = panel.xMax - 24f - ax;
+            var view = new Rect(ax, y, aw, H - 160f);
+            UIKit.Fill(view, UIKit.Panel);
+            UIKit.Text(new Rect(ax + 12f, y + 12f, aw, 28f), "Achievements  " + pr.achievements.Count + " / " + Achievements.All.Count, UIKit.Header, UIKit.Accent);
+            var inner = new Rect(ax + 4f, y + 48f, aw - 8f, view.height - 56f);
+            var content = new Rect(0f, 0f, inner.width - 20f, Achievements.All.Count * 52f);
+            profileScroll = GUI.BeginScrollView(inner, profileScroll, content);
+            float ay = 0f;
+            foreach (var a in Achievements.All)
+            {
+                bool got = pr.Has(a.Id);
+                UIKit.Fill(new Rect(4f, ay, content.width - 8f, 46f), new Color(1f, 1f, 1f, got ? 0.08f : 0.02f));
+                UIKit.Fill(new Rect(4f, ay, 5f, 46f), got ? new Color(1f, 0.8f, 0.25f) : new Color(0.3f, 0.3f, 0.35f));
+                UIKit.Text(new Rect(16f, ay + 2f, content.width - 24f, 22f), "<b>" + a.Title + "</b>", UIKit.Label, got ? Color.white : UIKit.Muted);
+                UIKit.Text(new Rect(16f, ay + 23f, content.width - 24f, 20f), a.Description + (a.Hat != null ? "  - unlocks " + Hats.Get(a.Hat).Name : ""), UIKit.Small, UIKit.Muted);
+                ay += 52f;
+            }
+            GUI.EndScrollView();
+
+            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back") || UIKit.BackPressed())
+            {
+                pr.Save();
+                gm.GoToMenu(GameState.MainMenu);
+            }
         }
 
         // ------------------------------------------------------------------ online

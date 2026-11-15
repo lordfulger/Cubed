@@ -62,6 +62,15 @@ namespace Cubed
             ReloadPressed = false;
             FireHeld = false;
             if (self.Frozen) { Move = Vector3.zero; return; }
+            if (Difficulty == BotDifficulty.Dummy)
+            {
+                // Training targets: drift side to side and sometimes block, never shoot.
+                float t = Time.time * 0.6f + self.Index;
+                Move = new Vector3(Mathf.Sin(t), 0f, 0f) * 0.35f;
+                AimPoint = self.Head.position + self.transform.forward * 10f;
+                if (self.BlockCooldownTimer <= 0f && Random.value < 0.004f) BlockPressed = true;
+                return;
+            }
 
             var map = GameManager.ActiveMap;
             jumpCooldown -= dt;

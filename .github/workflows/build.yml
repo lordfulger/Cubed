@@ -1,0 +1,163 @@
+# Builds Cubed for Windows, Linux and macOS with GameCI, and packages the example Thunderstore mod.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions > New repository secret):
+#   UNITY_LICENSE   Full contents of your Unity license file (Unity_lic.ulf). For a Personal license, follow
+#                   https://game.ci/docs/github/activation to obtain it.
+#   UNITY_EMAIL     Email address of the Unity account that owns the license.
+#   UNITY_PASSWORD  Password of that Unity account.
+# (Pro/Plus licenses can use UNITY_SERIAL instead of UNITY_LICENSE; see the GameCI activation docs.)
+#
+# Optional repository variable (Settings > Secrets and variables > Actions > Variables):
+#   THUNDERSTORE_TEAM  Thunderstore team name used in package zip names (default: CubedTeam).
+#
+# Before this workflow can succeed, open the project in Unity once and commit the generated .meta files,
+# Assets/Cubed/Scenes/Main.unity and ProjectSettings/ (see docs/RELEASE.md, step 1). GameCI's default
+# build method builds the scenes listed in Build Settings, so the scene must be committed.
+#
+# Newer major versions of the GameCI actions exist; v4 is used here on purpose. Check
+# https://game.ci/docs/github/builder before bumping.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
+jobs:
+  # Runs Unity tests if the project has any test assemblies. The project has none yet, so the
+  # test-runner step is skipped and the job just passes.
+  test:
+    name: Tests (if any)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Look for test assemblies
+        id: detect
+        run: |
+          if grep -rlq --include='*.asmdef' -e 'UnityEngine.TestRunner' -e 'nunit.framework.dll' Assets 2>/dev/null; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "No test assemblies found; skipping Unity tests."
+          fi
+
+      - uses: actions/cache@v4
+        if: steps.detect.outputs.has_tests == 'true'
+        with:
+          path: Library
+          key: Library-test-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-test-
+
+      - name: Run Unity tests
+        if: steps.detect.outputs.has_tests == 'true'
+        uses: game-ci/unity-test-runner@v4
+        with:
+          testMode: all
+          artifactsPath: test-results
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.detect.outputs.has_tests == 'true'
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: ignore
+
+  build:
+    name: Build ${{ matrix.targetPlatform }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targetPlatform:
+          - StandaloneWindows64
+          - StandaloneLinux64
+          - StandaloneOSX
+    steps:
+      - uses: actions/checkout@v5
+
+      # Keeps PlayerSettings.bundleVersion in sync with CubedAPI.GameVersion.
+      - name: Read game version
+        id: version
+        run: |
+          v=$(grep -oP 'GameVersion\s*=\s*"\K[^"]+' Assets/Cubed/Scripts/Modding/CubedAPI.cs || true)
+          echo "version=${v:-0.0.0}" >> "$GITHUB_OUTPUT"
+          echo "Game version: ${v:-0.0.0}"
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ matrix.targetPlatform }}-
+
+      # Unity's Docker images are large. If a build fails with "no space left on device", add a disk
+      # cleanup step here (for example jlumbroso/free-disk-space).
+
+      # GameCI's default build method is used. To use the project's own build method instead, set
+      #   buildMethod: Cubed.EditorTools.CubedProjectSetup.BuildWindowsCI   (or BuildLinuxCI)
+      # and change the artifact path below to Builds/<platform>/.
+      - uses: game-ci/unity-builder@v4
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildName: Cubed
+          versioning: Custom
+          version: ${{ steps.version.outputs.version }}
+
+      # upload-artifact does not keep Unix file permissions, which would strip the executable bit from
+      # Cubed.x86_64 and Cubed.app/Contents/MacOS/Cubed. Pack the build into a tarball first.
+      - name: Pack build
+        run: |
+          mkdir -p dist
+          sudo tar -czf "dist/Cubed-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}.tar.gz" \
+            -C "build/${{ matrix.targetPlatform }}" .
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cubed-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}
+          path: dist/*.tar.gz
+          retention-days: 14
+
+  thunderstore:
+    name: Package example data mod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Package Modding/ExampleDataPack
+        run: python Tools/package_thunderstore.py Modding/ExampleDataPack --author "${{ vars.THUNDERSTORE_TEAM || 'CubedTeam' }}" --out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thunderstore-ExampleDataPack
+          path: dist/*.zip
+          if-no-files-found: error
+
+      # Runs last so the package artifact is uploaded even when a built-in map has errors.
+      - name: Validate built-in maps
+        run: |
+          if [ -f Tools/validate_maps.py ]; then
+            python Tools/validate_maps.py
+          else
+            echo "Tools/validate_maps.py not found; skipping."
+          fi

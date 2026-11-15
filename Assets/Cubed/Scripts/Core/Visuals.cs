@@ -157,11 +157,17 @@ namespace Cubed
             startScale = transform.localScale;
         }
 
+        public void Restart(float life)
+        {
+            Life = maxLife = Mathf.Max(0.01f, life);
+            startScale = transform.localScale;
+        }
+
         void Update()
         {
             float dt = Time.deltaTime;
             Life -= dt;
-            if (Life <= 0f) { Destroy(gameObject); return; }
+            if (Life <= 0f) { Fx.ReleaseParticle(this); return; }
             Velocity += Vector3.down * Gravity * dt;
             Velocity *= 1f - Mathf.Clamp01(1.5f * dt);
             transform.position += Velocity * dt;
@@ -279,21 +285,45 @@ namespace Cubed
         {
             if (root != null) Object.Destroy(root.gameObject);
             root = null;
+            particlePool.Clear(); // pooled particles lived under the destroyed root
+        }
+
+        static readonly Stack<FxParticle> particlePool = new Stack<FxParticle>();
+
+        internal static void ReleaseParticle(FxParticle p)
+        {
+            p.gameObject.SetActive(false);
+            if (particlePool.Count < 800) particlePool.Push(p);
+            else Object.Destroy(p.gameObject);
         }
 
         public static void Burst(Vector3 pos, Color color, int count, float speed, float size = 0.15f, float life = 0.6f, float gravity = 20f)
         {
             if (Mirror) Net.NetSession.Instance.MirrorBurst(pos, color, count, speed, size, life, gravity);
             var mat = Mats.Solid(color);
+            var parent = Root;
             for (int i = 0; i < count; i++)
             {
-                var go = Prim.Cube("fx", Root, pos, Vector3.one * size * Random.Range(0.6f, 1.3f), mat);
-                go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                var p = go.AddComponent<FxParticle>();
+                FxParticle p = null;
+                while (particlePool.Count > 0 && p == null) p = particlePool.Pop();
+                Vector3 scale = Vector3.one * size * Random.Range(0.6f, 1.3f);
+                if (p == null)
+                {
+                    var go = Prim.Cube("fx", parent, pos, scale, mat);
+                    go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    p = go.AddComponent<FxParticle>();
+                }
+                else
+                {
+                    p.transform.position = pos;
+                    p.transform.localScale = scale;
+                    p.GetComponent<MeshRenderer>().sharedMaterial = mat;
+                    p.gameObject.SetActive(true);
+                }
                 p.Velocity = Random.onUnitSphere * speed * Random.Range(0.4f, 1f);
-                p.Life = life * Random.Range(0.7f, 1.2f);
                 p.Gravity = gravity;
                 p.Spin = Random.insideUnitSphere * 720f;
+                p.Restart(life * Random.Range(0.7f, 1.2f));
             }
         }
 

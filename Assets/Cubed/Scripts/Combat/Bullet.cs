@@ -51,9 +51,22 @@ namespace Cubed
 
         public static Bullet Spawn(Player owner, Vector3 position, Vector3 velocity)
         {
-            var go = new GameObject("Bullet");
-            go.transform.position = position;
-            var b = go.AddComponent<Bullet>();
+            // Bullets are pooled: firing hundreds per second shouldn't allocate GameObjects.
+            Bullet b = null;
+            while (pool.Count > 0 && b == null) b = pool.Pop();
+            if (b == null)
+            {
+                var go = new GameObject("Bullet");
+                if (poolRoot == null) { poolRoot = new GameObject("Bullets").transform; DontDestroyOnLoad(poolRoot.gameObject); }
+                go.transform.SetParent(poolRoot, false);
+                go.SetActive(false);
+                b = go.AddComponent<Bullet>();
+            }
+            b.ResetState();
+            b.transform.position = position;
+            b.gameObject.SetActive(true);
+            var trail0 = b.GetComponent<TrailRenderer>();
+            if (trail0 != null) trail0.Clear();
             b.NetId = ++nextNetId;
             b.SpawnPosition = position;
             b.Owner = owner;
@@ -104,10 +117,49 @@ namespace Cubed
             return b;
         }
 
+        static readonly Stack<Bullet> pool = new Stack<Bullet>();
+        static Transform poolRoot;
+        const int MaxPooled = 600;
+
+        void ResetState()
+        {
+            Owner = null; Team = -1; Velocity = Vector3.zero; Gravity = 0f; Damage = 0f; Radius = 0.12f; Knockback = 0f;
+            Homing = 0f; ExplosionRadius = 0f; Lifetime = 4f; BouncesLeft = 0; PierceLeft = 0; BounceCount = 0; CanHitOwner = false;
+            TerrainPierceLeft = 0; Age = 0f; Color = Color.white;
+            AlreadyHit.Clear();
+            Data.Clear();
+            dead = false;
+            checkedSpawnOverlap = false;
+        }
+
+        void Release()
+        {
+            gameObject.SetActive(false);
+            if (pool.Count < MaxPooled) pool.Push(this);
+            else Destroy(gameObject);
+        }
+
         void BuildVisual()
         {
-            if (visual != null) Destroy(visual.gameObject);
-            visual = CreateVisual(gameObject, Radius, Color);
+            if (visual == null) visual = CreateVisual(gameObject, Radius, Color);
+            else UpdateVisual(visual, gameObject, Radius, Color);
+        }
+
+        /// <summary>Re-color and re-size an existing visual made by CreateVisual.</summary>
+        public static void UpdateVisual(Transform visual, GameObject host, float radius, Color color)
+        {
+            var core = Color.Lerp(color, Color.white, 0.45f);
+            visual.localScale = Vector3.one * Mathf.Max(0.08f, radius * 2f);
+            visual.GetComponent<MeshRenderer>().sharedMaterial = Mats.Transparent(new Color(core.r, core.g, core.b, 1f));
+            var halo = visual.childCount > 0 ? visual.GetChild(0).GetComponent<MeshRenderer>() : null;
+            if (halo != null) halo.sharedMaterial = Mats.Transparent(new Color(color.r, color.g, color.b, 0.22f));
+            var trail = host.GetComponent<TrailRenderer>();
+            if (trail != null)
+            {
+                trail.startWidth = Mathf.Max(0.06f, radius * 1.6f);
+                trail.startColor = new Color(color.r, color.g, color.b, 0.7f);
+                trail.endColor = new Color(color.r, color.g, color.b, 0f);
+            }
         }
 
         /// <summary>Sphere + trail look shared by simulated bullets and network bullet views.</summary>
@@ -150,8 +202,7 @@ namespace Cubed
             {
                 if (b == null) continue;
                 b.dead = true;
-                b.gameObject.SetActive(false);
-                Destroy(b.gameObject);
+                b.Release();
             }
             Active.Clear();
         }
@@ -426,7 +477,7 @@ namespace Cubed
             dead = true;
             if (explode && ExplosionRadius > 0f)
                 Explosion.Create(transform.position, ExplosionRadius, Damage, Owner, Knockback, Color);
-            Destroy(gameObject);
+            Release();
         }
     }
 }

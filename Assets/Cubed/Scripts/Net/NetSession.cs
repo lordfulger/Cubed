@@ -189,6 +189,7 @@ namespace Cubed.Net
                     int protocol = m.Int();
                     string version = m.Str();
                     string name = m.Str().Trim();
+                    string hat = m.AtEnd ? "" : m.Str();
                     if (name.Length == 0) name = "Player " + id;
                     if (name.Length > 16) name = name.Substring(0, 16);
                     if (protocol != NetConst.Protocol || version != CubedAPI.GameVersion)
@@ -211,7 +212,7 @@ namespace Cubed.Net
                     }
                     r.Name = name;
                     r.Welcomed = true;
-                    Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id });
+                    Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id, hat = hat ?? "" });
                     r.Conn.Send(new NetWriter(Msg.Welcome).Int(id).ToArray());
                     lastLobbyJson = "";
                     CubedHud.AddFeedText(name + " joined");
@@ -311,7 +312,7 @@ namespace Cubed.Net
             foreach (var p in Gm.Players)
             {
                 int owner = p.Input is NetworkInput ni ? ni.Owner : -1;
-                w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot);
+                w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.hat : "");
             }
             server.Broadcast(w.ToArray());
             snapshotTimer = 0f;
@@ -505,7 +506,7 @@ namespace Cubed.Net
                 host = connector.Connection;
                 connector = null;
                 Status = "Connected, waiting for the host...";
-                host.Send(new NetWriter(Msg.Hello).Int(NetConst.Protocol).Str(CubedAPI.GameVersion).Str(Gm.Settings.onlineName).ToArray());
+                host.Send(new NetWriter(Msg.Hello).Int(NetConst.Protocol).Str(CubedAPI.GameVersion).Str(Gm.Settings.onlineName).Str(Profile.Current.hat).ToArray());
             }
             if (host == null) return;
 
@@ -566,6 +567,7 @@ namespace Cubed.Net
                         var info = new GameManager.NetPlayerInfo { Index = m.Byte(), Name = m.Str(), Team = m.Byte() };
                         int owner = m.Int();
                         info.Bot = m.Bool();
+                        info.Hat = m.Str();
                         info.Local = owner >= 0 && owner == MyId;
                         infos.Add(info);
                     }

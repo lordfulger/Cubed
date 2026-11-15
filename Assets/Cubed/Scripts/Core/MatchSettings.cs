@@ -30,7 +30,9 @@ namespace Cubed
 
     public enum MapRotation { Fixed, Cycle, Random }
 
-    public enum BotDifficulty { Easy, Normal, Hard, Brutal }
+    public enum BotDifficulty { Easy, Normal, Hard, Brutal, Dummy }
+
+    public enum GameMode { Elimination, Deathmatch, KingOfTheHill, CardRush, Practice }
 
     [Serializable]
     public class PlayerSlot
@@ -41,6 +43,8 @@ namespace Cubed
         public BotDifficulty difficulty = BotDifficulty.Normal;
         /// <summary>Network client id that controls this slot (ControlType.Online), otherwise -1.</summary>
         public int netOwner = -1;
+        /// <summary>Cosmetic hat id (see Hats).</summary>
+        public string hat = "";
 
         public bool IsHuman => control != ControlType.None && control != ControlType.Bot;
         public bool IsLocalHuman => IsHuman && control != ControlType.Online;
@@ -58,6 +62,11 @@ namespace Cubed
         public List<PlayerSlot> slots = new List<PlayerSlot>();
 
         // Match flow
+        public GameMode mode = GameMode.Elimination;
+        /// <summary>Deathmatch: team kills needed to win a round.</summary>
+        public int killsToWinRound = 5;
+        /// <summary>King of the Hill: seconds of control needed to win a round.</summary>
+        public float hillSeconds = 20f;
         public int roundsToWin = 5;
         public float roundTimeLimit = 0f;
 

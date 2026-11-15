@@ -473,6 +473,7 @@ namespace Cubed
             try
             {
                 string id = MapRegistry.SaveUserMap(Data);
+                Profile.Current.Unlock("architect");
                 Status("Saved " + MapRegistry.Get(id)?.FilePath);
             }
             catch (System.Exception e)
