@@ -17,6 +17,7 @@ namespace Cubed
         public static void AddDamageNumber(Vector3 pos, float amount, Color color)
         {
             if (amount < 0.5f) return;
+            if (!Options.Current.damageNumbers) { if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorDamageNumber(pos, amount, color); return; }
             if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorDamageNumber(pos, amount, color);
             damageNumbers.Add(new DamageNumber { Pos = pos + Random.insideUnitSphere * 0.3f, Amount = amount, Color = color, Time = Time.unscaledTime });
             if (damageNumbers.Count > 60) damageNumbers.RemoveAt(0);

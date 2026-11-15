@@ -44,7 +44,8 @@ namespace Cubed
             {
                 float lost = lastHealth - p.Health;
                 AddTrauma(Mathf.Clamp(lost / 70f, 0.12f, 0.6f));
-                DamageFlash = Mathf.Clamp01(DamageFlash + lost / 40f + 0.25f);
+                DamageFlash = Mathf.Clamp01(DamageFlash + lost / 40f + 0.25f) * (Options.Current.reduceFlashes ? 0.4f : 1f);
+                if (InputSource != null && InputSource.Joystick > 0) Rumble.Pulse(InputSource.Joystick, 0.6f, 0.9f, 0.18f);
             }
             lastHealth = p.Health;
             if (p.DamageDealt > lastDealt + 0.5f)
@@ -58,6 +59,7 @@ namespace Cubed
             {
                 fovKick = Mathf.Min(fovKick + 2.2f, 5f);
                 AddTrauma(0.05f);
+                if (InputSource != null && InputSource.Joystick > 0) Rumble.Pulse(InputSource.Joystick, 0.15f, 0.35f, 0.06f);
             }
             lastAmmo = ammo;
             if (p.Grounded && !lastGrounded && lastVy < -12f) AddTrauma(Mathf.Clamp01((-lastVy - 12f) / 40f) + 0.08f);
@@ -139,7 +141,7 @@ namespace Cubed
                 desired = pivot + dir * Mathf.Max(0.3f, closest - 0.05f);
             }
             // Screen shake (trauma squared feels natural) and firing FOV kick.
-            float shake = trauma * trauma;
+            float shake = trauma * trauma * Options.Current.screenShake;
             float time = Time.unscaledTime * 22f;
             var shakeRot = Quaternion.Euler(
                 (Mathf.PerlinNoise(time, 1f) - 0.5f) * 6f * shake,
@@ -148,7 +150,7 @@ namespace Cubed
             transform.SetPositionAndRotation(desired + rot * new Vector3(Mathf.PerlinNoise(time, 5f) - 0.5f, Mathf.PerlinNoise(6f, time) - 0.5f, 0f) * 0.35f * shake, rot * shakeRot);
             trauma = Mathf.Max(0f, trauma - dt * 1.5f);
             fovKick = Mathf.Lerp(fovKick, 0f, 1f - Mathf.Exp(-dt * 12f));
-            Cam.fieldOfView = baseFov + fovKick;
+            Cam.fieldOfView = baseFov + Options.Current.fovOffset + fovKick * Mathf.Min(1f, Options.Current.screenShake);
         }
 
         /// <summary>The world point under the crosshair, ignoring the player and anything behind them.</summary>

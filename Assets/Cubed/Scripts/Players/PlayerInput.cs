@@ -74,7 +74,7 @@ namespace Cubed
         public bool MenuConfirm { get; private set; }
         public bool PausePressed { get; private set; }
 
-        bool prevBlockTrigger, prevMenuStick;
+        bool prevBlockTrigger, prevMenuStick, prevJump, prevReload, prevPause, prevConfirm, prevLeft, prevRight;
 
         public HumanInput(ControlType device) { Device = device; }
 
@@ -94,37 +94,43 @@ namespace Cubed
             var s = Settings;
             float invert = s != null && s.invertY ? -1f : 1f;
             Vector2 look, move;
+            var binds = InputBindings.Current;
             if (IsKeyboard)
             {
                 float sens = s != null ? s.mouseSensitivity : 2f;
                 bool locked = Cursor.lockState == CursorLockMode.Locked;
                 look = locked ? new Vector2(SafeInput.Axis("Mouse X"), SafeInput.Axis("Mouse Y")) * sens : Vector2.zero;
                 move = new Vector2(
-                    (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
-                    (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f));
-                JumpPressed = Input.GetKeyDown(KeyCode.Space);
-                FireHeld = locked && Input.GetMouseButton(0);
-                BlockPressed = (locked && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.F);
-                ReloadPressed = Input.GetKeyDown(KeyCode.R);
-                PausePressed = Input.GetKeyDown(KeyCode.Escape);
+                    (binds.KeyHeld(GameAction.MoveRight) ? 1f : 0f) - (binds.KeyHeld(GameAction.MoveLeft) ? 1f : 0f),
+                    (binds.KeyHeld(GameAction.MoveForward) ? 1f : 0f) - (binds.KeyHeld(GameAction.MoveBack) ? 1f : 0f));
+                JumpPressed = binds.KeyDown(GameAction.Jump);
+                // Mouse buttons only count while the cursor is captured (so clicking UI doesn't shoot).
+                var fire = binds.Key(GameAction.Fire);
+                FireHeld = binds.KeyHeld(GameAction.Fire) && (locked || (fire.primary != KeyCode.Mouse0 && fire.secondary != KeyCode.Mouse0));
+                BlockPressed = binds.KeyDown(GameAction.Block) && (locked || !Input.GetMouseButtonDown(1));
+                ReloadPressed = binds.KeyDown(GameAction.Reload);
+                PausePressed = binds.KeyDown(GameAction.Pause);
             }
             else
             {
                 int j = Joystick;
+                var profile = Controllers.Profile(j);
                 float sens = (s != null ? s.gamepadSensitivity : 160f) * dt;
-                look = Deadzone(new Vector2(SafeInput.JoyAxis(j, 4), -SafeInput.JoyAxis(j, 5)), 0.15f) * sens;
-                move = Deadzone(new Vector2(SafeInput.JoyAxis(j, 1), -SafeInput.JoyAxis(j, 2)), 0.2f);
-                // Windows XInput maps triggers to axes 9/10; Linux/macOS drivers commonly use 3/6.
-                bool windows = Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
-                float rt = SafeInput.JoyAxis(j, windows ? 10 : 6);
-                float lt = SafeInput.JoyAxis(j, windows ? 9 : 3);
-                bool blockTrigger = lt > 0.5f;
-                JumpPressed = Input.GetKeyDown(SafeInput.JoyButton(j, 0));
-                FireHeld = rt > 0.4f || Input.GetKey(SafeInput.JoyButton(j, 5));
-                BlockPressed = Input.GetKeyDown(SafeInput.JoyButton(j, 4)) || Input.GetKeyDown(SafeInput.JoyButton(j, 1)) || (blockTrigger && !prevBlockTrigger);
-                prevBlockTrigger = blockTrigger;
-                ReloadPressed = Input.GetKeyDown(SafeInput.JoyButton(j, 2));
-                PausePressed = Input.GetKeyDown(SafeInput.JoyButton(j, 7));
+                look = Deadzone(Controllers.RightStick(j, profile), 0.15f) * sens;
+                move = Deadzone(Controllers.LeftStick(j, profile), 0.2f);
+                bool jump = binds.PadHeld(GameAction.Jump, j, profile);
+                bool block = binds.PadHeld(GameAction.Block, j, profile);
+                bool reload = binds.PadHeld(GameAction.Reload, j, profile);
+                bool pause = binds.PadHeld(GameAction.Pause, j, profile);
+                JumpPressed = jump && !prevJump;
+                BlockPressed = block && !prevBlockTrigger;
+                ReloadPressed = reload && !prevReload;
+                PausePressed = pause && !prevPause;
+                FireHeld = binds.PadHeld(GameAction.Fire, j, profile);
+                prevJump = jump;
+                prevBlockTrigger = block;
+                prevReload = reload;
+                prevPause = pause;
             }
 
             Yaw = Mathf.Repeat(Yaw + look.x, 360f);
@@ -151,14 +157,21 @@ namespace Cubed
                 return;
             }
             int j = Joystick;
-            // Left stick or the shoulder buttons (d-pad axes differ between platforms).
-            float x = SafeInput.JoyAxis(j, 1);
+            var profile = Controllers.Profile(j);
+            float x = Controllers.LeftStick(j, profile).x;
+            float dpad = Controllers.DPad(j, profile).x;
+            if (Mathf.Abs(dpad) > 0.5f) x = dpad;
             bool stick = Mathf.Abs(x) > 0.6f;
             if (stick && !prevMenuStick) MenuHorizontal = x > 0 ? 1 : -1;
             prevMenuStick = stick;
-            if (Input.GetKeyDown(SafeInput.JoyButton(j, 4))) MenuHorizontal = -1;
-            if (Input.GetKeyDown(SafeInput.JoyButton(j, 5))) MenuHorizontal = 1;
-            MenuConfirm = Input.GetKeyDown(SafeInput.JoyButton(j, 0));
+            bool left = Controllers.Held(j, profile, PadButton.LeftShoulder), right = Controllers.Held(j, profile, PadButton.RightShoulder);
+            if (left && !prevLeft) MenuHorizontal = -1;
+            if (right && !prevRight) MenuHorizontal = 1;
+            prevLeft = left;
+            prevRight = right;
+            bool confirm = Controllers.Held(j, profile, PadButton.South);
+            MenuConfirm = confirm && !prevConfirm;
+            prevConfirm = confirm;
         }
 
         static Vector2 Deadzone(Vector2 v, float dz)

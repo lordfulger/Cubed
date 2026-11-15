@@ -251,6 +251,7 @@ namespace Cubed
         public static void Light(Vector3 pos, Color color, float range, float intensity, float life)
         {
             if (Mirror) Net.NetSession.Instance.MirrorLight(pos, color, range, intensity, life);
+            if (Options.Current.reduceFlashes) intensity *= 0.35f;
             var go = new GameObject("flash");
             go.transform.SetParent(Root, false);
             go.transform.position = pos;

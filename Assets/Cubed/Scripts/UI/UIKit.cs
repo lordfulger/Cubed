@@ -102,21 +102,23 @@ namespace Cubed
             if (allowKeyboardBack && Input.GetKeyDown(KeyCode.Escape)) b = true;
             bool keyboardNav = vertical != 0 || horizontal != 0 || a;
 
-            // Gamepads: left stick or d-pad (axes differ per platform) with key repeat.
-            bool windows = Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
+            // Gamepads: left stick or d-pad (per detected controller layout) with key repeat.
             int dir = 0; // 1 up, 2 down, 3 left, 4 right
             for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
             {
-                float x = SafeInput.JoyAxis(j, 1), y = SafeInput.JoyAxis(j, 2);
-                float dx = SafeInput.JoyAxis(j, windows ? 6 : 7), dy = SafeInput.JoyAxis(j, windows ? 7 : 8);
-                if (Mathf.Abs(dx) > 0.5f) x = dx;
-                if (Mathf.Abs(dy) > 0.5f) y = windows ? -dy : dy; // Windows d-pad Y is up-positive
-                if (y < -0.6f) dir = 1;
-                else if (y > 0.6f) dir = 2;
+                if (!Controllers.IsConnected(j)) continue;
+                var prof = Controllers.Profile(j);
+                var st = Controllers.LeftStick(j, prof);
+                var dp = Controllers.DPad(j, prof);
+                float x = Mathf.Abs(dp.x) > 0.5f ? dp.x : st.x;
+                float y = Mathf.Abs(dp.y) > 0.5f ? dp.y : st.y;
+                if (y > 0.6f) dir = 1;
+                else if (y < -0.6f) dir = 2;
                 else if (x < -0.6f) dir = 3;
                 else if (x > 0.6f) dir = 4;
-                if (Input.GetKeyDown(SafeInput.JoyButton(j, 0))) a = true;
-                if (Input.GetKeyDown(SafeInput.JoyButton(j, 1))) b = true;
+                int south = prof.ButtonIndex(PadButton.South), east = prof.ButtonIndex(PadButton.East);
+                if (south >= 0 && Input.GetKeyDown(SafeInput.JoyButton(j, south))) a = true;
+                if (east >= 0 && Input.GetKeyDown(SafeInput.JoyButton(j, east))) b = true;
                 if (dir != 0) break;
             }
             bool fire = false;
@@ -220,7 +222,7 @@ namespace Cubed
                 submit = back = false;
                 adjust = 0;
             }
-            Scale = Mathf.Clamp(Screen.height / VirtualHeight, 0.5f, 4f);
+            Scale = Mathf.Clamp(Screen.height / VirtualHeight * Options.Current.uiScale, 0.4f, 5f);
             Size = new Vector2(Screen.width / Scale, Screen.height / Scale);
             GUI.matrix = Matrix4x4.Scale(new Vector3(Scale, Scale, 1f));
         }

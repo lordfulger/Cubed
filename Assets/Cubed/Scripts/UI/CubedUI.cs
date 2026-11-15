@@ -54,7 +54,8 @@ namespace Cubed
             {
                 for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
                 {
-                    if (!Input.GetKeyDown(SafeInput.JoyButton(j, 7))) continue;
+                    int start = Controllers.Profile(j).ButtonIndex(PadButton.Start);
+                    if (start < 0 || !Input.GetKeyDown(SafeInput.JoyButton(j, start))) continue;
                     var pad = ControlTypes.Gamepad(j);
                     var slots = gm.Settings.slots;
                     if (slots.Any(s => s.control == pad) || slots.Count >= 8) continue;
@@ -78,6 +79,7 @@ namespace Cubed
                 case GameState.Lobby: DrawLobby(); break;
                 case GameState.CardLibrary: DrawCardLibrary(); break;
                 case GameState.Mods: DrawMods(); break;
+                case GameState.Options: if (OptionsUI.Draw(gm)) gm.GoToMenu(GameState.MainMenu); break;
                 case GameState.Editor: gm.Editor.DrawGUI(); break;
                 default:
                     GUI.enabled = !gm.Paused;
@@ -85,9 +87,11 @@ namespace Cubed
                     GUI.enabled = true;
                     break;
             }
-            if (gm.Paused) DrawPause();
+            if (gm.Paused && gm.ShowOptionsOverlay) { if (OptionsUI.Draw(gm)) gm.ShowOptionsOverlay = false; }
+            else if (gm.Paused) DrawPause();
             else if (gm.NetClientMode && gm.HostPaused)
                 UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.2f, UIKit.Size.x, 40f), "Host paused the game", UIKit.Title, Color.white);
+            Toasts.Draw();
             UIKit.End();
 
             // Mod overlays draw in raw pixel coordinates.
@@ -135,6 +139,8 @@ namespace Cubed
             if (UIKit.Btn(new Rect(50f, y, w, h), "Map Editor")) gm.OpenEditor();
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Card Library")) gm.GoToMenu(GameState.CardLibrary);
+            y += h + gap;
+            if (UIKit.Btn(new Rect(50f, y, w, h), "Options")) gm.GoToMenu(GameState.Options);
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Mods (" + (CubedAPI.Mods.Count + ContentLoader.Sources.Count) + ")")) gm.GoToMenu(GameState.Mods);
             y += h + gap;
@@ -683,7 +689,7 @@ namespace Cubed
         {
             var s = UIKit.Size;
             UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.55f));
-            float w = 460f, h = 520f;
+            float w = 460f, h = 580f;
             var r = new Rect(s.x * 0.5f - w * 0.5f, s.y * 0.5f - h * 0.5f, w, h);
             UIKit.Fill(r, UIKit.Panel);
             UIKit.Text(new Rect(r.x, r.y + 16f, w, 40f), "Paused", UIKit.Title, Color.white);
@@ -700,6 +706,8 @@ namespace Cubed
             st.invertY = UIKit.CheckRow(new Rect(r.x + 20f, y, w - 40f, 36f), "Invert Y", st.invertY);
             y += 56f;
             if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Resume") || UIKit.BackPressed()) { gm.SaveSettings(); gm.SetPaused(false); }
+            y += 56f;
+            if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Options")) gm.ShowOptionsOverlay = true;
             y += 56f;
             if (gm.NetClientMode)
             {

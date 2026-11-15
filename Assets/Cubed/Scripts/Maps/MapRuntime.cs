@@ -218,7 +218,7 @@ namespace Cubed
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 r.receiveShadows = false;
             }
-            Looks.Motes(transform, FullBounds, Color.Lerp(horizon, Color.white, 0.5f) * new Color(1f, 1f, 1f, 0.5f));
+            if (Options.Current.ambientParticles) Looks.Motes(transform, FullBounds, Color.Lerp(horizon, Color.white, 0.5f) * new Color(1f, 1f, 1f, 0.5f));
         }
 
         static Color Quantize(Color c)

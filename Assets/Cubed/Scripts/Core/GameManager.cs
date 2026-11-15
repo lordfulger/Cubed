@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Cubed
 {
-    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
+    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Options, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
 
     /// <summary>One player's progress through a card pick phase.</summary>
     public class PickState
@@ -67,6 +67,7 @@ namespace Cubed
         public MapEditor Editor { get; private set; }
 
         MapData editorTestMap;
+        readonly bool[] pausePrev = new bool[ControlTypes.MaxGamepads + 1];
         MatchSettings localSettingsBackup;
         float pickDoneTimer;
         float orbitAngle;
@@ -84,6 +85,8 @@ namespace Cubed
             DontDestroyOnLoad(gameObject);
 
             Settings = MatchSettings.Load();
+            Options.Current.Apply(false);
+            Controllers.Changed += OnControllerChanged;
             Sfx.Init(gameObject);
             Sfx.Volume = Settings.volume;
             gameObject.AddComponent<AudioListener>();
@@ -562,6 +565,8 @@ namespace Cubed
         void Update()
         {
             float udt = Time.unscaledDeltaTime;
+            Controllers.Poll();
+            Rumble.Update();
             HandlePause();
             if (NetClientMode)
             {
@@ -640,9 +645,29 @@ namespace Cubed
         {
             if (!InMatch) return;
             bool pressed = Input.GetKeyDown(KeyCode.Escape);
-            for (int j = 1; j <= ControlTypes.MaxGamepads && !pressed; j++) pressed = Input.GetKeyDown(SafeInput.JoyButton(j, 7));
+            // Poll pause buttons directly: player input isn't ticked while time is stopped.
+            var binds = InputBindings.Current;
+            if (binds.KeyDown(GameAction.Pause)) pressed = true;
+            for (int j = 1; j <= ControlTypes.MaxGamepads; j++)
+            {
+                bool held = Controllers.IsConnected(j) && binds.PadHeld(GameAction.Pause, j, Controllers.Profile(j));
+                if (held && !pausePrev[j]) pressed = true;
+                pausePrev[j] = held;
+            }
             if (pressed) SetPaused(!Paused);
         }
+
+        void OnControllerChanged(int joystick, bool connected, string name)
+        {
+            Toasts.Show(connected ? "Controller " + joystick + " connected" : "Controller " + joystick + " disconnected",
+                connected ? name + " (" + Controllers.DetectLayout(joystick) + " layout)" : "Reconnect it to keep playing", connected ? UIKit.Good : UIKit.Bad);
+            // A local player lost their pad mid-match: pause so nobody gets a free kill.
+            if (!connected && InMatch && !Paused && Players.Any(p => p.Input is HumanInput h && h.Joystick == joystick))
+                SetPaused(true);
+        }
+
+        /// <summary>Overlay the options screen on top of the pause menu.</summary>
+        public bool ShowOptionsOverlay;
 
         public void SetPaused(bool paused)
         {
