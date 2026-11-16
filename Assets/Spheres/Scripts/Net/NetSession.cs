@@ -538,7 +538,7 @@ namespace Spheres.Net
                 float cd = p.BlockCooldownTimer / Mathf.Max(0.01f, p.GetStat(Stat.BlockCooldown));
                 w.Byte(p.Index).Vec3(p.transform.position).Vec3(p.Velocity).Float(yaw).Float(pitch).Float(p.Health)
                  .Byte(flags).Byte(p.Weapon.Ammo).Unit(p.Weapon.ReloadProgress).Unit(cd).Byte(p.LivesRemaining)
-                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt).Float(p.Barrier).Byte(p.Team);
+                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt).Float(p.Barrier).Byte(p.Team).Byte(p.LastAttacker != null ? p.LastAttacker.Index : 255);
             }
 
             int count = Mathf.Min(Bullet.Active.Count, 400);
@@ -1027,9 +1027,11 @@ namespace Spheres.Net
                 float dmg = m.Float();
                 float barrier = m.Float();
                 int team = m.Byte();
+                int attacker = m.Byte();
                 var p = FindPlayer(index);
                 if (p == null) continue;
                 p.Team = team;
+                p.LastAttacker = attacker == 255 ? null : FindPlayer(attacker);
                 p.Frozen = state != GameState.Fighting;
                 p.NetApply(pos, vel, yaw, pitch, health, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, (flags & 8) != 0,
                     (flags & 16) != 0, (flags & 32) != 0, ammo, (flags & 64) != 0, reload, cd, lives, kills, deaths, dmg,

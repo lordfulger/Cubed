@@ -12,6 +12,18 @@ namespace Spheres
         public Vector3 ShoulderOffset = new Vector3(0.85f, 0.35f, 0f);
         public Player Following { get; private set; }
 
+        public const float KillCamDuration = 2.6f;
+        /// <summary>Who killed the target (kill cam), and when.</summary>
+        public Player Killer { get; private set; }
+        public float DiedAt { get; private set; } = -99f;
+        public bool KillCamActive => Target != null && !Target.IsAlive && Killer != null && Killer != Target && Killer.IsAlive
+                                     && Time.unscaledTime - DiedAt < KillCamDuration;
+        /// <summary>Dead players can fly a free camera (Jump toggles it).</summary>
+        public bool FreeCam { get; private set; }
+        int spectateIndex;
+        bool wasAlive = true, prevSpecFire;
+        Vector3 freePos;
+
         /// <summary>All live player cameras (used for shake and positional audio).</summary>
         public static readonly System.Collections.Generic.List<PlayerCamera> Active = new System.Collections.Generic.List<PlayerCamera>();
 
@@ -99,9 +111,51 @@ namespace Spheres
 
         public void SetViewport(Rect normalized) => Cam.rect = normalized;
 
+        void UpdateSpectating(float dt)
+        {
+            bool alive = Target.IsAlive;
+            if (wasAlive && !alive)
+            {
+                DiedAt = Time.unscaledTime;
+                Killer = Target.LastAttacker;
+                FreeCam = false;
+                spectateIndex = 0;
+            }
+            if (alive) { FreeCam = false; Killer = null; }
+            wasAlive = alive;
+            if (alive || KillCamActive) { prevSpecFire = InputSource.FireHeld; return; }
+
+            bool fire = InputSource.FireHeld;
+            if (fire && !prevSpecFire) { spectateIndex++; FreeCam = false; }
+            prevSpecFire = fire;
+            if (InputSource.JumpPressed)
+            {
+                FreeCam = !FreeCam;
+                if (FreeCam) freePos = transform.position;
+            }
+            if (FreeCam)
+            {
+                var local = Quaternion.Euler(0f, -InputSource.Yaw, 0f) * InputSource.Move;
+                var rot = Quaternion.Euler(InputSource.Pitch, InputSource.Yaw, 0f);
+                freePos += rot * new Vector3(local.x, 0f, local.z) * 14f * dt;
+                var gm = GameManager.Instance;
+                if (gm != null && gm.Map != null)
+                {
+                    var b = gm.Map.FullBounds;
+                    b.Expand(20f);
+                    freePos = b.ClosestPoint(freePos);
+                }
+            }
+        }
+
         Player PickFollow()
         {
             if (Target != null && Target.IsAlive) return Target;
+            if (KillCamActive) return Killer;
+            var alivePlayers = new System.Collections.Generic.List<Player>();
+            foreach (var p in Player.All) if (p.IsAlive && p.Team == Target.Team) alivePlayers.Add(p);
+            foreach (var p in Player.All) if (p.IsAlive && p.Team != Target.Team) alivePlayers.Add(p);
+            if (alivePlayers.Count > 0) return alivePlayers[((spectateIndex % alivePlayers.Count) + alivePlayers.Count) % alivePlayers.Count];
             // Spectate a living teammate, otherwise anyone alive.
             Player any = null;
             foreach (var p in Player.All)
@@ -118,7 +172,14 @@ namespace Spheres
             if (Target == null || InputSource == null) return;
             float dt = Time.unscaledDeltaTime;
             Monitor(dt);
+            UpdateSpectating(dt);
             Following = PickFollow();
+            if (FreeCam)
+            {
+                transform.SetPositionAndRotation(freePos, Quaternion.Euler(InputSource.Pitch, InputSource.Yaw, 0f));
+                Cam.fieldOfView = baseFov + Options.Current.fovOffset;
+                return;
+            }
             float size = Following.Size;
             Quaternion rot = Quaternion.Euler(InputSource.Pitch, InputSource.Yaw, 0f);
             Vector3 pivot = Following.transform.position + Vector3.up * (1.35f * size);

@@ -222,7 +222,14 @@ namespace Spheres
             }
             else
             {
-                string who = cam.Following != null && cam.Following != p ? "  -  spectating " + cam.Following.DisplayName : "";
+                string who = cam.FreeCam ? "  -  free camera" : cam.Following != null && cam.Following != p ? "  -  spectating " + cam.Following.DisplayName : "";
+                if (cam.KillCamActive) DrawKillCam(cam, v);
+                else if (!p.IsAlive && gm.State == GameState.Fighting)
+                {
+                    var hi = p.Input as HumanInput;
+                    string hint = hi != null && !hi.IsKeyboard ? "Fire: next player    A: free camera" : "Fire: next player    Space: free camera (WASD)";
+                    UIKit.Shadowed(new Rect(v.x, v.yMax - 92f, v.width, 20f), hint, UIKit.SmallCenter, UIKit.Muted);
+                }
                 UIKit.Shadowed(new Rect(v.x, v.yMax - 120f, v.width, 30f), "ELIMINATED" + who, UIKit.HeaderCenter, UIKit.Bad);
             }
 
@@ -329,6 +336,34 @@ namespace Spheres
             float y = Mathf.Clamp(tooltipAnchor.center.y - h * 0.5f, 8f, UIKit.Size.y - h - 8f);
             UIKit.DrawCard(new Rect(x, y, w, h), tooltipCard, true);
             if (Event.current.type == EventType.Repaint) tooltipCard = null;
+        }
+
+        // ------------------------------------------------------------------ kill cam
+
+        static void DrawKillCam(PlayerCamera cam, Rect v)
+        {
+            var k = cam.Killer;
+            if (k == null) return;
+            float age = Time.unscaledTime - cam.DiedAt;
+            float slide = Mathf.Pow(1f - Mathf.Clamp01(age * 4f), 3f) * 60f;
+            float w = Mathf.Min(420f, v.width - 20f);
+            var r = new Rect(v.center.x - w * 0.5f, v.y + 70f - slide, w, 104f);
+            UIKit.Fill(r, new Color(0.04f, 0.04f, 0.07f, 0.85f));
+            UIKit.Fill(new Rect(r.x, r.y, 4f, r.height), k.Color);
+            UIKit.Text(new Rect(r.x + 14f, r.y + 6f, w - 28f, 20f), "KILLED BY", UIKit.Small, UIKit.Bad);
+            UIKit.Text(new Rect(r.x + 14f, r.y + 22f, w - 28f, 30f), k.DisplayName, UIKit.Header, Color.Lerp(k.Color, Color.white, 0.3f));
+            UIKit.Bar(new Rect(r.x + 14f, r.y + 56f, w * 0.5f, 8f), k.Health / Mathf.Max(1f, k.MaxHealth), k.Color, new Color(0f, 0f, 0f, 0.6f));
+            UIKit.Text(new Rect(r.x + 20f + w * 0.5f, r.y + 50f, w * 0.5f - 34f, 20f), Mathf.CeilToInt(k.Health) + " HP left", UIKit.Small, Color.white);
+            float ix = r.x + 14f;
+            foreach (var g in k.Cards.GroupBy(c => c))
+            {
+                if (ix > r.xMax - 30f) break;
+                var ir = new Rect(ix, r.y + 72f, 22f, 22f);
+                CardIcons.Draw(ir, g.Key, 1f);
+                if (ir.Contains(Event.current.mousePosition)) { tooltipCard = g.Key; tooltipAnchor = ir; }
+                ix += 25f;
+            }
+            if (k.Cards.Count == 0) UIKit.Text(new Rect(r.x + 14f, r.y + 72f, w - 28f, 22f), "No cards yet!", UIKit.Small, UIKit.Muted);
         }
 
         // ------------------------------------------------------------------ quick chat wheel
