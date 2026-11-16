@@ -14,6 +14,10 @@ namespace Spheres
         public int detail;
         public int eyeColor;
         public string hat = "none";
+        /// <summary>Index into <see cref="Cosmetics.Trails"/>.</summary>
+        public int trail;
+        /// <summary>Index into <see cref="Cosmetics.Poses"/> (victory pose on the podium).</summary>
+        public int pose;
 
         public static readonly string[] EyeStyles = { "Round", "Sleepy", "Angry", "Happy", "Big", "Cyclops", "Visor", "Dots" };
         public static readonly string[] MouthStyles = { "None", "Smile", "Grin", "Frown", "Gasp", "Fangs", "Flat", "Tongue" };
@@ -27,19 +31,21 @@ namespace Spheres
 
         public CharacterLook Clone() => (CharacterLook)MemberwiseClone();
 
-        /// <summary>Compact form for the network and match slots: "eyes.mouth.detail.color.hat".</summary>
-        public string Encode() => eyes + "." + mouth + "." + detail + "." + eyeColor + "." + (hat ?? "none");
+        /// <summary>Compact form for the network and match slots: "eyes.mouth.detail.color.hat.trail.pose".</summary>
+        public string Encode() => eyes + "." + mouth + "." + detail + "." + eyeColor + "." + (hat ?? "none") + "." + trail + "." + pose;
 
         public static CharacterLook Decode(string code)
         {
             var l = new CharacterLook();
             if (string.IsNullOrEmpty(code)) return l;
-            var p = code.Split(new[] { '.' }, 5);
+            var p = code.Split(new[] { '.' }, 7);
             if (p.Length > 0) int.TryParse(p[0], out l.eyes);
             if (p.Length > 1) int.TryParse(p[1], out l.mouth);
             if (p.Length > 2) int.TryParse(p[2], out l.detail);
             if (p.Length > 3) int.TryParse(p[3], out l.eyeColor);
             if (p.Length > 4) l.hat = p[4];
+            if (p.Length > 5) int.TryParse(p[5], out l.trail);
+            if (p.Length > 6) int.TryParse(p[6], out l.pose);
             l.Clamp();
             return l;
         }
@@ -51,6 +57,8 @@ namespace Spheres
             detail = Mathf.Clamp(detail, 0, Details.Length - 1);
             eyeColor = Mathf.Clamp(eyeColor, 0, EyeColors.Length - 1);
             if (string.IsNullOrEmpty(hat)) hat = "none";
+            trail = Mathf.Clamp(trail, 0, Cosmetics.Trails.Length - 1);
+            pose = Mathf.Clamp(pose, 0, Cosmetics.Poses.Length - 1);
         }
 
         /// <summary>Deterministic random look (bots), so a bot keeps its face between rounds and machines.</summary>

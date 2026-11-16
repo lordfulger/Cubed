@@ -683,7 +683,19 @@ namespace Spheres
             y += 44f;
             int locked = Hats.All.Count - hats.Count;
             if (locked > 0) UIKit.Text(new Rect(x, y, w, 22f), locked + " more hats unlock through achievements.", UIKit.Small, UIKit.Muted);
-            y += 36f;
+            y += 28f;
+
+            // Trails and victory poses (locked ones show what unlocks them).
+            string[] trailNames = Cosmetics.Trails.Select(c => Cosmetics.Unlocked(c) ? c.Name : c.Name + " (locked: " + Cosmetics.UnlockHint(c) + ")").ToArray();
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Trail", look.trail, trailNames);
+            if (v != look.trail && Cosmetics.Unlocked(Cosmetics.Trails[v])) { look.trail = v; changed = true; }
+            else if (v != look.trail) Toasts.Show("Locked", "Unlock \"" + Cosmetics.Trails[v].Name + "\" with the " + Cosmetics.UnlockHint(Cosmetics.Trails[v]) + " achievement.", UIKit.Muted);
+            y += 44f;
+            string[] poseNames = Cosmetics.Poses.Select(c => Cosmetics.Unlocked(c) ? c.Name : c.Name + " (locked: " + Cosmetics.UnlockHint(c) + ")").ToArray();
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Victory pose", look.pose, poseNames);
+            if (v != look.pose && Cosmetics.Unlocked(Cosmetics.Poses[v])) { look.pose = v; changed = true; }
+            else if (v != look.pose) Toasts.Show("Locked", "Unlock \"" + Cosmetics.Poses[v].Name + "\" with the " + Cosmetics.UnlockHint(Cosmetics.Poses[v]) + " achievement.", UIKit.Muted);
+            y += 48f;
 
             float bw = (w - 12f) / 3f;
             if (UIKit.Btn(new Rect(x, y, bw, 40f), "Randomize", true))

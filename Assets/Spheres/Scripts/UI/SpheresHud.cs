@@ -782,22 +782,23 @@ namespace Spheres
         static void DrawMatchEnd(GameManager gm)
         {
             var size = UIKit.Size;
-            UIKit.Fill(new Rect(0f, 0f, size.x, size.y), new Color(0f, 0f, 0f, 0.5f));
-            float w = 760f, h = 160f + gm.Players.Count * 30f + 90f;
-            var r = new Rect(size.x * 0.5f - w * 0.5f, size.y * 0.5f - h * 0.5f, w, h);
-            UIKit.Fill(r, UIKit.Panel);
+            // The podium fills the left of the screen; results sit on the right.
+            float w = Mathf.Min(600f, size.x * 0.48f), h = Mathf.Min(size.y - 40f, 160f + gm.Players.Count * 30f + 90f);
+            var r = new Rect(size.x - w - 30f, size.y * 0.5f - h * 0.5f, w, h);
+            UIKit.Fill(r, new Color(UIKit.Panel.r, UIKit.Panel.g, UIKit.Panel.b, 0.92f));
             int win = gm.MatchWinner;
             UIKit.Outline(r, Teams.GetColor(win), 3f);
-            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!", UIKit.Title, Teams.GetColor(win));
+            var titleStyle = new GUIStyle(UIKit.Title) { fontSize = 40 };
+            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!", titleStyle, Teams.GetColor(win));
 
             float y = r.y + 90f;
-            float[] cols = { 20f, 300f, 390f, 480f, 600f };
+            float[] cols = { 16f, 250f, 320f, 400f, 500f };
             string[] heads = { "Player", "Kills", "Deaths", "Damage", "Cards" };
             for (int i = 0; i < cols.Length; i++) UIKit.Text(new Rect(r.x + cols[i], y, 150f, 24f), heads[i], UIKit.Small, UIKit.Muted);
             y += 28f;
-            foreach (var p in gm.Players.OrderByDescending(p => p.Team == win).ThenByDescending(p => p.Kills))
+            foreach (var p in gm.Players.OrderByDescending(p => p.HomeTeam == win).ThenByDescending(p => p.Kills))
             {
-                UIKit.Text(new Rect(r.x + cols[0], y, 270f, 26f), p.DisplayName + (p.IsBot ? " (bot)" : ""), UIKit.Label, p.Color);
+                UIKit.Text(new Rect(r.x + cols[0], y, 230f, 26f), p.DisplayName + (p.IsBot ? " (bot)" : ""), UIKit.Label, p.Color);
                 UIKit.Text(new Rect(r.x + cols[1], y, 80f, 26f), p.Kills.ToString(), UIKit.Label, Color.white);
                 UIKit.Text(new Rect(r.x + cols[2], y, 80f, 26f), p.Deaths.ToString(), UIKit.Label, Color.white);
                 UIKit.Text(new Rect(r.x + cols[3], y, 110f, 26f), Mathf.RoundToInt(p.DamageDealt).ToString(), UIKit.Label, Color.white);
@@ -812,7 +813,7 @@ namespace Spheres
                 if (UIKit.Btn(new Rect(r.xMax - 240f, by, 220f, 42f), "Leave")) { gm.Net.Leave(); gm.ReturnToMenu(); }
                 return;
             }
-            float bw = gm.TestingFromEditor ? 220f : 300f;
+            float bw = gm.TestingFromEditor ? (w - 80f) / 3f : (w - 60f) / 2f;
             float bx = r.x + 20f;
             if (UIKit.Btn(new Rect(bx, by, bw, 42f), "Rematch")) gm.Rematch();
             bx += bw + 20f;

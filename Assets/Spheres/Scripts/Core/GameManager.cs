@@ -162,8 +162,40 @@ namespace Spheres
 
         public void SetState(GameState state)
         {
+            var old = State;
             State = state;
             StateTime = 0f;
+            OnStateChanged(old, state);
+        }
+
+        void OnStateChanged(GameState old, GameState now)
+        {
+            if (old == now) return;
+            if (now == GameState.MatchEnd) Podium.Show(this);
+            else if (old == GameState.MatchEnd) Podium.Hide();
+            bool menu = now == GameState.MainMenu || now == GameState.ProfileScreen || now == GameState.Online || now == GameState.Mods || now == GameState.Options || now == GameState.CardLibrary;
+            if (!menu) MenuShowcase.Clear();
+        }
+
+        bool podiumCamera;
+
+        /// <summary>Podium: show it full-screen on the overview camera (restores the normal layout when off).</summary>
+        public void SetPodiumCamera(bool on)
+        {
+            podiumCamera = on;
+            if (on)
+            {
+                foreach (var c in Cameras) if (c != null && c.Cam != null) c.Cam.enabled = false;
+                OverviewCamera.enabled = true;
+                OverviewCamera.rect = new Rect(0f, 0f, 1f, 1f);
+                OverviewCamera.transform.position = Podium.CameraPos;
+                OverviewCamera.transform.LookAt(Podium.CameraLook);
+            }
+            else if (InMatch)
+            {
+                foreach (var c in Cameras) if (c != null && c.Cam != null) c.Cam.enabled = true;
+                LayoutCameras();
+            }
         }
 
         /// <summary>Switch between menu screens (MainMenu, Setup, CardLibrary, Mods).</summary>
@@ -743,6 +775,16 @@ namespace Spheres
 
         void UpdateOverviewCamera(float dt)
         {
+            if (podiumCamera && Podium.Showing)
+            {
+                // Slow push-in on the winners.
+                Podium.Update();
+                var want = Podium.CameraPos + (Podium.CameraLook - Podium.CameraPos) * Mathf.Clamp01(StateTime * 0.03f);
+                OverviewCamera.transform.position = Vector3.Lerp(OverviewCamera.transform.position, want, 1f - Mathf.Exp(-dt * 2f));
+                OverviewCamera.transform.LookAt(Podium.CameraLook);
+                return;
+            }
+            if (State == GameState.MainMenu) MenuShowcase.Ensure(this);
             if (OverviewCamera == null || !OverviewCamera.enabled || Map == null) return;
             orbitAngle += dt * (InMatch ? 6f : 9f);
             var b = Map.FullBounds;
@@ -838,6 +880,7 @@ namespace Spheres
         {
             if (state != State) Picks.RemoveAll(_ => state != GameState.CardPick);
             if (state == GameState.MatchEnd && State != GameState.MatchEnd) Achievements.RecordMatch(matchWinner, true);
+            var oldState = State;
             State = state;
             StateTime = stateTime;
             RoundNumber = round;
@@ -846,6 +889,7 @@ namespace Spheres
             MatchWinner = matchWinner;
             HostPaused = hostPaused;
             for (int i = 0; i < TeamScores.Length && i < scores.Length; i++) TeamScores[i] = scores[i];
+            OnStateChanged(oldState, state);
         }
 
         /// <summary>True on a client while the host has the game paused.</summary>

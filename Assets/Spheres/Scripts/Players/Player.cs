@@ -96,6 +96,7 @@ namespace Spheres
             if (parts == null || look == null) return;
             FighterModel.BuildFace(parts, Color, look);
             FighterModel.SetHat(parts, Color, look.hat);
+            Cosmetics.ApplyTrail(parts.Rig, look.trail, Color);
             if (Slot != null) Slot.look = look.Encode();
         }
         Transform rig, footL, footR, gunRoot, shieldRing;
@@ -165,7 +166,9 @@ namespace Spheres
 
             Model = new GameObject("Model").transform;
             Model.SetParent(transform, false);
-            parts = FighterModel.Build(Model, Color, CharacterLook.Decode(Slot != null ? Slot.look : ""));
+            var builtLook = CharacterLook.Decode(Slot != null ? Slot.look : "");
+            parts = FighterModel.Build(Model, Color, builtLook);
+            Cosmetics.ApplyTrail(parts.Rig, builtLook.trail, Color);
             rig = parts.Rig;
             Head = parts.Head;
             footL = parts.FootL;
