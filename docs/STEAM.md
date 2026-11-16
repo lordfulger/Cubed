@@ -1,7 +1,7 @@
 # Steam integration (optional)
 
-Cubed builds and plays without Steam. The Steam features are compiled in only when the scripting define
-**`CUBED_STEAM`** is set, using [Facepunch.Steamworks](https://github.com/Facepunch/Facepunch.Steamworks) (MIT), a
+Spheres builds and plays without Steam. The Steam features are compiled in only when the scripting define
+**`SPHERES_STEAM`** is set, using [Facepunch.Steamworks](https://github.com/Facepunch/Facepunch.Steamworks) (MIT), a
 C# wrapper around Valve's Steamworks API. Without the define, none of the Steam code is compiled, so you don't need the
 DLLs for normal development or for non-Steam releases (itch.io, direct download, Thunderstore testers).
 
@@ -31,8 +31,8 @@ Menu labels and details may differ slightly from the final build.
    Use the SDK version that the Facepunch release was built against, which its release notes state. A mismatched
    `steam_api` can crash on startup.
 
-Unity copies the native libraries next to the player on build (`Cubed_Data/Plugins/x86_64/` on Windows/Linux,
-`Cubed.app/Contents/PlugIns/` on macOS). Check a test build to make sure they are there.
+Unity copies the native libraries next to the player on build (`Spheres_Data/Plugins/x86_64/` on Windows/Linux,
+`Spheres.app/Contents/PlugIns/` on macOS). Check a test build to make sure they are there.
 
 The Steamworks redistributable libraries may be shipped with your game under the Steamworks SDK agreement. Check
 that agreement before committing them to a **public** repository. Many projects keep them out of git and add them
@@ -45,26 +45,26 @@ your own app id.
 
 - Create `steam_appid.txt` containing just `480`:
   - **in the editor:** in the project root (next to `Assets/`), and
-  - **in a build:** next to the executable (`Cubed.exe`, `Cubed.x86_64`). On macOS, Steam looks in the working
-    directory, which is not the `.app` when launched from Finder. Don't put the file inside a signed `Cubed.app`.
+  - **in a build:** next to the executable (`Spheres.exe`, `Spheres.x86_64`). On macOS, Steam looks in the working
+    directory, which is not the `.app` when launched from Finder. Don't put the file inside a signed `Spheres.app`.
   - Facepunch's `SteamClient.Init(appId)` passes the app id to Steam directly, so the file is mostly a fallback
     and for other tools. It's still the usual way to test.
 - The Steam client must be running and logged in. Steam shows you as playing "Spacewar".
 - Testing online needs **two Steam accounts on two machines** (or a machine plus a VM). Steam allows one logged-in
   account per machine.
-- Spacewar has its own achievements and rich presence strings, so Cubed's achievements and presence text only
+- Spacewar has its own achievements and rich presence strings, so Spheres's achievements and presence text only
   work once you use your real app id (section 5).
 
-For release, replace 480 with your app id in `SteamIntegration.AppId` (`Assets/Cubed/Scripts/Net/SteamIntegration.cs`). **Don't ship `steam_appid.txt`** in Steam depots. The game should be launched by Steam.
+For release, replace 480 with your app id in `SteamIntegration.AppId` (`Assets/Spheres/Scripts/Net/SteamIntegration.cs`). **Don't ship `steam_appid.txt`** in Steam depots. The game should be launched by Steam.
 
 ## 3. Turn on the define
 
 **Edit > Project Settings > Player > (PC, Mac & Linux Standalone tab) > Other Settings > Script Compilation >
-Scripting Define Symbols**: add `CUBED_STEAM` and press *Apply*. Unity recompiles. If the Facepunch DLLs are
+Scripting Define Symbols**: add `SPHERES_STEAM` and press *Apply*. Unity recompiles. If the Facepunch DLLs are
 missing or set up for the wrong platform, you'll get compile errors about the `Steamworks` namespace.
 
 To build a non-Steam version again, remove the define. CI (`.github/workflows/build.yml`) builds without it unless
-`CUBED_STEAM` is committed in `ProjectSettings/ProjectSettings.asset`. If you commit it, the Facepunch DLLs must be
+`SPHERES_STEAM` is committed in `ProjectSettings/ProjectSettings.asset`. If you commit it, the Facepunch DLLs must be
 available to CI too.
 
 ## 4. What it enables
@@ -81,14 +81,14 @@ IP/LAN, and only if both run the same game version.
 
 ### How players use it
 
-1. Start Cubed **from Steam** (the overlay and invites need Steam running).
+1. Start Spheres **from Steam** (the overlay and invites need Steam running).
 2. **Host:** *Main Menu > Online > Host Steam lobby*. Then invite people with
    *Invite Friends*, or press **Shift+Tab** to open the overlay, right-click a friend and choose *Invite to Game*.
 3. **Join:** accept the invite in the overlay or Steam chat, or right-click a friend who is in a lobby and choose
-   *Join Game*. Cubed starts (if needed) and joins the lobby.
+   *Join Game*. Spheres starts (if needed) and joins the lobby.
 4. In the lobby, everything works like IP play: the host moves players between teams, picks rules and starts the match.
 
-If the Steam entries aren't in the Online menu, the build was made without `CUBED_STEAM`, or Steam failed to start.
+If the Steam entries aren't in the Online menu, the build was made without `SPHERES_STEAM`, or Steam failed to start.
 The Player log (docs/RELEASE.md, section 7) shows why.
 
 ## 5. Moving to your own app id

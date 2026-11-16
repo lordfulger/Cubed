@@ -1,4 +1,4 @@
-# Builds Cubed for Windows, Linux and macOS with GameCI, and packages the example Thunderstore mod.
+# Builds Spheres for Windows, Linux and macOS with GameCI, and packages the example Thunderstore mod.
 #
 # Required repository secrets (Settings > Secrets and variables > Actions > New repository secret):
 #   UNITY_LICENSE   Full contents of your Unity license file (Unity_lic.ulf). For a Personal license, follow
@@ -8,10 +8,10 @@
 # (Pro/Plus licenses can use UNITY_SERIAL instead of UNITY_LICENSE; see the GameCI activation docs.)
 #
 # Optional repository variable (Settings > Secrets and variables > Actions > Variables):
-#   THUNDERSTORE_TEAM  Thunderstore team name used in package zip names (default: CubedTeam).
+#   THUNDERSTORE_TEAM  Thunderstore team name used in package zip names (default: SpheresTeam).
 #
 # Before this workflow can succeed, open the project in Unity once and commit the generated .meta files,
-# Assets/Cubed/Scenes/Main.unity and ProjectSettings/ (see docs/RELEASE.md, step 1). GameCI's default
+# Assets/Spheres/Scenes/Main.unity and ProjectSettings/ (see docs/RELEASE.md, step 1). GameCI's default
 # build method builds the scenes listed in Build Settings, so the scene must be committed.
 #
 # Newer major versions of the GameCI actions exist; v4 is used here on purpose. Check
@@ -91,11 +91,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Keeps PlayerSettings.bundleVersion in sync with CubedAPI.GameVersion.
+      # Keeps PlayerSettings.bundleVersion in sync with SpheresAPI.GameVersion.
       - name: Read game version
         id: version
         run: |
-          v=$(grep -oP 'GameVersion\s*=\s*"\K[^"]+' Assets/Cubed/Scripts/Modding/CubedAPI.cs || true)
+          v=$(grep -oP 'GameVersion\s*=\s*"\K[^"]+' Assets/Spheres/Scripts/Modding/SpheresAPI.cs || true)
           echo "version=${v:-0.0.0}" >> "$GITHUB_OUTPUT"
           echo "Game version: ${v:-0.0.0}"
 
@@ -110,27 +110,27 @@ jobs:
       # cleanup step here (for example jlumbroso/free-disk-space).
 
       # GameCI's default build method is used. To use the project's own build method instead, set
-      #   buildMethod: Cubed.EditorTools.CubedProjectSetup.BuildWindowsCI   (or BuildLinuxCI)
+      #   buildMethod: Spheres.EditorTools.SpheresProjectSetup.BuildWindowsCI   (or BuildLinuxCI)
       # and change the artifact path below to Builds/<platform>/.
       - uses: game-ci/unity-builder@v4
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
-          buildName: Cubed
+          buildName: Spheres
           versioning: Custom
           version: ${{ steps.version.outputs.version }}
 
       # upload-artifact does not keep Unix file permissions, which would strip the executable bit from
-      # Cubed.x86_64 and Cubed.app/Contents/MacOS/Cubed. Pack the build into a tarball first.
+      # Spheres.x86_64 and Spheres.app/Contents/MacOS/Spheres. Pack the build into a tarball first.
       - name: Pack build
         run: |
           mkdir -p dist
-          sudo tar -czf "dist/Cubed-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}.tar.gz" \
+          sudo tar -czf "dist/Spheres-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}.tar.gz" \
             -C "build/${{ matrix.targetPlatform }}" .
           ls -lh dist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Cubed-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}
+          name: Spheres-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}
           path: dist/*.tar.gz
           retention-days: 14
 
@@ -145,7 +145,7 @@ jobs:
           python-version: "3.12"
 
       - name: Package Modding/ExampleDataPack
-        run: python Tools/package_thunderstore.py Modding/ExampleDataPack --author "${{ vars.THUNDERSTORE_TEAM || 'CubedTeam' }}" --out dist
+        run: python Tools/package_thunderstore.py Modding/ExampleDataPack --author "${{ vars.THUNDERSTORE_TEAM || 'SpheresTeam' }}" --out dist
 
       - uses: actions/upload-artifact@v4
         with:

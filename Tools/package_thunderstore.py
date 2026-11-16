@@ -48,7 +48,7 @@ def make_icon(path, rgb=(90, 160, 255)):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
-    ap.add_argument("--author", default="CubedModder", help="Thunderstore team name (used in the zip name)")
+    ap.add_argument("--author", default="SpheresModder", help="Thunderstore team name (used in the zip name)")
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()
 

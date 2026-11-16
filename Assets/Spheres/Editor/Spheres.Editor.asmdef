@@ -1,0 +1,14 @@
+{
+    "name": "Spheres.Editor",
+    "rootNamespace": "Spheres.EditorTools",
+    "references": ["Spheres"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

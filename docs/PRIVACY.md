@@ -8,10 +8,10 @@
 
 ---
 
-**Cubed privacy policy**
+**Spheres privacy policy**
 Last updated: [date]
 
-This policy explains what information the game Cubed ("the game") uses, made by [owner / company name]
+This policy explains what information the game Spheres ("the game") uses, made by [owner / company name]
 ("we", "us"). Contact: [email address]. [If required: postal address / EU or UK representative.]
 
 ## Summary
@@ -46,8 +46,8 @@ and IP addresses of connections; it stays on the host's computer."]
 ## 2. Files stored on your device
 
 The game stores these files locally, in your user data folder (for example
-`%USERPROFILE%\AppData\LocalLow\Cubed\Cubed` on Windows, `~/Library/Application Support/Cubed/Cubed` on macOS,
-`~/.config/unity3d/Cubed/Cubed` on Linux):
+`%USERPROFILE%\AppData\LocalLow\Spheres\Spheres` on Windows, `~/Library/Application Support/Spheres/Spheres` on macOS,
+`~/.config/unity3d/Spheres/Spheres` on Linux):
 
 - **Settings**: graphics, audio, controls, your player name, the last IP address you joined, and match rules.
 - **Profile stats**: [for example matches played, wins, cards picked]. Local only.

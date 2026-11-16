@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the built-in maps defined in Assets/Cubed/Scripts/Maps/BuiltInMaps.cs.
+"""Validate the built-in maps defined in Assets/Spheres/Scripts/Maps/BuiltInMaps.cs.
 
 Parses each `public static MapData Name()` method, replays its Box / BoxMirrorX /
 BoxMirror4 / Spawn calls exactly like MapData.cs does, and checks:
@@ -18,7 +18,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_PATH = os.path.join(ROOT, "Assets", "Cubed", "Scripts", "Maps", "BuiltInMaps.cs")
+DEFAULT_PATH = os.path.join(ROOT, "Assets", "Spheres", "Scripts", "Maps", "BuiltInMaps.cs")
 
 BLOCK_TYPES = {"solid", "light", "dark", "bouncy", "hazard", "ice", "glass", "crate", "grass"}
 BREAKABLE = {"glass", "crate"}

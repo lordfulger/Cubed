@@ -1,4 +1,4 @@
-# Cubed
+# Spheres
 
 A 3D arena shooter built around card picks. You fight in rounds, and after each round the losers choose a
 card that changes their stats or adds an ability. The game supports teams, bots, local split-screen, a
@@ -30,17 +30,17 @@ so you can open it and press Play.
 | **Fall damage** | Falling into the bottom of the arena deals damage and launches you back up. Landing hard on blocks also hurts. **Blocking at the moment of impact negates it** (and still triggers on-block card effects). |
 | **Maps** | 14 built-in arenas (towers, lanes, ice lakes, a crate maze, a lava castle, island rings, an 8-player plaza and a duel box). `Tools/validate_maps.py` checks spawns and bounds. |
 | **Map editor** | Fly camera, paint blocks on a grid, 9 block types (stone, bouncer, lava, ice, breakable glass/crate...), team spawns, X/Z mirroring for symmetric maps, arena resize, undo/redo, save/load, and one-click **Test Play** against bots. |
-| **Modding** | BepInEx plugins get a public C# API (`CubedAPI`, `GameEvents`, `CardEffect` hooks) and work with Harmony patches. You can also make mods with no code: drop `*.cubedcards.json`, `*.cubedmap.json` or `*.cubedblocks.json` into any BepInEx plugin folder. |
+| **Modding** | BepInEx plugins get a public C# API (`SpheresAPI`, `GameEvents`, `CardEffect` hooks) and work with Harmony patches. You can also make mods with no code: drop `*.spherescards.json`, `*.spheresmap.json` or `*.spheresblocks.json` into any BepInEx plugin folder. |
 
 ## Getting started
 
 1. Install **Unity 2022.3 LTS** (any 2022.3.x works; newer versions should work too).
 2. Open this folder as a project in Unity Hub.
-3. On first load the `Cubed > Setup Project` step runs automatically. It creates `Assets/Cubed/Scenes/Main.unity`,
+3. On first load the `Spheres > Setup Project` step runs automatically. It creates `Assets/Spheres/Scenes/Main.unity`,
    adds it to Build Settings, makes sure the gamepad input axes exist, and sets the build to
    **Mono + no managed stripping**, which BepInEx needs.
 4. Press **Play** (in any scene). The game builds itself at startup.
-5. To make a release build, use **Cubed > Build > Windows / Linux / macOS**. Output goes to `Builds/<platform>/`.
+5. To make a release build, use **Spheres > Build > Windows / Linux / macOS**. Output goes to `Builds/<platform>/`.
 
 > Unity will generate `.meta` files and other `ProjectSettings` the first time you open the project. Commit them.
 
@@ -90,16 +90,16 @@ game version. Card mods only need to be on the host, but clients without them se
 ## Project layout
 
 ```
-Assets/Cubed/Scripts/      Game code (assembly: Cubed.dll; this is what mods reference)
+Assets/Spheres/Scripts/      Game code (assembly: Spheres.dll; this is what mods reference)
   Core/        GameManager (match flow), MatchSettings, GameEvents, visuals, synthesized audio
   Players/     Player (movement, block, damage, borders), input, camera, BotBrain
   Combat/      Weapon, Bullet, Explosion
   Cards/       Stats, CardDefinition, CardRegistry, built-in cards & effects
   Maps/        MapData (JSON format), BlockTypes, MapRuntime, BuiltInMaps, MapEditor
   UI/          IMGUI toolkit, menus, HUD and card pick screens
-  Modding/     CubedAPI, ContentLoader (JSON mods)
+  Modding/     SpheresAPI, ContentLoader (JSON mods)
   Net/         TCP transport + LAN discovery, protocol, NetSession (host/client)
-Assets/Cubed/Editor/       Project setup + build menu
+Assets/Spheres/Editor/       Project setup + build menu
 Modding/ExampleCardMod/    Example BepInEx plugin (C#, Harmony) + Thunderstore metadata
 Modding/ExampleDataPack/   Example no-code mod (JSON cards, blocks, map)
 Tools/                     Thunderstore packager, InputManager generator
@@ -110,16 +110,16 @@ docs/                      MODDING.md, R2MODMAN.md
 
 * **[docs/MODDING.md](docs/MODDING.md)** covers the C# API, card effects, events, JSON formats and Harmony.
 * **[docs/R2MODMAN.md](docs/R2MODMAN.md)** covers installing BepInEx, packaging for Thunderstore, and getting
-  Cubed listed in r2modman.
+  Spheres listed in r2modman.
 
 ## Release & ops
 
 * `docs/RELEASE.md`: release checklist covering builds, signing and notarization, Steam, Thunderstore, and legal.
-* `docs/STEAM.md`: how to enable the optional Steam build. Set `CUBED_STEAM`, add Facepunch.Steamworks, and set the app id in `SteamIntegration.AppId`.
+* `docs/STEAM.md`: how to enable the optional Steam build. Set `SPHERES_STEAM`, add Facepunch.Steamworks, and set the app id in `SteamIntegration.AppId`.
 * `docs/PRIVACY.md`: a privacy-policy **template**.
 * `.github/workflows/build.yml`: CI builds through GameCI. This needs Unity license secrets.
 * Logs and crash reports are written to `<persistentDataPath>/logs`. In-game: Mods > Open logs. Crash reports are only uploaded if `CrashLog.UploadUrl` is set.
-* `Tools/make_bepinex_pack.py` builds a `BepInExPack_Cubed` Thunderstore package from the official BepInEx zip.
+* `Tools/make_bepinex_pack.py` builds a `BepInExPack_Spheres` Thunderstore package from the official BepInEx zip.
 
 ## Not done yet
 

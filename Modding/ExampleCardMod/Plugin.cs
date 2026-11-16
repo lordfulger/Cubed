@@ -1,19 +1,19 @@
 using BepInEx;
 using BepInEx.Configuration;
-using Cubed;
+using Spheres;
 using HarmonyLib;
 using UnityEngine;
 
 namespace ExampleCardMod
 {
     /// <summary>
-    /// Example BepInEx 5 plugin for Cubed: adds cards (stat-only, effect-based and code-hook based),
+    /// Example BepInEx 5 plugin for Spheres: adds cards (stat-only, effect-based and code-hook based),
     /// listens to game events, and uses a Harmony patch.
     /// </summary>
     [BepInPlugin(Guid, Name, Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Guid = "com.example.cubed.examplecards";
+        public const string Guid = "com.example.spheres.examplecards";
         public const string Name = "Example Cards";
         public const string Version = "1.0.0";
 
@@ -25,13 +25,13 @@ namespace ExampleCardMod
             SparkleJumps = Config.Bind("Fun", "SparkleJumps", true, "Spawn sparkles every time someone jumps (Harmony patch demo).");
             StormDamage = Config.Bind("Cards", "StormCallerDamage", 12f, "Damage of each Storm Caller chain zap.");
 
-            CubedAPI.RegisterMod(Guid, Name, Version, "Example", "Three demo cards, an event hook and a Harmony patch.");
+            SpheresAPI.RegisterMod(Guid, Name, Version, "Example", "Three demo cards, an event hook and a Harmony patch.");
 
             // 1) A custom effect, usable by C# cards and by JSON cards ("effects": ["example.chain_zap"]).
-            CubedAPI.RegisterEffect<ChainZapEffect>("example.chain_zap", "Hits arc to a second enemy.");
+            SpheresAPI.RegisterEffect<ChainZapEffect>("example.chain_zap", "Hits arc to a second enemy.");
 
             // 2) A pure stat card.
-            CubedAPI.RegisterCard(new CardDefinition("example.moon_boots", "Moon Boots",
+            SpheresAPI.RegisterCard(new CardDefinition("example.moon_boots", "Moon Boots",
                     "Floaty jumps and an extra air jump.", Rarity.Uncommon, new Color(0.7f, 0.8f, 1f))
                 { Source = Name }
                 .Mul(Stat.JumpHeight, 1.6f)
@@ -40,14 +40,14 @@ namespace ExampleCardMod
                 .Mul(Stat.MaxHealth, 0.9f));
 
             // 3) A card that uses the custom effect.
-            CubedAPI.RegisterCard(new CardDefinition("example.storm_caller", "Storm Caller",
+            SpheresAPI.RegisterCard(new CardDefinition("example.storm_caller", "Storm Caller",
                     "Your hits chain lightning to the next nearest enemy.", Rarity.Rare, new Color(0.6f, 0.5f, 1f))
                 { Source = Name }
                 .Effect("example.chain_zap")
                 .Stacks(2));
 
             // 4) A card with a code hook and an appearance condition.
-            CubedAPI.RegisterCard(new CardDefinition("example.underdog", "Underdog",
+            SpheresAPI.RegisterCard(new CardDefinition("example.underdog", "Underdog",
                     "Only offered when your team is behind. +40 HP and faster blocks.", Rarity.Uncommon, new Color(1f, 0.6f, 0.3f))
             {
                 Source = Name,
@@ -66,7 +66,7 @@ namespace ExampleCardMod
 
         static bool IsBehind(Player p)
         {
-            var gm = CubedAPI.Game;
+            var gm = SpheresAPI.Game;
             if (gm == null) return false;
             int mine = gm.TeamScores[p.Team];
             foreach (int t in gm.ActiveTeams)
@@ -90,7 +90,7 @@ namespace ExampleCardMod
             }
             if (next == null) return;
             Fx.Zap(target.Center, next.Center, new Color(0.7f, 0.6f, 1f));
-            CubedAPI.PlaySound("zap", 0.5f);
+            SpheresAPI.PlaySound("zap", 0.5f);
             next.TakeDamage(new DamageInfo
             {
                 Amount = Plugin.StormDamage.Value,

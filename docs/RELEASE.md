@@ -1,6 +1,6 @@
 # Release checklist
 
-This is the checklist for shipping a Cubed build to players, on Steam, Thunderstore/r2modman, or as a plain download.
+This is the checklist for shipping a Spheres build to players, on Steam, Thunderstore/r2modman, or as a plain download.
 Work through it top to bottom for the first release. For later releases you usually only need sections 2 to 4, the depot upload in section 5 and package publishing in section 6.
 
 Store, signing and mod-manager processes change often. When a step below links to official docs, follow those
@@ -14,13 +14,13 @@ The repository holds only code and a minimal `ProjectSettings/`. Unity has to ge
 clean checkout can build.
 
 - [ ] Open the project in Unity **2022.3 LTS**. The version in `ProjectSettings/ProjectVersion.txt` is the one CI uses.
-- [ ] Let `Cubed > Setup Project` run (it runs automatically on first load). It creates
-      `Assets/Cubed/Scenes/Main.unity`, adds it to Build Settings, adds the gamepad input axes, and sets
+- [ ] Let `Spheres > Setup Project` run (it runs automatically on first load). It creates
+      `Assets/Spheres/Scenes/Main.unity`, adds it to Build Settings, adds the gamepad input axes, and sets
       **Mono** + **managed stripping disabled**.
 - [ ] Check **Edit > Project Settings > Player**: Company Name and Product Name are final. They decide where
       settings, saves and logs are stored (see section 7). Changing them after release moves every player's data
       to a new folder, so decide now.
-- [ ] Commit every generated `.meta` file, `Assets/Cubed/Scenes/Main.unity`, `ProjectSettings/*.asset` and
+- [ ] Commit every generated `.meta` file, `Assets/Spheres/Scenes/Main.unity`, `ProjectSettings/*.asset` and
       `Packages/packages-lock.json`. Do not commit `Library/`, `Temp/`, `Logs/`, `UserSettings/` or `Builds/`
       (they are already in `.gitignore`).
 - [ ] Add the CI secrets `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` (see the top of
@@ -33,9 +33,9 @@ Two numbers control compatibility. Both live in code:
 
 | What | Where | When to change it |
 |---|---|---|
-| Game version | `CubedAPI.GameVersion` in `Assets/Cubed/Scripts/Modding/CubedAPI.cs` | Every release (`MAJOR.MINOR.PATCH`). |
-| Network protocol | `NetConst.Protocol` in `Assets/Cubed/Scripts/Net/NetProtocol.cs` | Whenever a network message, snapshot layout or handshake changes. |
-| Modding API | `CubedAPI.ApiVersion` (same file as the game version) | When public API that mods use changes (bump the major version for breaking changes). |
+| Game version | `SpheresAPI.GameVersion` in `Assets/Spheres/Scripts/Modding/SpheresAPI.cs` | Every release (`MAJOR.MINOR.PATCH`). |
+| Network protocol | `NetConst.Protocol` in `Assets/Spheres/Scripts/Net/NetProtocol.cs` | Whenever a network message, snapshot layout or handshake changes. |
+| Modding API | `SpheresAPI.ApiVersion` (same file as the game version) | When public API that mods use changes (bump the major version for breaking changes). |
 
 - [ ] Bump `GameVersion`. The online handshake rejects players whose game version **or** protocol differs from
       the host's, so every release is incompatible online with every other release. That is on purpose: tell
@@ -49,7 +49,7 @@ Two numbers control compatibility. Both live in code:
 
 ## 3. Platform builds
 
-Build locally with **Cubed > Build > Windows / Linux / macOS** (output in `Builds/<platform>/`), or download the
+Build locally with **Spheres > Build > Windows / Linux / macOS** (output in `Builds/<platform>/`), or download the
 artifacts from the **Build** GitHub Actions workflow. CI artifacts are `.tar.gz` files, so the Linux and macOS
 executables keep their executable bit. Extract them with `tar -xzf`, not by double-clicking in Windows.
 
@@ -65,8 +65,8 @@ For each platform:
 - [ ] No `*_BurstDebugInformation_DoNotShip` or `*_BackUpThisFolder_ButDontShipItWithYourGame` folders in what
       you ship. Unity writes these next to builds for some settings; leave them out of zips and Steam depots.
 
-Executables: Windows `Cubed.exe` (with `UnityPlayer.dll`, `UnityCrashHandler64.exe`, `Cubed_Data/`),
-Linux `Cubed.x86_64` (with `UnityPlayer.so`, `Cubed_Data/`), macOS `Cubed.app`.
+Executables: Windows `Spheres.exe` (with `UnityPlayer.dll`, `UnityCrashHandler64.exe`, `Spheres_Data/`),
+Linux `Spheres.x86_64` (with `UnityPlayer.so`, `Spheres_Data/`), macOS `Spheres.app`.
 
 ## 4. Code signing
 
@@ -78,11 +78,11 @@ Unsigned games run, but Windows SmartScreen may warn on direct downloads. Steam 
   in a cloud HSM, not as a `.pfx` file you can copy. Microsoft's cloud signing service (Azure Trusted Signing; Microsoft has renamed it
   before, so search for the current name) is often the cheapest option where it is available. Check the current
   eligibility rules.
-- Sign `Cubed.exe` (and `UnityCrashHandler64.exe` if you like; `UnityPlayer.dll` is already signed by Unity):
+- Sign `Spheres.exe` (and `UnityCrashHandler64.exe` if you like; `UnityPlayer.dll` is already signed by Unity):
 
   ```
-  signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a Cubed.exe
-  signtool verify /pa /v Cubed.exe
+  signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a Spheres.exe
+  signtool verify /pa /v Spheres.exe
   ```
 
   `/a` picks the best certificate from the store or token. Use `/f cert.pfx /p ...` or your provider's
@@ -92,7 +92,7 @@ Unsigned games run, but Windows SmartScreen may warn on direct downloads. Steam 
 
 ### macOS (signing + notarization)
 
-Without signing and notarization, macOS Gatekeeper blocks a downloaded `Cubed.app` ("cannot be opened because the
+Without signing and notarization, macOS Gatekeeper blocks a downloaded `Spheres.app` ("cannot be opened because the
 developer cannot be verified"). Notarization is needed for direct downloads and recommended for Steam.
 
 You need an Apple Developer Program membership, a **Developer ID Application** certificate in your keychain, and
@@ -100,7 +100,7 @@ a Mac with Xcode command-line tools. Apple's guide:
 <https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution>.
 Unity's manual also has a page on notarizing macOS builds (search the 2022.3 manual for "notarization").
 
-1. Create `Cubed.entitlements`. Mono needs JIT. `disable-library-validation` and
+1. Create `Spheres.entitlements`. Mono needs JIT. `disable-library-validation` and
    `allow-dyld-environment-variables` let BepInEx's macOS launcher and native mod libraries load. Leave those
    two out if you don't want to support code mods on macOS.
 
@@ -122,15 +122,15 @@ Unity's manual also has a page on notarizing macOS builds (search the 2022.3 man
 
    ```
    IDENTITY="Developer ID Application: Your Name (TEAMID)"
-   xattr -cr Cubed.app
-   chmod -R a+rX Cubed.app
-   find Cubed.app/Contents -type f \( -name "*.dylib" -o -name "*.so" \) \
+   xattr -cr Spheres.app
+   chmod -R a+rX Spheres.app
+   find Spheres.app/Contents -type f \( -name "*.dylib" -o -name "*.so" \) \
        -exec codesign --force --timestamp --options runtime --sign "$IDENTITY" {} \;
-   find Cubed.app/Contents -type d -name "*.bundle" \
+   find Spheres.app/Contents -type d -name "*.bundle" \
        -exec codesign --force --timestamp --options runtime --sign "$IDENTITY" {} \;
-   codesign --force --timestamp --options runtime --entitlements Cubed.entitlements \
-       --sign "$IDENTITY" Cubed.app
-   codesign --verify --deep --strict --verbose=2 Cubed.app
+   codesign --force --timestamp --options runtime --entitlements Spheres.entitlements \
+       --sign "$IDENTITY" Spheres.app
+   codesign --verify --deep --strict --verbose=2 Spheres.app
    ```
 
    (`codesign --deep` for signing also works with Unity apps and is what Unity's docs show. Apple recommends
@@ -139,23 +139,23 @@ Unity's manual also has a page on notarizing macOS builds (search the 2022.3 man
 3. Notarize. Store the credentials once with an app-specific password from <https://account.apple.com>, then submit:
 
    ```
-   xcrun notarytool store-credentials cubed-notary --apple-id you@example.com --team-id TEAMID
-   ditto -c -k --keepParent Cubed.app Cubed-notarize.zip
-   xcrun notarytool submit Cubed-notarize.zip --keychain-profile cubed-notary --wait
+   xcrun notarytool store-credentials spheres-notary --apple-id you@example.com --team-id TEAMID
+   ditto -c -k --keepParent Spheres.app Spheres-notarize.zip
+   xcrun notarytool submit Spheres-notarize.zip --keychain-profile spheres-notary --wait
    # if it says Invalid:
-   xcrun notarytool log <submission-id> --keychain-profile cubed-notary
+   xcrun notarytool log <submission-id> --keychain-profile spheres-notary
    ```
 
 4. Staple the ticket and check it:
 
    ```
-   xcrun stapler staple Cubed.app
-   xcrun stapler validate Cubed.app
-   spctl --assess --type execute --verbose=4 Cubed.app
+   xcrun stapler staple Spheres.app
+   xcrun stapler validate Spheres.app
+   spctl --assess --type execute --verbose=4 Spheres.app
    ```
 
 5. Distribute the stapled app (zip it with `ditto -c -k --keepParent`, or upload it to the macOS Steam depot).
-   Do not change anything inside `Cubed.app` after signing. That includes adding `steam_appid.txt` or mod files inside the bundle.
+   Do not change anything inside `Spheres.app` after signing. That includes adding `steam_appid.txt` or mod files inside the bundle.
 
 ## 5. Steam
 
@@ -177,8 +177,8 @@ from time to time, so menu names below may differ.
 ### Depots and builds (SteamPipe)
 
 Create one depot per OS in **App Admin > SteamPipe > Depots**, and set each depot's operating system so Steam
-installs the right one. Add launch options in **Installation > General**: `Cubed.exe` (Windows), `Cubed.x86_64`
-(Linux), `Cubed.app` (macOS). Publish the app-admin changes.
+installs the right one. Add launch options in **Installation > General**: `Spheres.exe` (Windows), `Spheres.x86_64`
+(Linux), `Spheres.app` (macOS). Publish the app-admin changes.
 
 Get `steamcmd` from the Steamworks SDK (`sdk/tools/ContentBuilder`). Use a dedicated build account with Steam Guard
 and only the build permissions it needs. Example layout and script, using the placeholder app id `1234560` and depots
@@ -188,7 +188,7 @@ and only the build permissions it needs. Example layout and script, using the pl
 ContentBuilder/
   content/windows/   <- contents of Builds/Windows
   content/linux/     <- contents of Builds/Linux
-  content/macos/     <- Cubed.app (signed + notarized)
+  content/macos/     <- Spheres.app (signed + notarized)
   scripts/app_build_1234560.vdf
   output/
 ```
@@ -197,7 +197,7 @@ ContentBuilder/
 "AppBuild"
 {
 	"AppID"       "1234560"
-	"Desc"        "Cubed 0.2.0"
+	"Desc"        "Spheres 0.2.0"
 	"ContentRoot" "../content/"
 	"BuildOutput" "../output/"
 	"SetLive"     ""        // e.g. "beta" to set a branch live automatically; never "default" from a script
@@ -235,7 +235,7 @@ steamcmd +login <build_account> +run_app_build "$(pwd)/scripts/app_build_1234560
 Then in **SteamPipe > Builds**, set the new build live on a beta branch, test it by installing through Steam, and
 only after that set it live on `default`. Full reference: <https://partner.steamgames.com/doc/sdk/uploading>.
 
-- [ ] Build the Steam version with `CUBED_STEAM` enabled and the real app id (see docs/STEAM.md). Leave
+- [ ] Build the Steam version with `SPHERES_STEAM` enabled and the real app id (see docs/STEAM.md). Leave
       `steam_appid.txt` out of depots.
 - [ ] Optional: Steam Cloud. Settings and user maps live under `persistentDataPath` (section 7). Steam Auto-Cloud
       can sync them with a root override per OS, without code changes.
@@ -244,7 +244,7 @@ only after that set it live on `default`. Full reference: <https://partner.steam
 ### Steam Deck
 
 Valve tests games and assigns Verified / Playable / Unsupported. See
-<https://partner.steamgames.com/doc/steamdeck/compat> for the current criteria. Things that matter for Cubed:
+<https://partner.steamgames.com/doc/steamdeck/compat> for the current criteria. Things that matter for Spheres:
 
 - [ ] **Input:** everything works with a controller, including menus, Match Setup (press Start to join), card
       picks and the map editor (or the editor is clearly marked as needing keyboard/mouse). On-screen prompts must
@@ -265,13 +265,13 @@ docs/R2MODMAN.md explains the background. Thunderstore's process for new communi
 <https://wiki.thunderstore.io> and ask in the Thunderstore Discord (linked from <https://thunderstore.io>) before
 you start.
 
-- [ ] **Community request.** Ask the Thunderstore team for a Cubed community. They usually want the game to be
+- [ ] **Community request.** Ask the Thunderstore team for a Spheres community. They usually want the game to be
       public (or close to it), a store link, and confirmation that it supports BepInEx.
 - [ ] **Ecosystem schema PR.** Open a PR to <https://github.com/thunderstore-io/ecosystem-schema>, following its
       README and copying an existing Unity Mono + BepInEx 5 game. It typically includes the display name,
-      executable names (`Cubed.exe`, `Cubed.x86_64`), data folder (`Cubed_Data`), Steam app id and/or a manual
+      executable names (`Spheres.exe`, `Spheres.x86_64`), data folder (`Spheres_Data`), Steam app id and/or a manual
       folder picker for non-Steam installs, the `bepinex` package loader, install rules, and the **mod loader
-      package** (`<Team>-BepInExPack_Cubed`, root folder `BepInExPack`). r2modman picks up schema changes on its own
+      package** (`<Team>-BepInExPack_Spheres`, root folder `BepInExPack`). r2modman picks up schema changes on its own
       schedule. Some versions bundle the schema, so the game may only show up after an r2modman update.
 - [ ] **BepInExPack.** Download the official BepInEx 5 Windows x64 zip from
       <https://github.com/BepInEx/BepInEx/releases>, then run:
@@ -280,36 +280,36 @@ you start.
       python Tools/make_bepinex_pack.py BepInEx_win_x64_5.4.23.x.zip --author <YourTeam> --out dist
       ```
 
-      Check `dist/BepInExPack_Cubed/` (manifest, README, `BepInExPack/winhttp.dll`, `BepInExPack/BepInEx/core`,
+      Check `dist/BepInExPack_Spheres/` (manifest, README, `BepInExPack/winhttp.dll`, `BepInExPack/BepInEx/core`,
       `doorstop_config.ini` targeting `BepInEx\core\BepInEx.Preloader.dll`). Upload the zip, and replace the
       placeholder icon with real art first if you have it. Ask the Thunderstore/BepInEx team whether they would
       rather publish the pack themselves. For some communities the BepInEx team publishes the official
       `BepInEx-BepInExPack_<Game>`.
 - [ ] Update the dependency in `Modding/ExampleCardMod/thunderstore/manifest.json` (currently the placeholder
-      `BepInEx-BepInExPack-5.4.2100`) to the pack you actually published, e.g. `<YourTeam>-BepInExPack_Cubed-5.4.2302`.
+      `BepInEx-BepInExPack-5.4.2100`) to the pack you actually published, e.g. `<YourTeam>-BepInExPack_Spheres-5.4.2302`.
 - [ ] **Publish packages.** Create a team on thunderstore.io and upload zips through the website's upload page, or
       from CI with the Thunderstore CLI (`tcli`, <https://github.com/thunderstore-io/thunderstore-cli>) and a
       service-account token stored as a GitHub secret. The **Build** workflow already produces the example data
       pack zip as an artifact.
-- [ ] Install through r2modman on a clean machine. Choose Cubed, create a profile, install the BepInExPack and the
+- [ ] Install through r2modman on a clean machine. Choose Spheres, create a profile, install the BepInExPack and the
       example mods, press *Start modded*, and confirm "BepInEx active" plus the Mods list.
 
 ## 7. Crash reports and logs
 
-Tell testers where to find these. The company and product names (`Cubed`/`Cubed` unless changed in Player
+Tell testers where to find these. The company and product names (`Spheres`/`Spheres` unless changed in Player
 Settings) are part of every path.
 
 | | Windows | macOS | Linux |
 |---|---|---|---|
-| Unity `Player.log` (and `Player-prev.log`) | `%USERPROFILE%\AppData\LocalLow\Cubed\Cubed\` | `~/Library/Logs/Cubed/Cubed/` | `~/.config/unity3d/Cubed/Cubed/` |
-| `persistentDataPath` (settings, maps, `Content/`) | `%USERPROFILE%\AppData\LocalLow\Cubed\Cubed\` | `~/Library/Application Support/Cubed/Cubed/` | `$XDG_CONFIG_HOME/unity3d/Cubed/Cubed/` (usually `~/.config/unity3d/...`) |
+| Unity `Player.log` (and `Player-prev.log`) | `%USERPROFILE%\AppData\LocalLow\Spheres\Spheres\` | `~/Library/Logs/Spheres/Spheres/` | `~/.config/unity3d/Spheres/Spheres/` |
+| `persistentDataPath` (settings, maps, `Content/`) | `%USERPROFILE%\AppData\LocalLow\Spheres\Spheres\` | `~/Library/Application Support/Spheres/Spheres/` | `$XDG_CONFIG_HOME/unity3d/Spheres/Spheres/` (usually `~/.config/unity3d/...`) |
 | Game log | `<persistentDataPath>\logs\` | `<persistentDataPath>/logs/` | `<persistentDataPath>/logs/` |
-| Native crash dumps | `%TEMP%\Cubed\Cubed\Crashes\` | `~/Library/Logs/DiagnosticReports/` | `Player.log` (stack trace at the end) |
+| Native crash dumps | `%TEMP%\Spheres\Spheres\Crashes\` | `~/Library/Logs/DiagnosticReports/` | `Player.log` (stack trace at the end) |
 | BepInEx log | `<game or r2modman profile>\BepInEx\LogOutput.log` | same | same |
 
 - The game's own log folder (`<persistentDataPath>/logs`) is new. Check that the shipped build writes to it.
 - Under Proton, Windows paths are inside `steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/`.
-- In the editor, **Cubed > Open User Data Folder** opens `persistentDataPath`.
+- In the editor, **Spheres > Open User Data Folder** opens `persistentDataPath`.
 - Bug reports should include the game version (shown in the main menu footer), the OS, whether BepInEx/mods were
   installed, `Player.log`, and the game log.
 
@@ -318,7 +318,7 @@ Settings) are part of every path.
 This section is a checklist, not legal advice. Have a lawyer review anything you are unsure about, especially
 before you spend money on marketing.
 
-- [ ] **Trademark search for the name "Cubed".** "Cubed" is a common word and probably already used by games,
+- [ ] **Trademark search for the name "Spheres".** "Spheres" is a common word and probably already used by games,
       apps and other products. **The owner, ideally with a trademark lawyer, has to do this search. It was not
       done for you.** At minimum, search the USPTO (<https://tmsearch.uspto.gov>), EUIPO / TMview
       (<https://www.tmdn.org/tmview>) and WIPO's Global Brand Database (<https://branddb.wipo.int>) in the
@@ -334,14 +334,14 @@ before you spend money on marketing.
   - keep it replaceable: users must be able to swap in another BepInEx build (true as long as it stays separate DLLs);
   - keep the notices of the components it bundles (HarmonyX, MonoMod and Mono.Cecil are MIT; Unity Doorstop has its
     own license; check each).
-  Cubed's own code is not affected by shipping BepInEx next to it as separate files, but check this with your lawyer
+  Spheres's own code is not affected by shipping BepInEx next to it as separate files, but check this with your lawyer
   if you link to BepInEx in other ways.
 - [ ] **Other third-party code.** Facepunch.Steamworks is MIT (keep its license notice). Steam's `steam_api` libraries
       are covered by the Steamworks SDK agreement. Unity runtime terms depend on your Unity plan (revenue limits,
       splash screen rules for Unity Personal). Check the current Unity terms for 2022.3.
-- [ ] **A separate identity from the games that inspired Cubed.** Card-pick arena shooters (for example ROUNDS) are a
+- [ ] **A separate identity from the games that inspired Spheres.** Card-pick arena shooters (for example ROUNDS) are a
       genre, and game mechanics are generally not protected. Names, logos, art, UI layout, card names and card text,
-      sounds and store descriptions can be. Don't use another game's name in Cubed's title or marketing beyond a
+      sounds and store descriptions can be. Don't use another game's name in Spheres's title or marketing beyond a
       factual comparison, don't copy its card names, descriptions or visual style, and review the 407 card names
       for any that match another game's. Use original store art and a logo that doesn't look like theirs.
 - [ ] **Privacy policy.** Online play sends player names and IP addresses between players (see docs/PRIVACY.md).

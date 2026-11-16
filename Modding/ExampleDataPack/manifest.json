@@ -1,7 +1,7 @@
 {
   "name": "ExampleDataPack",
   "version_number": "1.0.0",
-  "website_url": "https://github.com/lordfulger/Cubed",
-  "description": "No-code Cubed mod: JSON cards, a custom block type and a map.",
+  "website_url": "https://github.com/lordfulger/Spheres",
+  "description": "No-code Spheres mod: JSON cards, a custom block type and a map.",
   "dependencies": []
 }

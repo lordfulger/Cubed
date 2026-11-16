@@ -1,6 +1,6 @@
-# Modding Cubed
+# Modding Spheres
 
-Cubed supports two kinds of mods. Both can be distributed as Thunderstore packages and installed with
+Spheres supports two kinds of mods. Both can be distributed as Thunderstore packages and installed with
 r2modman (see [R2MODMAN.md](R2MODMAN.md)).
 
 | | Data mods (JSON) | Code mods (BepInEx plugins) |
@@ -9,25 +9,25 @@ r2modman (see [R2MODMAN.md](R2MODMAN.md)).
 | Can add | Cards (stat modifiers + existing effects), block types, maps | Anything: new effects, game rules, UI, Harmony patches |
 | Example | `Modding/ExampleDataPack` | `Modding/ExampleCardMod` |
 
-All game code is in **`Cubed.dll`** (`<Game>_Data/Managed/Cubed.dll`) under the `Cubed` namespace. Classes and
+All game code is in **`Spheres.dll`** (`<Game>_Data/Managed/Spheres.dll`) under the `Spheres` namespace. Classes and
 members are public and non-sealed, so you can call them directly or patch them with Harmony.
 
 ---
 
 ## 1. Data mods
 
-On startup, and again when you press **Mods > Reload content**, Cubed scans these folders recursively:
+On startup, and again when you press **Mods > Reload content**, Spheres scans these folders recursively:
 
 1. `StreamingAssets/Content` (content shipped with the game)
 2. `<persistentDataPath>/Content`. The Mods screen shows the exact path and has an **Open content folder** button.
 3. **The BepInEx plugin folder** (`BepInEx/plugins`, including r2modman profiles; it is found through `BepInEx.Paths.PluginPath`)
-4. Any folder a code mod passes to `CubedAPI.LoadContentFolder(path)`
+4. Any folder a code mod passes to `SpheresAPI.LoadContentFolder(path)`
 
 | File suffix | Contains |
 |---|---|
-| `*.cubedcards.json` | A card pack |
-| `*.cubedblocks.json` | Block types |
-| `*.cubedmap.json` | One map (the same format the map editor saves) |
+| `*.spherescards.json` | A card pack |
+| `*.spheresblocks.json` | Block types |
+| `*.spheresmap.json` | One map (the same format the map editor saves) |
 
 Load errors are shown on the in-game Mods screen and written to the Unity/BepInEx log.
 
@@ -60,7 +60,7 @@ Load errors are shown on the in-game Mods screen and written to the Unity/BepInE
 * `rarity` is `Common` (weight 10), `Uncommon` (5), `Rare` (2) or `Legendary` (0.7). `weight` multiplies the rarity weight.
 * `maxStacks: 0` means a player can take the card any number of times.
 * Modifiers combine as `value = Set ?? (base + ΣAdd) × ΠMultiply`, then the result is clamped. The order you pick cards in doesn't matter.
-* A card that reuses an existing `id` replaces that card. Use this to rebalance built-in `cubed.*` cards.
+* A card that reuses an existing `id` replaces that card. Use this to rebalance built-in `spheres.*` cards.
 
 **Stats** (base value in parentheses):
 
@@ -84,7 +84,7 @@ Load errors are shown on the in-game Mods screen and written to the Unity/BepInE
 
 Code mods can register more.
 
-The 320 generated cards (`cubed.gen.000`-`cubed.gen.319`, tagged `generated`) are built deterministically by `CardGenerator`. Every machine gets the same ids, which online play needs. Patch `CardGenerator.Generate` or call `CardRegistry.Unregister` to change the pool.
+The 320 generated cards (`spheres.gen.000`-`spheres.gen.319`, tagged `generated`) are built deterministically by `CardGenerator`. Every machine gets the same ids, which online play needs. Patch `CardGenerator.Generate` or call `CardRegistry.Unregister` to change the pool.
 
 ### Block types
 
@@ -104,7 +104,7 @@ New block types show up in the map editor palette.
 
 Maps are boxes of size `sizeX × sizeY × sizeZ`. The faces of the box are the damaging borders, and the bottom
 face (y = 0) is the fall line. Blocks are axis-aligned boxes in integer cells. Spawns stand on the bottom of their
-cell. `team: -1` means any team can use the spawn. If a team has no spawns, Cubed generates spawn points on solid ground.
+cell. `team: -1` means any team can use the spawn. If a team has no spawns, Spheres generates spawn points on solid ground.
 
 ```json
 {
@@ -115,7 +115,7 @@ cell. `team: -1` means any team can use the spawn. If a team has no spawns, Cube
 }
 ```
 
-The easiest way to make a map is the in-game editor. It saves to `<persistentDataPath>/maps/*.cubedmap.json`, and you
+The easiest way to make a map is the in-game editor. It saves to `<persistentDataPath>/maps/*.spheresmap.json`, and you
 can copy that file into a mod.
 
 ---
@@ -127,11 +127,11 @@ can copy that file into a mod.
 `Modding/ExampleCardMod/ExampleCardMod.csproj` is a ready-to-build template:
 
 ```
-dotnet build Modding/ExampleCardMod -c Release -p:CubedDir="C:\Games\Cubed"
+dotnet build Modding/ExampleCardMod -c Release -p:SpheresDir="C:\Games\Spheres"
 ```
 
 * It targets `netstandard2.1` and references `BepInEx.Core 5.4.x` (from `nuget.bepinex.dev`) and `UnityEngine.Modules`.
-* It references `Cubed.dll` from `CubedDir\Cubed_Data\Managed`, or from `Library/ScriptAssemblies` when you
+* It references `Spheres.dll` from `SpheresDir\Spheres_Data\Managed`, or from `Library/ScriptAssemblies` when you
   build inside this Unity project.
 * After a build, the DLL is copied into `thunderstore/plugins/`, ready for packaging.
 
@@ -139,17 +139,17 @@ dotnet build Modding/ExampleCardMod -c Release -p:CubedDir="C:\Games\Cubed"
 
 ```csharp
 using BepInEx;
-using Cubed;
+using Spheres;
 using UnityEngine;
 
-[BepInPlugin("you.cubed.sniper", "Sniper Pack", "1.0.0")]
+[BepInPlugin("you.spheres.sniper", "Sniper Pack", "1.0.0")]
 public class SniperPack : BaseUnityPlugin
 {
     void Awake()
     {
-        CubedAPI.RegisterMod("you.cubed.sniper", "Sniper Pack", "1.0.0", "you");
+        SpheresAPI.RegisterMod("you.spheres.sniper", "Sniper Pack", "1.0.0", "you");
 
-        CubedAPI.RegisterCard(new CardDefinition("you.railgun", "Railgun",
+        SpheresAPI.RegisterCard(new CardDefinition("you.railgun", "Railgun",
                 "One huge, instant shot.", Rarity.Legendary, Color.cyan) { Source = "Sniper Pack" }
             .Mul(Stat.Damage, 4f)
             .Mul(Stat.BulletSpeed, 4f)
@@ -174,8 +174,8 @@ public class Vampiric : CardEffect
 }
 
 // Register it under an id. JSON cards can use the same id.
-CubedAPI.RegisterEffect<Vampiric>("you.vampiric", "Heal 50 on kill");
-CubedAPI.RegisterCard(new CardDefinition("you.trophy", "Trophy Hunter", "Kills heal 50.", Rarity.Rare, Color.red)
+SpheresAPI.RegisterEffect<Vampiric>("you.vampiric", "Heal 50 on kill");
+SpheresAPI.RegisterCard(new CardDefinition("you.trophy", "Trophy Hunter", "Kills heal 50.", Rarity.Rare, Color.red)
     .Effect("you.vampiric"));
 ```
 
@@ -218,15 +218,15 @@ GameEvents.PlayerDamaging += e =>
 ### Other API
 
 ```csharp
-CubedAPI.RegisterMap("you:arena", mapData);          // MapData has Box/Spawn/BoxMirror4 builder helpers
-CubedAPI.RegisterBlockType(new BlockType("you.goo", "Goo", Color.green) { GroundAccel = 0.2f });
-CubedAPI.SetBaseStat(Stat.MoveSpeed, 10f);            // global balance change
-CubedAPI.RemoveCard("cubed.brittle_fury");            // remove a built-in card
-CubedAPI.AddMenuButton("My Mod Settings", () => ...); // main-menu button
-CubedAPI.AddGuiDrawer(() => GUI.Label(...));          // IMGUI overlay (pixel coordinates)
-CubedAPI.RegisterSound("shoot", myClip);              // replace a synthesized sound
+SpheresAPI.RegisterMap("you:arena", mapData);          // MapData has Box/Spawn/BoxMirror4 builder helpers
+SpheresAPI.RegisterBlockType(new BlockType("you.goo", "Goo", Color.green) { GroundAccel = 0.2f });
+SpheresAPI.SetBaseStat(Stat.MoveSpeed, 10f);            // global balance change
+SpheresAPI.RemoveCard("spheres.brittle_fury");            // remove a built-in card
+SpheresAPI.AddMenuButton("My Mod Settings", () => ...); // main-menu button
+SpheresAPI.AddGuiDrawer(() => GUI.Label(...));          // IMGUI overlay (pixel coordinates)
+SpheresAPI.RegisterSound("shoot", myClip);              // replace a synthesized sound
 MusicPlayer.TrackOverride = state => myClip;           // custom music per game state
-CubedAPI.Players / CubedAPI.Map / CubedAPI.Settings / CubedAPI.Game
+SpheresAPI.Players / SpheresAPI.Map / SpheresAPI.Settings / SpheresAPI.Game
 Teams.SetTeam(0, "Crimson", new Color(.8f, 0, .2f));
 player.ApplyStun(0.5f); player.AddBarrier(30f, 4f); player.ApplySlow(0.4f, 1f); player.ApplyPoison(6f, 3f, source);
 bullet.TerrainPierceLeft++; bullet.SetRadius(r); Fx.Box(pos, rot, size, color, life);  // Fx.* is mirrored online
@@ -235,7 +235,7 @@ Player.SafeLandingSpeed, Player.BottomBounceSpeed, Player.SideBounceSpeed  // fa
 
 ### Harmony
 
-`BepInEx.Core` ships HarmonyX. Patch any public or private method in `Cubed.dll`:
+`BepInEx.Core` ships HarmonyX. Patch any public or private method in `Spheres.dll`:
 
 ```csharp
 [HarmonyPatch(typeof(Player), nameof(Player.TryJump))]
@@ -256,7 +256,7 @@ Useful patch targets include `GameManager.StartMatch`, `GameManager.Pick`, `Card
 
 * In online matches **only the host simulates**. Card effects, `OnApply`, `GameEvents` handlers and Harmony
   patches on gameplay code run on the host. Clients are display-only (`Player.NetworkPuppet == true`).
-* Anything you draw with `Fx.*`, play with `Sfx.Play` (for the standard sound ids) or add with `CubedHud.AddFeedText`
+* Anything you draw with `Fx.*`, play with `Sfx.Play` (for the standard sound ids) or add with `SpheresHud.AddFeedText`
   on the host during a match is mirrored to clients automatically.
 * Clients need your card definitions so they can show card names and stats. Ship the same mod to everyone.
 * `GameManager.Instance.NetClientMode` tells you that you're running as a client.

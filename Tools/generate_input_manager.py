@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerates ProjectSettings/InputManager.asset with Unity's standard axes plus
-per-joystick axes named Cubed_J{joystick}_A{axis} (joysticks 1-8, axes 1-10)
-used by Cubed's gamepad input. Run from the repository root."""
+per-joystick axes named Spheres_J{joystick}_A{axis} (joysticks 1-8, axes 1-10)
+used by Spheres's gamepad input. Run from the repository root."""
 import os
 
 def axis(name, type_=0, axis_=0, joy=0, pos="", neg="", altpos="", altneg="",
@@ -38,7 +38,7 @@ axes = [
 ]
 for j in range(1, 9):
     for a in range(1, 11):
-        axes.append(axis(f"Cubed_J{j}_A{a}", type_=2, axis_=a - 1, joy=j, dead=0.05, sens=1))
+        axes.append(axis(f"Spheres_J{j}_A{a}", type_=2, axis_=a - 1, joy=j, dead=0.05, sens=1))
 
 text = """%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
