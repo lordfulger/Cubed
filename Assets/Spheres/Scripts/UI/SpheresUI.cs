@@ -491,6 +491,9 @@ namespace Spheres
 
         // ------------------------------------------------------------------ mods
 
+        float friendsRefresh;
+        System.Collections.Generic.List<SteamIntegration.FriendEntry> friendsCache = new System.Collections.Generic.List<SteamIntegration.FriendEntry>();
+
         void DrawMods()
         {
             var s = UIKit.Size;
@@ -502,6 +505,22 @@ namespace Spheres
             var content = new Rect(0f, 0f, view.width - 20f, 1400f);
             modsScroll = GUI.BeginScrollView(view, modsScroll, content);
             float y = 0f, w = content.width;
+
+            if (SteamWorkshop.Available)
+            {
+                UIKit.Text(new Rect(0f, y, w, 30f), "Steam Workshop", UIKit.Header, UIKit.Accent);
+                if (UIKit.Btn(new Rect(w - 420f, y, 200f, 30f), "Browse Workshop", true)) SteamWorkshop.Browse();
+                if (UIKit.Btn(new Rect(w - 210f, y, 200f, 30f), "Refresh subscriptions", true)) SteamWorkshop.LoadSubscribed();
+                y += 34f;
+                UIKit.Text(new Rect(10f, y, w, 22f), SteamWorkshop.Status + "  -  publish maps from the map editor", UIKit.Small, UIKit.Muted);
+                y += 22f;
+                foreach (var f in SteamWorkshop.InstalledFolders)
+                {
+                    UIKit.Text(new Rect(24f, y, w - 24f, 20f), f, UIKit.Small, Color.white);
+                    y += 20f;
+                }
+                y += 12f;
+            }
 
             string bep = ContentLoader.BepInExLoaded ? "<color=#7dff8a>BepInEx is loaded.</color>" : "<color=#ffb070>BepInEx is not loaded</color> - code mods (DLLs) need BepInEx 5. Data mods (JSON) still work.";
             UIKit.Text(new Rect(0f, y, w, 26f), bep, UIKit.Label, Color.white);
@@ -857,6 +876,29 @@ namespace Spheres
                 }
                 UIKit.Text(new Rect(x + 420f, y + 14f, w - 440f, 36f), SteamIntegration.Status + "  -  friends join from their Steam friends list", UIKit.Small, UIKit.Muted);
                 y += 76f;
+
+                // Friends: join the ones playing, invite anyone while you host.
+                if (Time.unscaledTime > friendsRefresh)
+                {
+                    friendsRefresh = Time.unscaledTime + 3f;
+                    friendsCache = SteamIntegration.Friends().Where(f => f.Online).Take(8).ToList();
+                }
+                if (friendsCache.Count > 0)
+                {
+                    float fh = 30f + Mathf.CeilToInt(friendsCache.Count / 2f) * 34f;
+                    UIKit.Fill(new Rect(x, y, w, fh), UIKit.Panel);
+                    UIKit.Text(new Rect(x + 14f, y + 4f, 300f, 24f), "Friends online", UIKit.Label, UIKit.Accent);
+                    float fw = (w - 36f) / 2f;
+                    for (int i = 0; i < friendsCache.Count; i++)
+                    {
+                        var f = friendsCache[i];
+                        var r = new Rect(x + 14f + (i % 2) * (fw + 8f), y + 30f + (i / 2) * 34f, fw, 30f);
+                        UIKit.Text(new Rect(r.x, r.y, fw - 190f, 30f), f.Name + (f.PlayingSpheres ? "  <color=#7dff8a>playing Spheres</color>" : ""), UIKit.Small, Color.white);
+                        if (f.CanJoin && UIKit.Btn(new Rect(r.xMax - 180f, r.y + 2f, 86f, 26f), "Join", true)) SteamIntegration.JoinFriend(f.Id);
+                        if (SteamIntegration.HostingLobby && UIKit.Btn(new Rect(r.xMax - 88f, r.y + 2f, 86f, 26f), "Invite", true)) SteamIntegration.InviteFriend(f.Id);
+                    }
+                    y += fh + 12f;
+                }
             }
 
             // LAN

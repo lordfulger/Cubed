@@ -678,6 +678,11 @@ namespace Spheres
             y += 40f;
             if (UIKit.Btn(new Rect(x, y, w, 40f), "<b>Test Play</b>")) TestPlay();
             y += 46f;
+            if (Spheres.Net.SteamWorkshop.Available)
+            {
+                if (UIKit.Btn(new Rect(x, y, w, 34f), "Publish to Steam Workshop", true)) Spheres.Net.SteamWorkshop.PublishMap(Data.Clone());
+                y += 40f;
+            }
             if (UIKit.Btn(new Rect(x, y, w, 34f), "Exit to Menu", true)) { Gm.ReturnToMenu(); return; }
             y += 44f;
 
@@ -698,6 +703,8 @@ namespace Spheres
             UIKit.Shadowed(new Rect(340f, s.y - 34f, s.x - 360f, 24f), info, UIKit.Small, Color.white);
             if (Time.unscaledTime - statusTime < 6f)
                 UIKit.Shadowed(new Rect(340f, 12f, s.x - 360f, 26f), status, UIKit.Label, UIKit.Accent);
+            else if (Spheres.Net.SteamWorkshop.Available && !string.IsNullOrEmpty(Spheres.Net.SteamWorkshop.Status))
+                UIKit.Shadowed(new Rect(340f, 12f, s.x - 360f, 26f), Spheres.Net.SteamWorkshop.Status, UIKit.Small, UIKit.Muted);
 
             if (selectedMech != null) DrawMechPanel();
             if (showLoad) DrawLoad();

@@ -214,7 +214,7 @@ namespace Spheres
 
             var tex = new Texture2D(res, res, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, name = "MapThumb_" + m.name };
             tex.SetPixels32(px);
-            tex.Apply(false, true);
+            tex.Apply(false, false);
             return tex;
         }
     }

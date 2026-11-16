@@ -38,6 +38,8 @@ namespace Spheres.Net
                 return;
             }
             SteamFriends.OnGameLobbyJoinRequested += (lobby, friend) => JoinLobby(lobby);
+            // "Join game" from a friend's profile when we set a connect string in rich presence.
+            SteamFriends.OnGameRichPresenceJoinRequested += (friend, connect) => TryConnectString(connect);
             SteamMatchmaking.OnLobbyEntered += OnLobbyEntered;
             Profile.AchievementUnlocked += a =>
             {
@@ -45,7 +47,84 @@ namespace Spheres.Net
                 catch (Exception e) { Debug.LogWarning("[Spheres] Steam achievement " + a.Id + ": " + e.Message); }
             };
             Status = "Signed in as " + SteamClient.Name;
+            // Launched by Steam to join a friend: "+connect_lobby <id>" on the command line.
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == "+connect_lobby") pendingConnect = "+connect_lobby " + args[i + 1];
         }
+
+        static string pendingConnect;
+
+        /// <summary>Called once the game has finished booting (so the online menu exists to join into).</summary>
+        public static void ProcessLaunchJoin()
+        {
+            if (!ready || pendingConnect == null) return;
+            var c = pendingConnect;
+            pendingConnect = null;
+            TryConnectString(c);
+        }
+
+        static void TryConnectString(string connect)
+        {
+            if (string.IsNullOrEmpty(connect)) return;
+            var parts = connect.Trim().Split(' ');
+            for (int i = 0; i < parts.Length - 1; i++)
+                if (parts[i] == "+connect_lobby" && ulong.TryParse(parts[i + 1], out ulong id))
+                {
+                    Status = "Joining friend's lobby...";
+                    JoinLobby(new Lobby(id));
+                    return;
+                }
+        }
+
+        public struct FriendEntry
+        {
+            public ulong Id;
+            public string Name;
+            public bool Online, PlayingSpheres, CanJoin;
+        }
+
+        /// <summary>Your Steam friends, those playing Spheres first.</summary>
+        public static List<FriendEntry> Friends()
+        {
+            var list = new List<FriendEntry>();
+            if (!ready) return list;
+            try
+            {
+                foreach (var f in SteamFriends.GetFriends())
+                {
+                    bool playing = f.IsPlayingThisGame;
+                    bool joinable = playing && f.GameInfo.HasValue && f.GameInfo.Value.Lobby.HasValue;
+                    list.Add(new FriendEntry { Id = f.Id, Name = f.Name, Online = f.IsOnline, PlayingSpheres = playing, CanJoin = joinable });
+                }
+            }
+            catch (Exception e) { Debug.LogException(e); }
+            list.Sort((a, b) => a.PlayingSpheres != b.PlayingSpheres ? (a.PlayingSpheres ? -1 : 1) : a.Online != b.Online ? (a.Online ? -1 : 1) : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return list;
+        }
+
+        /// <summary>Invite one friend to the lobby you're hosting.</summary>
+        public static void InviteFriend(ulong friendId)
+        {
+            if (!ready || !CurrentLobby.HasValue) return;
+            try { CurrentLobby.Value.InviteFriend(friendId); Status = "Invite sent"; }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        /// <summary>Join the lobby a friend is in.</summary>
+        public static void JoinFriend(ulong friendId)
+        {
+            if (!ready) return;
+            try
+            {
+                var f = new Friend(friendId);
+                if (f.GameInfo.HasValue && f.GameInfo.Value.Lobby.HasValue) JoinLobby(f.GameInfo.Value.Lobby.Value);
+                else Status = f.Name + " isn't in a joinable lobby";
+            }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        public static bool HostingLobby => ready && CurrentLobby.HasValue && CurrentLobby.Value.Owner.Id == SteamClient.SteamId;
 
         public static string PlayerName => ready ? SteamClient.Name : null;
 
@@ -96,6 +175,7 @@ namespace Spheres.Net
             socketManager = SteamNetworkingSockets.CreateRelaySocket<SpheresSocketManager>(0);
             Status = "Steam lobby open - invite friends";
             SetRichPresence("Hosting a lobby");
+            SteamFriends.SetRichPresence("connect", "+connect_lobby " + l.Id.Value);
         }
 
         public static void InviteFriends()
@@ -121,6 +201,7 @@ namespace Spheres.Net
 
         public static void LeaveLobby()
         {
+            if (ready) SteamFriends.SetRichPresence("connect", null);
             CurrentLobby?.Leave();
             CurrentLobby = null;
             socketManager?.Close();
@@ -238,6 +319,12 @@ namespace Spheres.Net
         public static void HostLobby() { }
         public static void InviteFriends() { }
         public static void LeaveLobby() { }
+        public static void ProcessLaunchJoin() { }
+        public static bool HostingLobby => false;
+        public struct FriendEntry { public ulong Id; public string Name; public bool Online, PlayingSpheres, CanJoin; }
+        public static System.Collections.Generic.List<FriendEntry> Friends() => new System.Collections.Generic.List<FriendEntry>();
+        public static void InviteFriend(ulong friendId) { }
+        public static void JoinFriend(ulong friendId) { }
     }
 }
 #endif

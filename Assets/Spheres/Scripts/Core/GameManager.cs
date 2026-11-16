@@ -600,6 +600,12 @@ namespace Spheres
             UpdateLocalVoteInput();
             Achievements.Tick(udt);
             Spheres.Net.SteamIntegration.Update();
+            if (!launchJoinChecked && State == GameState.MainMenu)
+            {
+                launchJoinChecked = true;
+                Spheres.Net.SteamIntegration.ProcessLaunchJoin();
+                Spheres.Net.SteamWorkshop.LoadSubscribed();
+            }
             HandlePause();
             if (NetClientMode)
             {
@@ -692,6 +698,8 @@ namespace Spheres
             if (!InMatch) return;
             if (pressed) SetPaused(!Paused);
         }
+
+        bool launchJoinChecked;
 
         /// <summary>True while a local player holds the scoreboard button (Tab / View).</summary>
         public bool ScoreboardOpen { get; private set; }
