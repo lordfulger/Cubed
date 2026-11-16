@@ -815,7 +815,7 @@ namespace Spheres
                 bool got = pr.Has(a.Id);
                 UIKit.Fill(new Rect(4f, ay, content.width - 8f, 46f), new Color(1f, 1f, 1f, got ? 0.08f : 0.02f));
                 UIKit.Fill(new Rect(4f, ay, 5f, 46f), got ? new Color(1f, 0.8f, 0.25f) : new Color(0.3f, 0.3f, 0.35f));
-                UIKit.Text(new Rect(16f, ay + 2f, content.width - 24f, 22f), "<b>" + a.Title + "</b>", UIKit.Label, got ? Color.white : UIKit.Muted);
+                UIKit.Text(new Rect(16f, ay + 2f, content.width - 24f, 22f), "<b>" + Loc.T(a.Title) + "</b>", UIKit.Label, got ? Color.white : UIKit.Muted);
                 UIKit.Text(new Rect(16f, ay + 23f, content.width - 24f, 20f), a.Description + (a.Hat != null ? "  - unlocks " + Hats.Get(a.Hat).Name : ""), UIKit.Small, UIKit.Muted);
                 ay += 52f;
             }

@@ -147,7 +147,7 @@ namespace Spheres
                 var r = new Rect(UIKit.Size.x - 360f + slide, y - 64f, 340f, 60f);
                 UIKit.Fill(r, new Color(0.06f, 0.07f, 0.1f, 0.92f));
                 UIKit.Fill(new Rect(r.x, r.y, 5f, r.height), t.Color);
-                UIKit.Text(new Rect(r.x + 14f, r.y + 6f, r.width - 20f, 24f), "<b>" + t.Title + "</b>", UIKit.Label, Color.white);
+                UIKit.Text(new Rect(r.x + 14f, r.y + 6f, r.width - 20f, 24f), "<b>" + Loc.T(t.Title) + "</b>", UIKit.Label, Color.white);
                 UIKit.Text(new Rect(r.x + 14f, r.y + 32f, r.width - 20f, 22f), t.Body, UIKit.Small, UIKit.Muted);
                 y -= 70f;
             }
