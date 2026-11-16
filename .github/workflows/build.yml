@@ -1,21 +1,29 @@
-# Builds Spheres for Windows, Linux and macOS with GameCI, and packages the example Thunderstore mod.
+# Builds Spheres for Windows, Linux and macOS with GameCI, smoke-tests the Linux build, optionally runs the card
+# balance simulator, and packages the example Thunderstore mod. Step-by-step setup: docs/TESTING.md.
 #
 # Required repository secrets (Settings > Secrets and variables > Actions > New repository secret):
 #   UNITY_LICENSE   Full contents of your Unity license file (Unity_lic.ulf). For a Personal license, follow
-#                   https://game.ci/docs/github/activation to obtain it.
+#                   docs/TESTING.md section 1 (or https://game.ci/docs/github/activation) to obtain it.
 #   UNITY_EMAIL     Email address of the Unity account that owns the license.
 #   UNITY_PASSWORD  Password of that Unity account.
 # (Pro/Plus licenses can use UNITY_SERIAL instead of UNITY_LICENSE; see the GameCI activation docs.)
+# Without these secrets the Unity jobs are skipped with a warning; the non-Unity jobs still run.
 #
 # Optional repository variable (Settings > Secrets and variables > Actions > Variables):
 #   THUNDERSTORE_TEAM  Thunderstore team name used in package zip names (default: SpheresTeam).
 #
-# Before this workflow can succeed, open the project in Unity once and commit the generated .meta files,
-# Assets/Spheres/Scenes/Main.unity and ProjectSettings/ (see docs/RELEASE.md, step 1). GameCI's default
-# build method builds the scenes listed in Build Settings, so the scene must be committed.
+# The builds use the project's own build method (SpheresProjectSetup.BuildCI), which runs Spheres > Setup Project
+# first, so the scene and input axes do not have to be committed for CI to work.
 #
-# Newer major versions of the GameCI actions exist; v4 is used here on purpose. Check
-# https://game.ci/docs/github/builder before bumping.
+# Smoke test: the Linux player is started headless with -spheresSmokeTest. It plays every menu, the map editor,
+# training and a bots-only match on every map, and exits with code 1 if anything logged an error or exception.
+# Running the built player needs no Unity license. Report: the "smoke-report" artifact.
+#
+# Balance simulator: Actions > Build > Run workflow, tick "Run the card balance simulator".
+# Report: the "balance-report" artifact (CSV + Markdown), also shown on the run's summary page.
+#
+# The GameCI actions are pinned to their v4 major version on purpose (newer majors exist). Check
+# https://game.ci/docs/github/builder before bumping. To pin harder, replace @v4 with a release tag or commit SHA.
 
 name: Build
 
@@ -23,6 +31,33 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      smoke_seconds:
+        description: Simulated seconds per map in the smoke test
+        type: number
+        default: 60
+      run_balance:
+        description: Run the card balance simulator (after the Linux build)
+        type: boolean
+        default: false
+      balance_matches:
+        description: "Balance simulator: number of bot-vs-bot matches"
+        type: number
+        default: 500
+      balance_map:
+        description: "Balance simulator: map id"
+        type: string
+        default: builtin:duel_cell
+      balance_team_size:
+        description: "Balance simulator: players per team (1 = 1v1, 2 = 2v2)"
+        type: choice
+        options: ["1", "2"]
+        default: "1"
+      balance_picks:
+        description: "Balance simulator: how bots choose cards (random gives the best coverage)"
+        type: choice
+        options: [random, bot]
+        default: random
 
 concurrency:
   group: build-${{ github.ref }}
@@ -33,14 +68,41 @@ permissions:
 
 env:
   UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
   UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
   UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
 
 jobs:
+  # Secrets cannot be used in job-level "if:" conditions, so this job checks them once and the Unity jobs
+  # skip themselves (with a visible warning) when they are missing.
+  license:
+    name: Check Unity license secrets
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || [ -n "$UNITY_SERIAL" ]; then
+            if [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+              echo "::warning title=Unity credentials incomplete::UNITY_EMAIL and UNITY_PASSWORD are not set. GameCI needs them together with UNITY_LICENSE/UNITY_SERIAL; activation will probably fail. See docs/TESTING.md."
+            fi
+            echo "Unity license secrets found."
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            msg="Unity license secrets are not set (UNITY_LICENSE or UNITY_SERIAL, plus UNITY_EMAIL and UNITY_PASSWORD), so the Unity builds, the smoke test and the balance simulator were skipped. docs/TESTING.md section 1 explains how to add them."
+            echo "::warning title=Unity jobs skipped::$msg"
+            { echo "### Unity jobs skipped"; echo; echo "$msg"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Runs Unity tests if the project has any test assemblies. The project has none yet, so the
   # test-runner step is skipped and the job just passes.
   test:
     name: Tests (if any)
+    needs: license
+    if: needs.license.outputs.available == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -79,7 +141,8 @@ jobs:
 
   build:
     name: Build ${{ matrix.targetPlatform }}
-    needs: test
+    needs: [license, test]
+    if: needs.license.outputs.available == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -109,13 +172,13 @@ jobs:
       # Unity's Docker images are large. If a build fails with "no space left on device", add a disk
       # cleanup step here (for example jlumbroso/free-disk-space).
 
-      # GameCI's default build method is used. To use the project's own build method instead, set
-      #   buildMethod: Spheres.EditorTools.SpheresProjectSetup.BuildWindowsCI   (or BuildLinuxCI)
-      # and change the artifact path below to Builds/<platform>/.
+      # SpheresProjectSetup.BuildCI runs project setup (scene, input axes, Mono backend) and then builds to the
+      # path GameCI passes (build/<platform>/Spheres[.exe|.x86_64|.app]).
       - uses: game-ci/unity-builder@v4
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
           buildName: Spheres
+          buildMethod: Spheres.EditorTools.SpheresProjectSetup.BuildCI
           versioning: Custom
           version: ${{ steps.version.outputs.version }}
 
@@ -133,6 +196,132 @@ jobs:
           name: Spheres-${{ steps.version.outputs.version }}-${{ matrix.targetPlatform }}
           path: dist/*.tar.gz
           retention-days: 14
+
+  # Runs the built Linux player headless. A built player needs no Unity license.
+  smoke:
+    name: Smoke test (Linux player)
+    needs: build
+    # Runs when the Linux build exists, even if another platform's build failed.
+    if: ${{ !cancelled() && needs.build.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Spheres-*-StandaloneLinux64
+          path: dist
+          merge-multiple: true
+
+      - name: Unpack player
+        id: player
+        run: |
+          mkdir -p player
+          for f in dist/*.tar.gz; do tar -xzf "$f" -C player; done
+          exe=$(find player -maxdepth 3 -type f -name '*.x86_64' | head -n 1)
+          if [ -z "$exe" ]; then
+            echo "::error::No Linux executable (*.x86_64) found in the build artifact"
+            find player -maxdepth 2 | head -n 50
+            exit 1
+          fi
+          chmod +x "$exe"
+          echo "exe=$PWD/$exe" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test (headless)
+        run: |
+          mkdir -p Builds
+          set +e
+          timeout 80m "${{ steps.player.outputs.exe }}" -batchmode -nographics -logFile - \
+            -spheresSmokeTest -smokeSeconds "${{ inputs.smoke_seconds || 60 }}" -automationTimeout 75 \
+            -smokeReport "$GITHUB_WORKSPACE/Builds/smoke-report.txt" > Builds/smoke-player.log 2>&1
+          code=$?
+          set -e
+          grep -F '[SpheresAutomation]' Builds/smoke-player.log | head -n 200 || true
+          if [ ! -f Builds/smoke-report.txt ]; then
+            echo "::error::The smoke test wrote no report (exit code $code). The player log is in the smoke-report artifact."
+            tail -n 100 Builds/smoke-player.log
+            exit 1
+          fi
+          cat Builds/smoke-report.txt
+          { echo "### Smoke test (headless)"; echo; echo '```'; head -n 120 Builds/smoke-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::Smoke test failed (exit code $code). Download the smoke-report artifact for the full report."
+          fi
+          exit "$code"
+
+      # OnGUI (menus, HUD, card pick screen) never runs in -batchmode. This run renders with a software GPU
+      # under a virtual display to cover that code. It is informational: a failure here does not fail the workflow.
+      - name: Smoke test with graphics (xvfb, informational)
+        if: ${{ !cancelled() && steps.player.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri mesa-vulkan-drivers > /dev/null
+          set +e
+          timeout 40m xvfb-run -a -s "-screen 0 1280x720x24" "${{ steps.player.outputs.exe }}" -force-glcore \
+            -screen-fullscreen 0 -screen-width 1280 -screen-height 720 -logFile - \
+            -spheresSmokeTest -smokeSeconds 20 -smokeModeSeconds 15 -smokeMaps builtin:garden,builtin:duel_cell,builtin:clockwork \
+            -automationTimeout 35 -smokeReport "$GITHUB_WORKSPACE/Builds/smoke-report-graphics.txt" > Builds/smoke-player-graphics.log 2>&1
+          code=$?
+          set -e
+          if [ -f Builds/smoke-report-graphics.txt ]; then
+            { echo "### Smoke test with graphics (informational)"; echo; echo '```'; head -n 80 Builds/smoke-report-graphics.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            tail -n 60 Builds/smoke-player-graphics.log
+          fi
+          exit "$code"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: smoke-report
+          path: Builds/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  balance:
+    name: Card balance simulator
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'skipped' && github.event_name == 'workflow_dispatch' && inputs.run_balance }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Spheres-*-StandaloneLinux64
+          path: dist
+          merge-multiple: true
+
+      - name: Unpack player
+        id: player
+        run: |
+          mkdir -p player
+          for f in dist/*.tar.gz; do tar -xzf "$f" -C player; done
+          exe=$(find player -maxdepth 3 -type f -name '*.x86_64' | head -n 1)
+          if [ -z "$exe" ]; then echo "::error::No Linux executable (*.x86_64) found in the build artifact"; exit 1; fi
+          chmod +x "$exe"
+          echo "exe=$PWD/$exe" >> "$GITHUB_OUTPUT"
+
+      - name: Run balance simulator
+        run: |
+          mkdir -p Builds
+          set +e
+          timeout 350m "${{ steps.player.outputs.exe }}" -batchmode -nographics -logFile - \
+            -spheresBalanceSim -balanceMatches "${{ inputs.balance_matches }}" -balanceMap "${{ inputs.balance_map }}" \
+            -balanceTeamSize "${{ inputs.balance_team_size }}" -balancePicks "${{ inputs.balance_picks }}" \
+            -automationTimeout 340 -balanceOut "$GITHUB_WORKSPACE/Builds/balance-report" 2>&1 \
+            | tee Builds/balance-player.log | grep --line-buffered -F '[SpheresAutomation]'
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ -f Builds/balance-report.md ]; then cat Builds/balance-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          exit "$code"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: balance-report
+          path: Builds/
+          if-no-files-found: ignore
+          retention-days: 30
 
   thunderstore:
     name: Package example data mod

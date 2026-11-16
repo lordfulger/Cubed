@@ -102,7 +102,8 @@ Assets/Spheres/Scripts/      Game code (assembly: Spheres.dll; this is what mods
   UI/          IMGUI toolkit, menus, HUD and card pick screens
   Modding/     SpheresAPI, ContentLoader (JSON mods)
   Net/         TCP transport + LAN discovery, protocol, NetSession (host/client)
-Assets/Spheres/Editor/       Project setup + build menu
+Assets/Spheres/Editor/       Project setup, build menu, test entry points (Spheres > Tests)
+Assets/Spheres/Automation/   Smoke test and card balance simulator (Spheres.Automation.dll, off unless asked for)
 Modding/ExampleCardMod/    Example BepInEx plugin (C#, Harmony) + Thunderstore metadata
 Modding/ExampleDataPack/   Example no-code mod (JSON cards, blocks, map)
 Tools/                     Thunderstore packager, InputManager generator
@@ -120,7 +121,8 @@ docs/                      MODDING.md, R2MODMAN.md
 * `docs/RELEASE.md`: release checklist covering builds, signing and notarization, Steam, Thunderstore, and legal.
 * `docs/STEAM.md`: how to enable the optional Steam build. Set `SPHERES_STEAM`, add Facepunch.Steamworks, and set the app id in `SteamIntegration.AppId`.
 * `docs/PRIVACY.md`: a privacy-policy **template**.
-* `.github/workflows/build.yml`: CI builds through GameCI. This needs Unity license secrets.
+* `.github/workflows/build.yml`: CI builds through GameCI, a headless smoke test of the Linux build, and an optional card balance simulation. This needs Unity license secrets.
+* **[docs/TESTING.md](docs/TESTING.md)**: how to add the Unity license secret, download builds from GitHub Actions, and run the smoke test and balance simulator locally.
 * Logs and crash reports are written to `<persistentDataPath>/logs`. In-game: Mods > Open logs. Crash reports are only uploaded if `CrashLog.UploadUrl` is set.
 * `Tools/make_bepinex_pack.py` builds a `BepInExPack_Spheres` Thunderstore package from the official BepInEx zip.
 

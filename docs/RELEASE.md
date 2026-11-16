@@ -23,9 +23,9 @@ clean checkout can build.
 - [ ] Commit every generated `.meta` file, `Assets/Spheres/Scenes/Main.unity`, `ProjectSettings/*.asset` and
       `Packages/packages-lock.json`. Do not commit `Library/`, `Temp/`, `Logs/`, `UserSettings/` or `Builds/`
       (they are already in `.gitignore`).
-- [ ] Add the CI secrets `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` (see the top of
-      `.github/workflows/build.yml` and <https://game.ci/docs/github/activation>), then run the **Build** workflow
-      once with *Run workflow* to check that it works.
+- [ ] Add the CI secrets `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` (step by step in
+      [TESTING.md, section 1](TESTING.md#1-one-time-setup-give-github-actions-a-unity-license)), then run the
+      **Build** workflow once with *Run workflow* to check that it works.
 
 ## 2. Versioning
 
@@ -52,6 +52,12 @@ Two numbers control compatibility. Both live in code:
 Build locally with **Spheres > Build > Windows / Linux / macOS** (output in `Builds/<platform>/`), or download the
 artifacts from the **Build** GitHub Actions workflow. CI artifacts are `.tar.gz` files, so the Linux and macOS
 executables keep their executable bit. Extract them with `tar -xzf`, not by double-clicking in Windows.
+
+- [ ] The **Smoke test** job of the Build workflow is green for the release commit (or run it locally; see
+      [TESTING.md](TESTING.md)). It plays every menu, the map editor and a bots-only match on every map and fails on
+      any logged error. Read the "Smoke test with graphics" section of the run summary too.
+- [ ] Optional: run the card balance simulator (**Run workflow** > *Run the card balance simulator*, 2000+ matches)
+      and look at the flagged cards in `balance-report.md`.
 
 For each platform:
 
