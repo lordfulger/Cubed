@@ -13,6 +13,8 @@ namespace Spheres.Net
         PickChoice,
         PickHighlight,
         Ping,
+        MapVote,
+        Signal,
         // host -> client
         Welcome = 32,
         Reject,
@@ -27,14 +29,15 @@ namespace Spheres.Net
         Pong,
         /// <summary>Physics prop poses and broken map blocks.</summary>
         Props,
+        VoteState,
     }
 
-    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke, BlockGone }
+    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke, BlockGone, Banner }
 
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 9;
+        public const int Protocol = 10;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }

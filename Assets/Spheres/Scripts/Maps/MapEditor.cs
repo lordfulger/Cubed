@@ -72,7 +72,7 @@ namespace Spheres
             brushes.Add(new Brush { Kind = BrushKind.Spawn, Team = -1, Label = "Any-team spawn", Color = Color.white });
             foreach (var k in MechKinds.All)
                 brushes.Add(new Brush { Kind = BrushKind.Mech, Id = k, Label = MechKinds.Name(k), Color = k == MechKinds.Pendulum || k == MechKinds.Saw || k == MechKinds.Spikes ? new Color(1f, 0.35f, 0.3f) : new Color(0.45f, 0.85f, 1f) });
-            foreach (var k in PropKinds.All)
+            foreach (var k in PropKinds.All.Where(k => !k.HideInEditor))
                 brushes.Add(new Brush { Kind = BrushKind.Prop, Id = k.Id, Label = k.Name, Color = k.Color });
             brushes.Add(new Brush { Kind = BrushKind.Erase, Label = "Eraser", Color = UIKit.Bad });
             brushIndex = Mathf.Clamp(brushIndex, 0, brushes.Count - 1);

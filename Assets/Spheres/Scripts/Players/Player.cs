@@ -25,6 +25,8 @@ namespace Spheres
         public int Index;
         public PlayerSlot Slot;
         public int Team;
+        /// <summary>The team this player signed up for. <see cref="Team"/> can differ temporarily (Infection rounds).</summary>
+        public int HomeTeam;
         public string DisplayName;
         public Color Color;
         public IPlayerInput Input;
@@ -139,6 +141,7 @@ namespace Spheres
             p.Index = index;
             p.Slot = slot;
             p.Team = slot.team;
+            p.HomeTeam = slot.team;
             p.DisplayName = slot.name;
             p.Color = Teams.GetColor(slot.team);
             p.Input = input;
@@ -319,10 +322,26 @@ namespace Spheres
 
         // ------------------------------------------------------------------ update
 
+        GameObject infectedShell;
+
+        /// <summary>Green glow on infected players (host and clients; driven by Team).</summary>
+        void UpdateInfectedLook()
+        {
+            var gm = GameManager.Instance;
+            bool infected = gm != null && gm.IsInfection && gm.InMatch && Team == GameManager.InfectedTeam && IsAlive;
+            if (infected && infectedShell == null && Model != null)
+            {
+                var mat = Mats.GlowAvailable ? Mats.Glow(new Color(0.35f, 1f, 0.3f, 0.35f), 2f) : Mats.Transparent(new Color(0.35f, 1f, 0.3f, 0.35f));
+                infectedShell = Prim.Sphere("Infected", Model.transform, new Vector3(0f, 0.7f, 0f), 1.25f, mat);
+            }
+            if (infectedShell != null && infectedShell.activeSelf != infected) infectedShell.SetActive(infected);
+        }
+
         void Update()
         {
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
+            UpdateInfectedLook();
             if (NetworkPuppet)
             {
                 PuppetUpdate(dt);
@@ -665,7 +684,17 @@ namespace Spheres
             {
                 var push = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
                 float speed = new Vector3(Velocity.x, 0f, Velocity.z).magnitude;
-                rb.AddForceAtPosition(push * Mathf.Clamp(speed, 2f, 20f) * 1.5f, hit.point, ForceMode.Acceleration);
+                var prop = rb.GetComponent<Prop>();
+                if (prop != null && prop.Kind.Kickable)
+                {
+                    // Dribble: the ball takes your speed plus a little lift.
+                    var want = push.normalized * Mathf.Max(speed * 1.3f, 4f) + Vector3.up * 1.5f;
+                    var dv = want - rb.velocity;
+                    if (Vector3.Dot(dv, push) > 0f) rb.AddForce(dv * 0.6f, ForceMode.VelocityChange);
+                    prop.LastAttacker = this;
+                }
+                else rb.AddForceAtPosition(push * Mathf.Clamp(speed, 2f, 20f) * 1.5f, hit.point, ForceMode.Acceleration);
+                if (prop != null && !prop.Kind.Kickable) prop.LastAttacker = this;
             }
             var info = hit.collider.GetComponent<BlockInfo>();
             if (info == null || info.Type == null) return;

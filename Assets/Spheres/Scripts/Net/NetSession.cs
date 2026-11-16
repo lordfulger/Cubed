@@ -95,6 +95,26 @@ namespace Spheres.Net
             GameEvents.PickPhaseStarted += OnPickPhaseStarted;
         }
 
+        bool voteHooked;
+
+        void OnVoteChanged()
+        {
+            if (!IsHosting || server == null) return;
+            Broadcast(BuildVoteState());
+        }
+
+        byte[] BuildVoteState()
+        {
+            var w = new NetWriter(Msg.VoteState).Byte(Gm.VoteMaps.Count);
+            for (int i = 0; i < Gm.VoteMaps.Count; i++) w.Str(Gm.VoteMaps[i]).Str(Gm.VoteNames[i]);
+            w.Byte(Gm.Votes.Count);
+            foreach (var kv in Gm.Votes) w.Byte(kv.Key).Byte(kv.Value);
+            return w.ToArray();
+        }
+
+        public void SendMapVote(int playerIndex, int choice) =>
+            host?.Send(new NetWriter(Msg.MapVote).Byte(playerIndex).Byte(choice).ToArray());
+
         void OnDestroy()
         {
             GameEvents.MatchStarted -= OnMatchStarted;
@@ -309,6 +329,15 @@ namespace Spheres.Net
                 case Msg.Ping:
                     r.Conn.Send(new NetWriter(Msg.Pong).Float(m.Float()).ToArray());
                     break;
+                case Msg.MapVote:
+                {
+                    int playerIndex = m.Byte();
+                    int choice = m.Byte();
+                    var p = Gm.Players.FirstOrDefault(x => x.Index == playerIndex);
+                    if (p == null || !(p.Input is NetworkInput owner) || owner.Owner != id) break;
+                    Gm.CastVote(p, choice);
+                    break;
+                }
                 case Msg.PickChoice:
                 case Msg.PickHighlight:
                 {
@@ -357,6 +386,7 @@ namespace Spheres.Net
                 return;
             }
 
+            if (!voteHooked && Gm != null) { Gm.VoteChanged += OnVoteChanged; voteHooked = true; }
             snapshotTimer -= dt;
             if (snapshotTimer <= 0f)
             {
@@ -401,7 +431,7 @@ namespace Spheres.Net
             foreach (var p in Gm.Players)
             {
                 int owner = p.Input is NetworkInput ni ? ni.Owner : -1;
-                w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.look : "");
+                w.Byte(p.Index).Str(p.DisplayName).Byte(p.HomeTeam).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.look : "");
                 int cardCount = Mathf.Min(p.Cards.Count, 255);
                 w.Byte(cardCount);
                 for (int k = 0; k < cardCount; k++) w.Str(p.Cards[k].Id);
@@ -490,7 +520,7 @@ namespace Spheres.Net
                 float cd = p.BlockCooldownTimer / Mathf.Max(0.01f, p.GetStat(Stat.BlockCooldown));
                 w.Byte(p.Index).Vec3(p.transform.position).Vec3(p.Velocity).Float(yaw).Float(pitch).Float(p.Health)
                  .Byte(flags).Byte(p.Weapon.Ammo).Unit(p.Weapon.ReloadProgress).Unit(cd).Byte(p.LivesRemaining)
-                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt).Float(p.Barrier);
+                 .UShort(p.Kills).UShort(p.Deaths).Float(p.DamageDealt).Float(p.Barrier).Byte(p.Team);
             }
 
             int count = Mathf.Min(Bullet.Active.Count, 400);
@@ -561,6 +591,9 @@ namespace Spheres.Net
 
         public void MirrorBox(Vector3 pos, Quaternion rot, Vector3 size, Color c, float life) =>
             FxWriter.Byte((int)FxKind.Box).Vec3(pos).Vec3(rot.eulerAngles).Vec3(size).Color(c).Float(life);
+
+        public void MirrorBanner(string text, Color c) =>
+            FxWriter.Byte((int)FxKind.Banner).Str(text).Color(c);
 
         public void MirrorBlockGone(int index) =>
             FxWriter.Byte((int)FxKind.BlockGone).UShort(index);
@@ -912,6 +945,19 @@ namespace Spheres.Net
                     if (Gm.NetClientMode) ApplyProps(m);
                     break;
 
+                case Msg.VoteState:
+                {
+                    int n = m.Byte();
+                    var ids = new List<string>();
+                    var names = new List<string>();
+                    for (int i = 0; i < n; i++) { ids.Add(m.Str()); names.Add(m.Str()); }
+                    int nv = m.Byte();
+                    var votes = new Dictionary<int, int>();
+                    for (int i = 0; i < nv; i++) { int pi = m.Byte(); votes[pi] = m.Byte(); }
+                    if (Gm.NetClientMode) Gm.ClientSetVote(ids, names, votes);
+                    break;
+                }
+
                 case Msg.MatchAbort:
                     if (Gm.NetClientMode) Gm.ClientExitMatch(GameState.Lobby);
                     ClearBulletViews();
@@ -962,8 +1008,10 @@ namespace Spheres.Net
                 int lives = m.Byte(), kills = m.UShort(), deaths = m.UShort();
                 float dmg = m.Float();
                 float barrier = m.Float();
+                int team = m.Byte();
                 var p = FindPlayer(index);
                 if (p == null) continue;
+                p.Team = team;
                 p.Frozen = state != GameState.Fighting;
                 p.NetApply(pos, vel, yaw, pitch, health, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, (flags & 8) != 0,
                     (flags & 16) != 0, (flags & 32) != 0, ammo, (flags & 64) != 0, reload, cd, lives, kills, deaths, dmg,
@@ -1082,6 +1130,13 @@ namespace Spheres.Net
                     case FxKind.Feed:
                         SpheresHud.AddFeedText(m.Str());
                         break;
+                    case FxKind.Banner:
+                    {
+                        string text = m.Str();
+                        var c = m.Color();
+                        SpheresHud.ShowBanner(text, c);
+                        break;
+                    }
                     case FxKind.BlockGone:
                     {
                         int idx = m.UShort();

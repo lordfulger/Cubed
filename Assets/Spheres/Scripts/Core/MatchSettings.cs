@@ -28,11 +28,11 @@ namespace Spheres
     /// <summary>Who picks cards after a round.</summary>
     public enum PickRule { Losers, Everyone, Winners, Nobody }
 
-    public enum MapRotation { Fixed, Cycle, Random }
+    public enum MapRotation { Fixed, Cycle, Random, Vote }
 
     public enum BotDifficulty { Easy, Normal, Hard, Brutal, Dummy }
 
-    public enum GameMode { Elimination, Deathmatch, KingOfTheHill, CardRush, Practice }
+    public enum GameMode { Elimination, Deathmatch, KingOfTheHill, CardRush, Practice, SphereBall, HoldTheOrb, Infection }
 
     [Serializable]
     public class PlayerSlot
@@ -71,6 +71,15 @@ namespace Spheres
         public int killsToWinRound = 5;
         /// <summary>King of the Hill: seconds of control needed to win a round.</summary>
         public float hillSeconds = 20f;
+        /// <summary>Sphere Ball: goals needed to win a round.</summary>
+        public int goalsToWinRound = 3;
+        /// <summary>Hold the Orb: seconds of carrying needed to win a round.</summary>
+        public float orbSeconds = 25f;
+        /// <summary>Infection: survivors win the round if anyone is uninfected after this long (when no round time limit is set).</summary>
+        public float infectionSeconds = 90f;
+        /// <summary>The team leading by <see cref="curseLead"/> rounds gets a small handicap card after each round.</summary>
+        public bool catchUpCurses;
+        public int curseLead = 2;
         public int roundsToWin = 5;
         public float roundTimeLimit = 0f;
 

@@ -27,7 +27,8 @@ namespace Spheres
 
         public GameMode Mode => Settings.mode;
         public bool IsTraining => trainingBackup != null;
-        bool RespawnMode => Mode == GameMode.Deathmatch || Mode == GameMode.KingOfTheHill || Mode == GameMode.Practice;
+        bool RespawnMode => Mode == GameMode.Deathmatch || Mode == GameMode.KingOfTheHill || Mode == GameMode.Practice
+                            || Mode == GameMode.SphereBall || Mode == GameMode.HoldTheOrb || Mode == GameMode.Infection;
 
         public static string ModeName(GameMode m)
         {
@@ -37,6 +38,9 @@ namespace Spheres
                 case GameMode.KingOfTheHill: return "King of the Hill";
                 case GameMode.CardRush: return "Card Rush";
                 case GameMode.Practice: return "Training";
+                case GameMode.SphereBall: return "Sphere Ball";
+                case GameMode.HoldTheOrb: return "Hold the Orb";
+                case GameMode.Infection: return "Infection";
                 default: return "Elimination";
             }
         }
@@ -49,6 +53,9 @@ namespace Spheres
                 case GameMode.KingOfTheHill: return "Hold the glowing zone. First team to fill the timer wins the round.";
                 case GameMode.CardRush: return "Elimination, but every kill instantly draws you a card.";
                 case GameMode.Practice: return "Free practice with target dummies.";
+                case GameMode.SphereBall: return "Shoot and bump the giant ball into another team's goal. Respawns on.";
+                case GameMode.HoldTheOrb: return "Grab the orb and keep it alive. Your team scores while you carry it.";
+                case GameMode.Infection: return "One player starts infected. Everyone they get turns. The last survivor wins it for their team.";
                 default: return "Last team standing wins the round.";
             }
         }
@@ -67,7 +74,8 @@ namespace Spheres
             System.Array.Clear(HillProgress, 0, HillProgress.Length);
             respawnAt.Clear();
             HillHolder = -1;
-            BuildHill();
+            BuildModeObjects();
+            if (Mode == GameMode.Infection) StartInfection();
         }
 
         /// <summary>Also used by network clients after loading a map so they see the same hill.</summary>
@@ -102,6 +110,16 @@ namespace Spheres
                     for (int t = 0; t < Teams.Max; t++)
                         if (HillProgress[t] >= Settings.hillSeconds) { EndRound(t); return true; }
                     return CheckTimeLimitByScore(HillProgress);
+                case GameMode.HoldTheOrb:
+                    for (int t = 0; t < Teams.Max; t++)
+                        if (HillProgress[t] >= Settings.orbSeconds) { EndRound(t); return true; }
+                    return CheckTimeLimitByScore(HillProgress);
+                case GameMode.SphereBall:
+                    for (int t = 0; t < Teams.Max; t++)
+                        if (RoundKills[t] >= Settings.goalsToWinRound) { EndRound(t); return true; }
+                    return CheckTimeLimitByScore(RoundKills.Select(k => (float)k).ToArray());
+                case GameMode.Infection:
+                    return InfectionRoundOver();
                 default:
                     return false;
             }
@@ -138,6 +156,7 @@ namespace Spheres
                 }
             }
             if (Mode == GameMode.KingOfTheHill) UpdateHill(dt);
+            UpdateExtraModes(dt);
             if (Mode == GameMode.Practice) UpdatePractice();
         }
 
@@ -193,6 +212,8 @@ namespace Spheres
         void OnPlayerDiedForMode(Player victim, DamageInfo info)
         {
             if (NetClientMode || !InMatch) return;
+            if (Mode == GameMode.Infection) InfectionDeath(victim);
+            if (Mode == GameMode.HoldTheOrb && victim == OrbCarrier) DropOrb();
             var killer = info != null && info.Source != null && info.Source != victim ? info.Source : victim.LastAttacker;
             if (killer == null || killer == victim || killer.Team == victim.Team) return;
             if (Mode == GameMode.Deathmatch) RoundKills[killer.Team]++;
@@ -215,6 +236,8 @@ namespace Spheres
             practicePickReturn = false;
             practiceSelectPrev = false;
             respawnAt.Clear();
+            OrbCarrier = null;
+            ModeProp = null;
         }
 
         bool practiceSelectPrev;

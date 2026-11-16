@@ -20,7 +20,7 @@ namespace Spheres
         };
         static readonly string[] difficultyNames = Enum.GetNames(typeof(BotDifficulty));
         static readonly string[] pickRuleNames = { "Losers pick", "Everyone picks", "Winners pick", "No cards" };
-        static readonly string[] rotationNames = { "Same map", "Cycle maps", "Random map" };
+        static readonly string[] rotationNames = { "Same map", "Cycle maps", "Random map", "Players vote" };
 
         void Awake() { gm = GetComponent<GameManager>(); }
 
@@ -350,11 +350,18 @@ namespace Spheres
             Rect Row(float rowH = h) { var r = new Rect(4f, y, w - 8f, rowH); y += rowH + 4f; return r; }
 
             Section("Match");
-            string[] modes = { "Elimination", "Deathmatch", "King of the Hill", "Card Rush" };
-            st.mode = (GameMode)UIKit.Cycle(Row(), "Mode", Mathf.Clamp((int)st.mode, 0, modes.Length - 1), modes);
+            GameMode[] modeList = { GameMode.Elimination, GameMode.Deathmatch, GameMode.KingOfTheHill, GameMode.CardRush, GameMode.SphereBall, GameMode.HoldTheOrb, GameMode.Infection };
+            string[] modes = modeList.Select(GameManager.ModeName).ToArray();
+            int modeIdx = Mathf.Max(0, System.Array.IndexOf(modeList, st.mode));
+            st.mode = modeList[UIKit.Cycle(Row(), "Mode", modeIdx, modes)];
             UIKit.Text(Row(24f), GameManager.ModeDescription(st.mode), UIKit.Small, UIKit.Muted);
             if (st.mode == GameMode.Deathmatch) st.killsToWinRound = UIKit.StepperInt(Row(), "   Kills to win a round", st.killsToWinRound, 1, 50);
             if (st.mode == GameMode.KingOfTheHill) st.hillSeconds = UIKit.Stepper(Row(), "   Hill time to win", st.hillSeconds, 5f, 5f, 120f, "0", "s");
+            if (st.mode == GameMode.SphereBall) st.goalsToWinRound = UIKit.StepperInt(Row(), "   Goals to win a round", st.goalsToWinRound, 1, 20);
+            if (st.mode == GameMode.HoldTheOrb) st.orbSeconds = UIKit.Stepper(Row(), "   Orb time to win", st.orbSeconds, 5f, 5f, 180f, "0", "s");
+            if (st.mode == GameMode.Infection) st.infectionSeconds = UIKit.Stepper(Row(), "   Survive for", st.infectionSeconds, 15f, 30f, 600f, "0", "s");
+            st.catchUpCurses = UIKit.CheckRow(Row(), "Catch-up curses (leader gets a handicap card)", st.catchUpCurses);
+            if (st.catchUpCurses) st.curseLead = UIKit.StepperInt(Row(), "   Lead needed (rounds)", st.curseLead, 1, 10);
             st.roundsToWin = UIKit.StepperInt(Row(), "Rounds to win", st.roundsToWin, 1, 20);
             st.roundTimeLimit = UIKit.Stepper(Row(), "Round time limit", st.roundTimeLimit, 30f, 0f, 600f, "0", "s", "Off");
             st.friendlyFire = UIKit.CheckRow(Row(), "Friendly fire", st.friendlyFire);
@@ -383,6 +390,17 @@ namespace Spheres
                     st.mapId = maps[newMi].Id;
                     gm.PreviewMap(st.mapId);
                 }
+            }
+            var thumbEntry = MapRegistry.Get(st.mapId);
+            if (thumbEntry != null)
+            {
+                var tr = Row(120f);
+                var tex = MapThumbnails.Get(thumbEntry.Data, thumbEntry.Id);
+                if (tex != null) GUI.DrawTexture(new Rect(tr.x + 4f, tr.y, 120f, 120f), tex, ScaleMode.ScaleToFit);
+                var d = thumbEntry.Data;
+                string info = "<b>" + d.name + "</b>\n" + d.description + "\n<color=#8890a8>" + d.sizeX + "×" + d.sizeY + "×" + d.sizeZ
+                    + (d.mechs.Count > 0 ? ", " + d.mechs.Count + " moving parts" : "") + (d.props.Count > 0 ? ", " + d.props.Count + " props" : "") + "</color>";
+                UIKit.Text(new Rect(tr.x + 134f, tr.y, tr.width - 138f, 120f), info, UIKit.Wrap, Color.white);
             }
             st.mapRotation = (MapRotation)UIKit.Cycle(Row(), "Between rounds", (int)st.mapRotation, rotationNames);
 

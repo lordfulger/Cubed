@@ -372,7 +372,11 @@ namespace Spheres
             {
                 var all = MapRegistry.All;
                 MapEntry entry = null;
-                if (!first && Settings.mapRotation == MapRotation.Cycle && all.Count > 0)
+                string voted = !first ? ResolveMapVote() : null;
+                if (voted != null) entry = MapRegistry.Get(voted);
+                else if (!first && Settings.mapRotation == MapRotation.Vote && all.Count > 0)
+                    entry = all[UnityEngine.Random.Range(0, all.Count)];
+                else if (!first && Settings.mapRotation == MapRotation.Cycle && all.Count > 0)
                 {
                     int idx = all.ToList().FindIndex(e => e.Id == CurrentMapId);
                     entry = all[(idx + 1 + all.Count) % all.Count];
@@ -422,6 +426,7 @@ namespace Spheres
 
         void EndRound(int winner)
         {
+            if (Mode == GameMode.Infection) RestoreHomeTeams();
             LastRoundWinner = winner;
             if (winner >= 0 && winner < TeamScores.Length) TeamScores[winner]++;
             SetState(GameState.RoundEnd);
@@ -451,6 +456,7 @@ namespace Spheres
                 return;
             }
 
+            ApplyCatchUpCurses();
             List<Player> pickers;
             switch (Settings.pickRule)
             {
@@ -478,6 +484,7 @@ namespace Spheres
             }
             StartingPickPhase = starting;
             pickDoneTimer = 0f;
+            if (!starting) StartMapVote();
             SetState(GameState.CardPick);
             GameEvents.RaisePickPhaseStarted();
         }
@@ -529,6 +536,7 @@ namespace Spheres
 
         void UpdatePicks(float dt)
         {
+            UpdateMapVote(dt);
             foreach (var st in Picks)
             {
                 if (st.Done) continue;
@@ -589,6 +597,7 @@ namespace Spheres
             Controllers.Poll();
             Rumble.Update();
             UpdateScoreboardKey();
+            UpdateLocalVoteInput();
             Achievements.Tick(udt);
             Spheres.Net.SteamIntegration.Update();
             HandlePause();
@@ -807,7 +816,7 @@ namespace Spheres
             Fx.Clear();
             ReplaceMap(map);
             CurrentMapId = "net";
-            BuildHill();
+            BuildModeObjects();
             foreach (var p in Players)
             {
                 p.NetResetForRound();

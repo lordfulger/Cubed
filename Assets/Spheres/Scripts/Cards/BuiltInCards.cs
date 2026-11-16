@@ -116,6 +116,7 @@ namespace Spheres
             foreach (var c in cards) CardRegistry.Register(c);
             ExpansionCards.RegisterAll();
             CardGenerator.RegisterAll();
+            CurseCards.RegisterAll();
         }
     }
 }

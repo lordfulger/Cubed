@@ -35,6 +35,14 @@ namespace Spheres
         public float ExplodeRadius, ExplodeDamage;
         /// <summary>How hard bullets shove it.</summary>
         public float BulletPush = 1f;
+        /// <summary>Players kick it hard when they run into it (balls).</summary>
+        public bool Kickable;
+        /// <summary>Not offered in the map editor (mode-only props).</summary>
+        public bool HideInEditor;
+        /// <summary>Glows (bloom).</summary>
+        public bool Glowing;
+        /// <summary>Health 0 = can't be destroyed.</summary>
+        public bool Indestructible => Health <= 0f;
     }
 
     public static class PropKinds
@@ -44,6 +52,10 @@ namespace Spheres
         public const string Barrel = "barrel";
         public const string Ball = "ball";
         public const string Heavy = "heavy";
+        /// <summary>Sphere Ball's giant ball (indestructible).</summary>
+        public const string Soccer = "soccer";
+        /// <summary>Hold the Orb's glowing orb (indestructible).</summary>
+        public const string Orb = "orb";
 
         static readonly Dictionary<string, PropKind> byId = new Dictionary<string, PropKind>();
         static readonly List<PropKind> ordered = new List<PropKind>();
@@ -54,7 +66,9 @@ namespace Spheres
             Register(new PropKind { Id = Crate, Name = "Wooden Crate", Color = new Color(0.68f, 0.47f, 0.26f), Size = Vector3.one * 1f, Mass = 3f, Health = 70f });
             Register(new PropKind { Id = Box, Name = "Cardboard Box", Color = new Color(0.78f, 0.64f, 0.44f), Size = new Vector3(0.8f, 0.7f, 0.8f), Mass = 0.6f, Health = 18f, BulletPush = 2f });
             Register(new PropKind { Id = Barrel, Name = "Explosive Barrel", Color = new Color(0.86f, 0.2f, 0.16f), Size = new Vector3(0.8f, 1.1f, 0.8f), Cylinder = true, Mass = 2f, Health = 35f, ExplodeRadius = 4.5f, ExplodeDamage = 50f });
-            Register(new PropKind { Id = Ball, Name = "Beach Ball", Color = new Color(0.3f, 0.75f, 1f), Size = Vector3.one * 1.3f, Round = true, Mass = 0.4f, Health = 45f, Bounciness = 0.85f, BulletPush = 2.5f });
+            Register(new PropKind { Id = Ball, Name = "Beach Ball", Color = new Color(0.3f, 0.75f, 1f), Size = Vector3.one * 1.3f, Round = true, Mass = 0.4f, Health = 45f, Bounciness = 0.85f, BulletPush = 2.5f, Kickable = true });
+            Register(new PropKind { Id = Soccer, Name = "Sphere Ball", Color = new Color(0.95f, 0.95f, 0.98f), Size = Vector3.one * 1.8f, Round = true, Mass = 0.7f, Health = 0f, Bounciness = 0.6f, BulletPush = 3.2f, Kickable = true, HideInEditor = true });
+            Register(new PropKind { Id = Orb, Name = "Orb", Color = new Color(1f, 0.85f, 0.3f), Size = Vector3.one * 0.9f, Round = true, Mass = 0.5f, Health = 0f, Bounciness = 0.4f, BulletPush = 1.5f, Glowing = true, HideInEditor = true });
             Register(new PropKind { Id = Heavy, Name = "Steel Crate", Color = new Color(0.45f, 0.5f, 0.58f), Size = Vector3.one * 1.4f, Mass = 12f, Health = 400f, BulletPush = 0.4f });
         }
 
@@ -85,6 +99,8 @@ namespace Spheres
         public Rigidbody Body { get; private set; }
         /// <summary>Who last shot or blew it up (credited for barrel kills).</summary>
         public Player LastAttacker;
+        /// <summary>If set, called instead of breaking when the prop falls out of the arena.</summary>
+        public System.Action<Prop> OnFellOut;
 
         // Network state
         internal Vector3 SentPos;
@@ -128,10 +144,15 @@ namespace Spheres
             {
                 var ball = Prim.Create(Prim.SphereMesh, "Ball", transform, Vector3.zero, k.Size, mat);
                 ball.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                // Stripes.
-                var white = Looks.Block(Color.white);
+                // Stripes (beach ball) or panels (sphere ball).
+                var white = Looks.Block(k.Id == PropKinds.Soccer ? new Color(0.15f, 0.16f, 0.2f) : Color.white);
                 Prim.Create(Prim.SphereMesh, "Stripe", transform, Vector3.zero, new Vector3(k.Size.x * 1.01f, k.Size.y * 0.32f, k.Size.z * 1.01f), white);
                 Prim.Create(Prim.SphereMesh, "Stripe2", transform, Vector3.zero, new Vector3(k.Size.x * 0.32f, k.Size.y * 1.01f, k.Size.z * 1.01f), Looks.Block(new Color(1f, 0.85f, 0.25f)));
+                if (k.Glowing && Mats.GlowAvailable)
+                {
+                    var halo = Prim.Create(Prim.SphereMesh, "Halo", transform, Vector3.zero, k.Size * 1.6f, Mats.Glow(new Color(k.Color.r, k.Color.g, k.Color.b, 0.45f), 2.6f));
+                    halo.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
                 var sc = gameObject.AddComponent<SphereCollider>();
                 sc.radius = k.Size.x * 0.5f;
                 col = sc;
@@ -227,7 +248,7 @@ namespace Spheres
             if (source != null) LastAttacker = source;
             if (Body != null && !Body.isKinematic && direction.sqrMagnitude > 0.0001f && force > 0f)
                 Body.AddForceAtPosition(direction.normalized * force * Kind.BulletPush, point, ForceMode.Impulse);
-            if (amount <= 0f) return;
+            if (amount <= 0f || Kind.Indestructible) return;
             Hp -= amount;
             if (Hp <= 0f) Break();
         }
@@ -254,6 +275,27 @@ namespace Spheres
             }
         }
 
+        /// <summary>Host: move instantly and stop (ball reset after a goal, orb dropped).</summary>
+        public void Teleport(Vector3 pos)
+        {
+            if (Body != null && !Body.isKinematic)
+            {
+                Body.velocity = Vector3.zero;
+                Body.angularVelocity = Vector3.zero;
+            }
+            transform.position = pos;
+            if (Body != null) Body.position = pos;
+        }
+
+        /// <summary>Host: a player is carrying this prop (it follows them; physics off).</summary>
+        public void SetCarried(bool carried)
+        {
+            if (Body == null || puppet) return;
+            Body.isKinematic = carried;
+            if (carried) Body.interpolation = RigidbodyInterpolation.None;
+            else Body.interpolation = RigidbodyInterpolation.Interpolate;
+        }
+
         /// <summary>Client: the host says this prop is gone (effects arrive separately).</summary>
         public void NetRemove()
         {
@@ -266,7 +308,7 @@ namespace Spheres
         {
             netPos = pos;
             netRot = rot;
-            if (!hasNet)
+            if (!hasNet || (pos - transform.position).sqrMagnitude > 25f)
             {
                 transform.SetPositionAndRotation(pos, rot);
                 hasNet = true;
@@ -286,7 +328,11 @@ namespace Spheres
         {
             if (!Authority || Removed) return;
             var map = GameManager.ActiveMap;
-            if (map != null && transform.position.y < map.FullBounds.min.y - 6f) Break();
+            if (map != null && transform.position.y < map.FullBounds.min.y - 6f)
+            {
+                if (OnFellOut != null) OnFellOut(this);
+                else Break();
+            }
         }
 
         void OnCollisionEnter(Collision c)
@@ -295,7 +341,7 @@ namespace Spheres
             float v = c.relativeVelocity.magnitude;
             if (v > 4f && Kind.Round) Sfx.PlayAt("bounce", transform.position, Mathf.Clamp01(v / 25f) * 0.4f);
             // Heavy impacts crack fragile props (boxes dropped from a height, barrels flung into walls).
-            if (v > 14f && c.rigidbody == null) Damage((v - 14f) * 4f, LastAttacker, Vector3.zero, transform.position, 0f);
+            if (v > 14f && c.rigidbody == null && !Kind.Indestructible) Damage((v - 14f) * 4f, LastAttacker, Vector3.zero, transform.position, 0f);
         }
     }
 }

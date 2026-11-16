@@ -41,6 +41,19 @@ namespace Spheres
             AddFeedText(text);
         }
 
+        static string bannerText = "";
+        static Color bannerColor = Color.white;
+        static float bannerTime = -99f;
+
+        /// <summary>Big centered announcement (GOAL!, curses). Mirrored online.</summary>
+        public static void ShowBanner(string text, Color color)
+        {
+            if (Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBanner(text, color);
+            bannerText = text;
+            bannerColor = color;
+            bannerTime = Time.unscaledTime;
+        }
+
         /// <summary>Add a line to the kill feed (also used for join/leave messages).</summary>
         public static void AddFeedText(string text)
         {
@@ -90,6 +103,7 @@ namespace Spheres
             DrawFeed();
             DrawBanners(gm);
             if (gm.State == GameState.MatchEnd) DrawMatchEnd(gm);
+            if (gm.State == GameState.CardPick && gm.VoteRunning) DrawVote(gm);
             if (gm.ScoreboardOpen && gm.State != GameState.MatchEnd) DrawScoreTab(gm);
             DrawTooltip();
         }
@@ -302,6 +316,38 @@ namespace Spheres
             if (Event.current.type == EventType.Repaint) tooltipCard = null;
         }
 
+        // ------------------------------------------------------------------ map vote
+
+        static void DrawVote(GameManager gm)
+        {
+            var s = UIKit.Size;
+            int n = gm.VoteMaps.Count;
+            const float cw = 150f, ch = 150f, gap = 10f;
+            float total = n * cw + (n - 1) * gap;
+            float x0 = s.x * 0.5f - total * 0.5f, y0 = s.y - ch - 46f;
+            UIKit.Fill(new Rect(x0 - 12f, y0 - 30f, total + 24f, ch + 70f), new Color(0.03f, 0.04f, 0.07f, 0.8f));
+            UIKit.Text(new Rect(x0, y0 - 28f, total, 24f), "Vote for the next map  (1 / 2 / 3, click, or Y on a gamepad)", UIKit.SmallCenter, UIKit.Accent);
+            var tally = new int[n];
+            foreach (var v in gm.Votes.Values) if (v >= 0 && v < n) tally[v]++;
+            var me = gm.Players.FirstOrDefault(p => p.Input is HumanInput h && h.IsKeyboard);
+            var mouse = Event.current.mousePosition;
+            for (int i = 0; i < n; i++)
+            {
+                var r = new Rect(x0 + i * (cw + gap), y0, cw, ch);
+                bool mine = gm.Players.Any(p => p.Input is HumanInput && gm.Votes.TryGetValue(p.Index, out int c) && c == i);
+                bool hot = r.Contains(mouse);
+                UIKit.Fill(r, new Color(1f, 1f, 1f, hot ? 0.12f : 0.06f));
+                var tex = MapThumbnails.Get(gm.VoteMaps[i]);
+                var img = new Rect(r.x + 8f, r.y + 6f, cw - 16f, ch - 52f);
+                if (tex != null) GUI.DrawTexture(img, tex, ScaleMode.ScaleToFit);
+                else UIKit.Text(img, "?", UIKit.HeaderCenter, UIKit.Muted);
+                UIKit.Text(new Rect(r.x + 4f, r.yMax - 44f, cw - 8f, 20f), (i + 1) + ". " + gm.VoteNames[i], UIKit.SmallCenter, Color.white);
+                UIKit.Text(new Rect(r.x + 4f, r.yMax - 24f, cw - 8f, 20f), tally[i] + (tally[i] == 1 ? " vote" : " votes"), UIKit.SmallCenter, tally[i] > 0 ? UIKit.Accent : UIKit.Muted);
+                if (mine) UIKit.Outline(r, UIKit.Accent, 2f);
+                if (me != null && UIKit.Clickable(r)) gm.CastVote(me, i);
+            }
+        }
+
         // ------------------------------------------------------------------ Tab scoreboard
 
         static void DrawScoreTab(GameManager gm)
@@ -334,7 +380,7 @@ namespace Spheres
                     : gm.Settings.mode == GameMode.KingOfTheHill ? "   hill: " + Mathf.FloorToInt(gm.HillProgress[t]) + "s" : "";
                 UIKit.Text(new Rect(r.x + 20f, y, W - 40f, 26f), "<b>" + Teams.GetName(t) + "</b>   " + gm.TeamScores[t] + " / " + gm.Settings.roundsToWin + " rounds" + extra, UIKit.Label, tc);
                 y += 30f;
-                foreach (var p in gm.Players.Where(p => p.Team == t).OrderByDescending(p => p.Kills).ThenByDescending(p => p.DamageDealt))
+                foreach (var p in gm.Players.Where(p => p.HomeTeam == t).OrderByDescending(p => p.Kills).ThenByDescending(p => p.DamageDealt))
                 {
                     if (y > r.yMax - 30f) break;
                     bool me = p.Input is HumanInput;
@@ -549,6 +595,41 @@ namespace Spheres
             }
             else if (mode == GameMode.CardRush && gm.InMatch)
                 UIKit.Shadowed(new Rect(0f, y, UIKit.Size.x, 22f), "Card Rush: every kill draws a card", UIKit.SmallCenter, UIKit.Muted);
+            else if (mode == GameMode.SphereBall && gm.InMatch)
+            {
+                string text = "Goals (first to " + gm.Settings.goalsToWinRound + "):  " + string.Join("   ", gm.ActiveTeams.Select(t =>
+                    "<color=#" + ColorUtility.ToHtmlStringRGB(Teams.GetColor(t)) + ">" + gm.RoundKills[t] + "</color>"));
+                UIKit.Shadowed(new Rect(0f, y, UIKit.Size.x, 24f), text, UIKit.LabelCenter, Color.white);
+            }
+            else if (mode == GameMode.HoldTheOrb && gm.InMatch)
+            {
+                float w = 300f, x = UIKit.Size.x * 0.5f - w * 0.5f;
+                foreach (int t in gm.ActiveTeams)
+                {
+                    UIKit.Bar(new Rect(x, y, w, 7f), gm.HillProgress[t] / Mathf.Max(1f, gm.Settings.orbSeconds), Teams.GetColor(t), new Color(0f, 0f, 0f, 0.5f));
+                    y += 10f;
+                }
+                string holder = gm.HillHolder >= 0 ? Teams.GetName(gm.HillHolder) + " has the orb" : "The orb is loose!";
+                UIKit.Shadowed(new Rect(0f, y + 2f, UIKit.Size.x, 22f), holder, UIKit.SmallCenter, gm.HillHolder >= 0 ? Teams.GetColor(gm.HillHolder) : new Color(1f, 0.85f, 0.3f));
+            }
+            else if (mode == GameMode.Infection && gm.InMatch)
+            {
+                int surv = gm.Players.Count(p => p.Team == GameManager.SurvivorTeam && p.IsAlive);
+                int inf = gm.Players.Count(p => p.Team == GameManager.InfectedTeam);
+                float limit = gm.Settings.roundTimeLimit > 0f ? gm.Settings.roundTimeLimit : gm.Settings.infectionSeconds;
+                string text = "<color=#7dd0ff>Survivors " + surv + "</color>     <color=#7dff6a>Infected " + inf + "</color>     " + Mathf.CeilToInt(Mathf.Max(0f, limit - gm.RoundTime)) + "s";
+                UIKit.Shadowed(new Rect(0f, y, UIKit.Size.x, 24f), text, UIKit.LabelCenter, Color.white);
+            }
+
+            // Banner (goals, curses).
+            if (Time.unscaledTime - bannerTime < 2.2f && gm.InMatch)
+            {
+                float age = Time.unscaledTime - bannerTime;
+                var c = bannerColor;
+                c.a = Mathf.Clamp01(2.2f - age);
+                var style = new GUIStyle(UIKit.Title) { fontSize = Mathf.RoundToInt(48 + 20f * Mathf.Clamp01(1f - age * 4f)) };
+                UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.22f, UIKit.Size.x, 80f), bannerText, style, c);
+            }
 
             // Respawn countdown for local players.
             foreach (var cam in gm.Cameras)
