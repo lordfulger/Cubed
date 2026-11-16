@@ -32,7 +32,7 @@ namespace Spheres.Net
         VoteState,
     }
 
-    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke, BlockGone, Banner }
+    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke, BlockGone, Banner, Signal }
 
     public static class NetConst
     {

@@ -112,6 +112,12 @@ namespace Spheres.Net
             return w.ToArray();
         }
 
+        public void SendSignal(int playerIndex, int kind, Vector3 pos, int phrase, int target) =>
+            host?.Send(new NetWriter(Msg.Signal).Byte(playerIndex).Byte(kind).Vec3(pos).Byte(phrase).Byte(target).ToArray());
+
+        public void MirrorSignal(int playerIndex, int kind, Vector3 pos, int phrase, int target) =>
+            FxWriter.Byte((int)FxKind.Signal).Byte(playerIndex).Byte(kind).Vec3(pos).Byte(phrase).Byte(target);
+
         public void SendMapVote(int playerIndex, int choice) =>
             host?.Send(new NetWriter(Msg.MapVote).Byte(playerIndex).Byte(choice).ToArray());
 
@@ -329,6 +335,18 @@ namespace Spheres.Net
                 case Msg.Ping:
                     r.Conn.Send(new NetWriter(Msg.Pong).Float(m.Float()).ToArray());
                     break;
+                case Msg.Signal:
+                {
+                    int playerIndex = m.Byte();
+                    int kind = m.Byte();
+                    var pos = m.Vec3();
+                    int phrase = m.Byte();
+                    int target = m.Byte();
+                    var p = Gm.Players.FirstOrDefault(x => x.Index == playerIndex);
+                    if (p == null || !(p.Input is NetworkInput owner) || owner.Owner != id) break;
+                    Signals.Receive(p, (SignalKind)Mathf.Clamp(kind, 0, 2), pos, phrase, Gm.Players.FirstOrDefault(x => x.Index == target));
+                    break;
+                }
                 case Msg.MapVote:
                 {
                     int playerIndex = m.Byte();
@@ -1130,6 +1148,15 @@ namespace Spheres.Net
                     case FxKind.Feed:
                         SpheresHud.AddFeedText(m.Str());
                         break;
+                    case FxKind.Signal:
+                    {
+                        int pi = m.Byte(), kind = m.Byte();
+                        var pos = m.Vec3();
+                        int phrase = m.Byte(), target = m.Byte();
+                        var from = FindPlayer(pi);
+                        if (from != null) Signals.Show(from, (SignalKind)Mathf.Clamp(kind, 0, 2), pos, phrase, FindPlayer(target));
+                        break;
+                    }
                     case FxKind.Banner:
                     {
                         string text = m.Str();

@@ -78,6 +78,19 @@ namespace Spheres
 
         public HumanInput(ControlType device) { Device = device; }
 
+        /// <summary>Quick-chat wheel is open (movement and look are paused while choosing).</summary>
+        public bool WheelOpen { get; private set; }
+        /// <summary>Current wheel selection (0-7, clockwise from up) or -1.</summary>
+        public int WheelChoice { get; private set; } = -1;
+        Vector2 wheelAccum;
+        bool prevPing, prevDpad, prevWheelPad;
+
+        static int Sector(Vector2 dir)
+        {
+            float ang = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg; // 0 = up, clockwise
+            return Mathf.RoundToInt(Mathf.Repeat(ang, 360f) / 45f) % 8;
+        }
+
         public bool IsKeyboard => Device == ControlType.KeyboardMouse;
         public int Joystick => ControlTypes.Joystick(Device);
 
@@ -133,6 +146,53 @@ namespace Spheres
                 prevPause = pause;
             }
 
+            // Quick chat and pings.
+            int phrase = -1;
+            bool ping;
+            if (IsKeyboard)
+            {
+                ping = binds.KeyDown(GameAction.Ping);
+                bool wheel = binds.KeyHeld(GameAction.QuickChat);
+                if (wheel)
+                {
+                    if (!WheelOpen) { wheelAccum = Vector2.zero; WheelChoice = -1; }
+                    wheelAccum += look * 6f;
+                    if (move.sqrMagnitude > 0.1f) wheelAccum = move * 100f;
+                    if (wheelAccum.magnitude > 30f) { WheelChoice = Sector(wheelAccum); wheelAccum = Vector2.ClampMagnitude(wheelAccum, 120f); }
+                    for (int i = 0; i < 8; i++)
+                        if (Input.GetKeyDown(KeyCode.Alpha1 + i)) { phrase = i; wheel = false; WheelChoice = -1; }
+                    look = Vector2.zero;
+                    move = Vector2.zero;
+                }
+                else if (WheelOpen && WheelChoice >= 0) phrase = WheelChoice;
+                WheelOpen = wheel;
+                if (!WheelOpen) WheelChoice = -1;
+            }
+            else
+            {
+                int j = Joystick;
+                var profile = Controllers.Profile(j);
+                bool pingHeld = binds.PadHeld(GameAction.Ping, j, profile);
+                ping = pingHeld && !prevPing;
+                prevPing = pingHeld;
+                var dpad = Controllers.DPad(j, profile);
+                bool dHeld = dpad.sqrMagnitude > 0.25f;
+                if (dHeld && !prevDpad) phrase = Sector(dpad);
+                prevDpad = dHeld;
+                // Left-stick click opens the full wheel; the right stick picks.
+                bool wheel = binds.PadHeld(GameAction.QuickChat, j, profile);
+                if (wheel)
+                {
+                    var rs = Controllers.RightStick(j, profile);
+                    if (rs.magnitude > 0.5f) WheelChoice = Sector(rs);
+                    look = Vector2.zero;
+                }
+                else if (prevWheelPad && WheelChoice >= 0) phrase = WheelChoice;
+                prevWheelPad = wheel;
+                WheelOpen = wheel;
+                if (!wheel) WheelChoice = -1;
+            }
+
             Yaw = Mathf.Repeat(Yaw + look.x, 360f);
             Pitch = Mathf.Clamp(Pitch - look.y * invert, -75f, 80f);
 
@@ -143,6 +203,8 @@ namespace Spheres
             Move = m.sqrMagnitude > 1f ? m.normalized : m;
 
             AimPoint = Camera != null ? Camera.ComputeAimPoint(player) : player.Head.position + Quaternion.Euler(Pitch, Yaw, 0f) * Vector3.forward * 50f;
+            if (phrase >= 0 || ping)
+                Signals.FromInput(player, phrase, ping, AimPoint, Camera != null && Camera.Cam != null ? Camera.Cam.transform.position : player.Head.position);
         }
 
         public void TickMenu()

@@ -54,6 +54,13 @@ namespace Spheres
             bannerTime = Time.unscaledTime;
         }
 
+        /// <summary>Add a feed line on this machine only (things that are mirrored another way, like quick chat).</summary>
+        public static void AddFeedTextLocal(string text)
+        {
+            feed.Add(new FeedEntry { Text = text, Time = Time.unscaledTime });
+            if (feed.Count > 6) feed.RemoveAt(0);
+        }
+
         /// <summary>Add a line to the kill feed (also used for join/leave messages).</summary>
         public static void AddFeedText(string text)
         {
@@ -144,6 +151,14 @@ namespace Spheres
                 UIKit.Shadowed(new Rect(pos.x - 80f, pos.y - 20f, 160f, 18f), p.DisplayName, UIKit.SmallCenter, Color.Lerp(p.Color, Color.white, 0.4f));
                 if (p.IsBlocking) UIKit.Outline(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white, 1f);
             }
+
+            Signals.Draw(self, world =>
+            {
+                var sp = cam.WorldToScreenPoint(world);
+                var gui = new Vector2(sp.x / scale, (Screen.height - sp.y) / scale) - groupOffset;
+                return (gui, sp.z > 0.1f && area.Contains(gui), sp.z <= 0.1f);
+            }, area);
+            if (self != null && self.Input is HumanInput hi && hi.WheelOpen) DrawChatWheel(area, hi);
 
             float now = Time.unscaledTime;
             var style = UIKit.HeaderCenter;
@@ -314,6 +329,25 @@ namespace Spheres
             float y = Mathf.Clamp(tooltipAnchor.center.y - h * 0.5f, 8f, UIKit.Size.y - h - 8f);
             UIKit.DrawCard(new Rect(x, y, w, h), tooltipCard, true);
             if (Event.current.type == EventType.Repaint) tooltipCard = null;
+        }
+
+        // ------------------------------------------------------------------ quick chat wheel
+
+        static void DrawChatWheel(Rect area, HumanInput hi)
+        {
+            var c = area.center;
+            float radius = Mathf.Min(150f, Mathf.Min(area.width, area.height) * 0.3f);
+            UIKit.Fill(new Rect(c.x - radius - 70f, c.y - radius - 30f, radius * 2f + 140f, radius * 2f + 60f), new Color(0f, 0f, 0f, 0.35f));
+            for (int i = 0; i < Signals.Phrases.Length; i++)
+            {
+                float a = i * 45f * Mathf.Deg2Rad;
+                var p = c + new Vector2(Mathf.Sin(a), -Mathf.Cos(a)) * radius;
+                bool sel = hi.WheelChoice == i;
+                var r = new Rect(p.x - 62f, p.y - 15f, 124f, 30f);
+                UIKit.Fill(r, sel ? new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, 0.85f) : new Color(0.08f, 0.09f, 0.13f, 0.85f));
+                UIKit.Text(r, (hi.IsKeyboard ? (i + 1) + "  " : "") + Signals.Phrases[i], UIKit.SmallCenter, sel ? Color.black : Color.white);
+            }
+            UIKit.Shadowed(new Rect(c.x - 120f, c.y - 10f, 240f, 20f), hi.IsKeyboard ? "Move or aim to pick, release V" : "Right stick to pick, release", UIKit.SmallCenter, UIKit.Muted);
         }
 
         // ------------------------------------------------------------------ map vote
