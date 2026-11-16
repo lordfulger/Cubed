@@ -109,7 +109,8 @@ namespace Spheres
             if (high && map != null)
             {
                 float size = Mathf.Max(map.FullBounds.size.x, map.FullBounds.size.z);
-                mat.SetVector("_FogParams", new Vector4(size * 0.8f, size * 4.5f, 0.45f, 0f));
+                float dens = Mathf.Max(0.2f, Weather.FogDensity);
+                mat.SetVector("_FogParams", new Vector4(size * 0.8f / dens, size * 4.5f / dens, Mathf.Clamp01(0.45f * Mathf.Sqrt(dens)), 0f));
                 var fc = map.FogColor;
                 mat.SetColor("_FogColor", QualitySettings.activeColorSpace == ColorSpace.Linear ? fc.linear : fc);
                 mat.EnableKeyword("SPHERES_FOG");

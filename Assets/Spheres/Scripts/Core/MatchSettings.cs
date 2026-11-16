@@ -98,6 +98,12 @@ namespace Spheres
         public string mapId = "builtin:garden";
         public MapRotation mapRotation = MapRotation.Fixed;
 
+        // Atmosphere (cosmetic)
+        public WeatherKind weather = WeatherKind.Clear;
+        public TimeOfDay timeOfDay = TimeOfDay.MapDefault;
+        /// <summary>Picked by the host each match so "Random" weather matches on every machine.</summary>
+        public int weatherSeed;
+
         // Borders and falling
         public bool damagingBorders = true;
         public float borderDamage = 25f;

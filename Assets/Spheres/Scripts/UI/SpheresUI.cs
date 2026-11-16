@@ -404,6 +404,12 @@ namespace Spheres
             }
             st.mapRotation = (MapRotation)UIKit.Cycle(Row(), "Between rounds", (int)st.mapRotation, rotationNames);
 
+            Section("Atmosphere");
+            var weathers = (WeatherKind[])System.Enum.GetValues(typeof(WeatherKind));
+            st.weather = weathers[UIKit.Cycle(Row(), "Weather", System.Array.IndexOf(weathers, st.weather), weathers.Select(Weather.Name).ToArray())];
+            var times = (TimeOfDay[])System.Enum.GetValues(typeof(TimeOfDay));
+            st.timeOfDay = times[UIKit.Cycle(Row(), "Time of day", System.Array.IndexOf(times, st.timeOfDay), times.Select(Weather.Name).ToArray())];
+
             Section("Borders & Falling");
             st.damagingBorders = UIKit.CheckRow(Row(), "Damaging borders", st.damagingBorders);
             if (st.damagingBorders) st.borderDamage = UIKit.Stepper(Row(), "   Border damage", st.borderDamage, 5f, 5f, 100f);

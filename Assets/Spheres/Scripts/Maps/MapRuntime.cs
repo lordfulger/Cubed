@@ -150,6 +150,7 @@ namespace Spheres
 
             map.BuildBorders();
             map.RefreshBounds();
+            if (!editorMode) map.Background = Weather.TintBackground(data, map.Background);
             map.BuildAtmosphere();
             GameEvents.RaiseMapLoaded(data);
             return map;

@@ -145,6 +145,7 @@ namespace Spheres
             fill.color = new Color(0.55f, 0.65f, 1f);
             fill.shadows = LightShadows.None;
             fill.transform.rotation = Quaternion.Euler(25f, 150f, 0f);
+            Weather.RegisterLights(sun, fill);
         }
 
         void OnApplicationQuit()
@@ -207,6 +208,8 @@ namespace Spheres
 
         public void ReturnToMenu()
         {
+            Weather.Active = false;
+            Weather.Clear();
             EndTraining();
             if (NetClientMode) ClientExitMatch(GameState.MainMenu);
             if (Net != null && Net.IsHosting && InMatch)
@@ -228,6 +231,7 @@ namespace Spheres
 
         void ShowMenuBackdrop()
         {
+            Weather.Active = false;
             var entry = MapRegistry.GetOrDefault(Settings.mapId);
             if (entry == null) return;
             ReplaceMap(entry.Data.Clone());
@@ -250,6 +254,7 @@ namespace Spheres
         {
             if (Map != null) DestroyImmediate(Map.gameObject);
             Map = MapRuntime.Build(data, false);
+            Weather.Apply(Map);
             Map.SetBorderStyle(Settings.damagingBorders, Settings.fallDamage);
             OverviewCamera.backgroundColor = Map.Background;
             foreach (var c in Cameras) c.Cam.backgroundColor = Map.Background;
@@ -284,6 +289,8 @@ namespace Spheres
         public void StartMatch(MapData testMap = null)
         {
             Settings.Validate();
+            Settings.weatherSeed = UnityEngine.Random.Range(1, 1 << 30);
+            Weather.Active = true;
             string error = Settings.CheckPlayable();
             if (error != null)
             {
@@ -631,6 +638,7 @@ namespace Spheres
             UpdateScoreboardKey();
             UpdateLocalVoteInput();
             Achievements.Tick(udt);
+            Weather.Update(udt);
             Spheres.Net.SteamIntegration.Update();
             if (!launchJoinChecked && State == GameState.MainMenu)
             {
@@ -830,6 +838,7 @@ namespace Spheres
         /// <summary>Network client: build the match described by the host.</summary>
         public void ClientStartMatch(MatchSettings rules, List<NetPlayerInfo> infos, MapData map)
         {
+            Weather.Active = true;
             if (Editor.IsOpen) Editor.Close();
             ClearMatch();
             if (localSettingsBackup == null) localSettingsBackup = Settings;
@@ -933,6 +942,8 @@ namespace Spheres
         /// <summary>Leave client mode (disconnect, or host went back to the lobby).</summary>
         public void ClientExitMatch(GameState next)
         {
+            Weather.Active = false;
+            Weather.Clear();
             ClearMatch();
             if (localSettingsBackup != null)
             {
