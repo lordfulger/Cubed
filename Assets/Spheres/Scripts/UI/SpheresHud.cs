@@ -72,8 +72,13 @@ namespace Spheres
                 GUI.BeginGroup(v);
                 var local = new Rect(0f, 0f, v.width, v.height);
                 DrawWorldOverlays(gm, cam.Cam, local, cam.Target, v.position);
-                if (gm.State == GameState.CardPick) DrawPickView(gm, cam.Target, local);
-                else if (gm.State != GameState.MatchEnd) DrawPlayerHud(gm, cam, local);
+                if (gm.State == GameState.CardPick)
+                {
+                    DrawPickView(gm, cam.Target, local);
+                    // Review your build while choosing (cursor is free during picks).
+                    if (local.width > 700f) DrawCardList(gm, cam.Target, new Rect(local.x, local.y + 140f, 230f, local.height - 260f), v.position);
+                }
+                else if (gm.State != GameState.MatchEnd) DrawPlayerHud(gm, cam, local, v.position);
                 GUI.EndGroup();
             }
             if (gm.Cameras.Count > 1) DrawSplitLines(gm);
@@ -83,6 +88,8 @@ namespace Spheres
             DrawFeed();
             DrawBanners(gm);
             if (gm.State == GameState.MatchEnd) DrawMatchEnd(gm);
+            if (gm.ScoreboardOpen && gm.State != GameState.MatchEnd) DrawScoreTab(gm);
+            DrawTooltip();
         }
 
         static void DrawSplitLines(GameManager gm)
@@ -141,7 +148,7 @@ namespace Spheres
             }
         }
 
-        static void DrawPlayerHud(GameManager gm, PlayerCamera cam, Rect v)
+        static void DrawPlayerHud(GameManager gm, PlayerCamera cam, Rect v, Vector2 groupOffset)
         {
             var p = cam.Target;
             if (p == null) return;
@@ -230,23 +237,137 @@ namespace Spheres
             if (p.InvulnerableTimer > 0f) status += "<color=#ffe680>REVIVED</color>  ";
             if (status.Length > 0) UIKit.Shadowed(new Rect(br.x - 40f, br.y - 30f, 210f, 22f), status, UIKit.Small, Color.white);
 
-            // Card list.
-            if (p.Cards.Count > 0)
+            DrawCardList(gm, p, new Rect(v.x, v.y + 90f, 240f, v.height - 200f), groupOffset);
+        }
+
+        // ------------------------------------------------------------------ card list + tooltip
+
+        static CardDefinition tooltipCard;
+        static Rect tooltipAnchor;
+
+        /// <summary>
+        /// The player's cards on the left of their view. Hover (cursor free: scoreboard open, card picks)
+        /// or focus with a gamepad to see the full card.
+        /// </summary>
+        static void DrawCardList(GameManager gm, Player p, Rect area, Vector2 groupOffset)
+        {
+            if (p == null || p.Cards.Count == 0) return;
+            bool interactive = gm.ScoreboardOpen || gm.State == GameState.CardPick || gm.State == GameState.MatchEnd;
+            var groups = p.Cards.GroupBy(c => c).ToList();
+            float rowH = interactive ? 22f : 17f;
+            float cy = area.y;
+            if (interactive)
             {
-                var groups = p.Cards.GroupBy(c => c).ToList();
-                float cy = v.y + 90f;
-                int shown = 0;
-                foreach (var g in groups)
+                UIKit.Fill(new Rect(area.x + 4f, cy - 26f, area.width, Mathf.Min(area.height, groups.Count * rowH) + 30f), new Color(0.03f, 0.04f, 0.07f, 0.75f));
+                UIKit.Text(new Rect(area.x + 12f, cy - 24f, area.width, 20f), "Your cards (" + p.Cards.Count + ")  -  hover to inspect", UIKit.Small, UIKit.Accent);
+            }
+            var mouse = Event.current.mousePosition;
+            foreach (var g in groups)
+            {
+                if (cy > area.yMax) break;
+                var c = g.Key;
+                var row = new Rect(area.x + 6f, cy, area.width - 4f, rowH);
+                bool hot = false;
+                if (interactive)
                 {
-                    if (cy > v.yMax - 110f) break;
-                    var c = g.Key;
-                    CardIcons.Draw(new Rect(v.x + 10f, cy + 1f, 14f, 14f), c, 0.9f);
-                    string label = c.Title + (g.Count() > 1 ? " x" + g.Count() : "");
-                    UIKit.Shadowed(new Rect(v.x + 28f, cy, 220f, 16f), label, UIKit.Small, new Color(1f, 1f, 1f, 0.75f));
-                    cy += 17f;
-                    shown++;
+                    bool focused = UIKit.NavFocus(row);
+                    hot = focused || row.Contains(mouse);
+                    if (hot)
+                    {
+                        UIKit.Fill(row, new Color(c.Color.r, c.Color.g, c.Color.b, 0.35f));
+                        UIKit.Outline(row, CardDefinition.RarityColor(c.Rarity), 1f);
+                        tooltipCard = c;
+                        tooltipAnchor = new Rect(row.x + groupOffset.x, row.y + groupOffset.y, row.width, row.height);
+                    }
+                }
+                float icon = interactive ? 18f : 14f;
+                CardIcons.Draw(new Rect(row.x + 4f, cy + (rowH - icon) * 0.5f, icon, icon), c, 0.95f);
+                string label = c.Title + (g.Count() > 1 ? " x" + g.Count() : "");
+                UIKit.Shadowed(new Rect(row.x + icon + 10f, cy, area.width - icon - 14f, rowH), label, UIKit.Small, hot ? Color.white : new Color(1f, 1f, 1f, 0.78f));
+                cy += rowH;
+            }
+        }
+
+        /// <summary>Draw the full card for whatever is hovered/focused this frame (drawn last, on top).</summary>
+        static void DrawTooltip()
+        {
+            if (tooltipCard == null) return;
+            const float w = 210f, h = 300f;
+            float x = tooltipAnchor.xMax + 12f;
+            if (x + w > UIKit.Size.x - 8f) x = tooltipAnchor.x - w - 12f;
+            float y = Mathf.Clamp(tooltipAnchor.center.y - h * 0.5f, 8f, UIKit.Size.y - h - 8f);
+            UIKit.DrawCard(new Rect(x, y, w, h), tooltipCard, true);
+            if (Event.current.type == EventType.Repaint) tooltipCard = null;
+        }
+
+        // ------------------------------------------------------------------ Tab scoreboard
+
+        static void DrawScoreTab(GameManager gm)
+        {
+            var s = UIKit.Size;
+            var teams = gm.ActiveTeams;
+            int rows = gm.Players.Count + teams.Count;
+            float W = Mathf.Min(1180f, s.x - 60f), H = Mathf.Min(s.y - 140f, 110f + rows * 34f);
+            var r = new Rect(s.x * 0.5f - W * 0.5f, 110f, W, H);
+            UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.35f));
+            UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.94f));
+            UIKit.Outline(r, new Color(1f, 1f, 1f, 0.12f), 1f);
+            string mode = GameManager.ModeName(gm.Settings.mode) + "  -  Round " + Mathf.Max(1, gm.RoundNumber) + "  -  first to " + gm.Settings.roundsToWin;
+            UIKit.Text(new Rect(r.x + 20f, r.y + 10f, W - 40f, 32f), "<b>Scoreboard</b>   <color=#8890a8>" + mode + "</color>", UIKit.Header, Color.white);
+
+            float[] cols = { 20f, 260f, 320f, 380f, 460f, 540f };
+            string[] heads = { "Player", "K", "D", "Damage", "Ping", "Cards (hover to inspect)" };
+            float y = r.y + 50f;
+            for (int i = 0; i < cols.Length; i++) UIKit.Text(new Rect(r.x + cols[i], y, 260f, 22f), heads[i], UIKit.Small, UIKit.Muted);
+            y += 26f;
+
+            var mouse = Event.current.mousePosition;
+            var net = gm.Net;
+            foreach (int t in teams.OrderByDescending(t => gm.TeamScores[t]))
+            {
+                var tc = Teams.GetColor(t);
+                UIKit.Fill(new Rect(r.x + 10f, y, W - 20f, 26f), new Color(tc.r, tc.g, tc.b, 0.18f));
+                UIKit.Fill(new Rect(r.x + 10f, y, 4f, 26f), tc);
+                string extra = gm.Settings.mode == GameMode.Deathmatch ? "   kills this round: " + gm.RoundKills[t]
+                    : gm.Settings.mode == GameMode.KingOfTheHill ? "   hill: " + Mathf.FloorToInt(gm.HillProgress[t]) + "s" : "";
+                UIKit.Text(new Rect(r.x + 20f, y, W - 40f, 26f), "<b>" + Teams.GetName(t) + "</b>   " + gm.TeamScores[t] + " / " + gm.Settings.roundsToWin + " rounds" + extra, UIKit.Label, tc);
+                y += 30f;
+                foreach (var p in gm.Players.Where(p => p.Team == t).OrderByDescending(p => p.Kills).ThenByDescending(p => p.DamageDealt))
+                {
+                    if (y > r.yMax - 30f) break;
+                    bool me = p.Input is HumanInput;
+                    if (me) UIKit.Fill(new Rect(r.x + 10f, y - 2f, W - 20f, 30f), new Color(1f, 1f, 1f, 0.05f));
+                    string tag = p.IsBot ? " <color=#8890a8>(bot)</color>" : p.IsRemote ? " <color=#7dff8a>(online)</color>" : me ? " <color=#ffd75e>(you)</color>" : "";
+                    var nameCol = p.IsAlive ? Color.Lerp(p.Color, Color.white, 0.35f) : new Color(0.55f, 0.55f, 0.6f);
+                    UIKit.Text(new Rect(r.x + cols[0] + 10f, y, 240f, 26f), p.DisplayName + tag + (p.IsAlive ? "" : "  <color=#ff7a70>x</color>"), UIKit.Label, nameCol);
+                    UIKit.Text(new Rect(r.x + cols[1], y, 60f, 26f), p.Kills.ToString(), UIKit.Label, Color.white);
+                    UIKit.Text(new Rect(r.x + cols[2], y, 60f, 26f), p.Deaths.ToString(), UIKit.Label, Color.white);
+                    UIKit.Text(new Rect(r.x + cols[3], y, 80f, 26f), Mathf.RoundToInt(p.DamageDealt).ToString(), UIKit.Label, Color.white);
+                    string ping = p.Input is Net.NetworkInput ni ? Mathf.RoundToInt(ni.Rtt * 1000f) + " ms"
+                        : me && gm.NetClientMode && net != null ? Mathf.RoundToInt(net.Rtt * 1000f) + " ms" : "-";
+                    UIKit.Text(new Rect(r.x + cols[4], y, 80f, 26f), ping, UIKit.Label, UIKit.Muted);
+
+                    // Card icons: hover (or focus with a gamepad) to see the full card.
+                    float ix = r.x + cols[5];
+                    foreach (var g in p.Cards.GroupBy(c => c))
+                    {
+                        if (ix > r.xMax - 34f) { UIKit.Text(new Rect(ix, y, 30f, 26f), "...", UIKit.Label, UIKit.Muted); break; }
+                        var ir = new Rect(ix, y + 1f, 24f, 24f);
+                        bool focused = UIKit.NavFocus(ir);
+                        if (focused || ir.Contains(mouse))
+                        {
+                            tooltipCard = g.Key;
+                            tooltipAnchor = ir;
+                            UIKit.Outline(new Rect(ir.x - 2f, ir.y - 2f, ir.width + 4f, ir.height + 4f), Color.white, 2f);
+                        }
+                        CardIcons.Draw(ir, g.Key, 1f);
+                        if (g.Count() > 1) UIKit.Shadowed(new Rect(ir.xMax - 12f, ir.yMax - 14f, 16f, 14f), g.Count().ToString(), UIKit.Small, Color.white);
+                        ix += 28f;
+                    }
+                    y += 32f;
                 }
             }
+            UIKit.Text(new Rect(r.x + 20f, r.yMax - 26f, W - 40f, 20f), "Hold Tab (View / Select on a gamepad). Gamepad: use the stick to move between cards.", UIKit.Small, UIKit.Muted);
         }
 
         // ------------------------------------------------------------------ picking
@@ -457,7 +578,7 @@ namespace Spheres
                     float pulse = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 4f);
                     UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.72f, UIKit.Size.x, 34f), step.Title + ":  " + step.Hint, UIKit.HeaderCenter, new Color(1f, 1f, 1f, pulse));
                 }
-                else UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.72f, UIKit.Size.x, 30f), "Press C (or Select) for more cards. Esc to leave training.", UIKit.LabelCenter, UIKit.Muted);
+                else UIKit.Shadowed(new Rect(0f, UIKit.Size.y * 0.72f, UIKit.Size.x, 30f), "Press C (or Y) for more cards. Hold Tab to review your cards. Esc to leave training.", UIKit.LabelCenter, UIKit.Muted);
             }
         }
 

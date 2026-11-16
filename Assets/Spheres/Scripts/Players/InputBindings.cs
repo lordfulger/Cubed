@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Spheres
 {
-    public enum GameAction { MoveForward, MoveBack, MoveLeft, MoveRight, Jump, Fire, Block, Reload, Pause }
+    public enum GameAction { MoveForward, MoveBack, MoveLeft, MoveRight, Jump, Fire, Block, Reload, Pause, Scoreboard }
 
     /// <summary>Layout-independent gamepad buttons ("South" is A on Xbox, Cross on PlayStation, B on Switch).</summary>
     public enum PadButton { None, South, East, West, North, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger, Select, Start, LeftStick, RightStick }
@@ -240,11 +240,13 @@ namespace Spheres
             K(GameAction.Block, KeyCode.Mouse1, KeyCode.LeftShift);
             K(GameAction.Reload, KeyCode.R);
             K(GameAction.Pause, KeyCode.Escape);
+            K(GameAction.Scoreboard, KeyCode.Tab);
             P(GameAction.Jump, PadButton.South);
             P(GameAction.Fire, PadButton.RightTrigger, PadButton.RightShoulder);
             P(GameAction.Block, PadButton.LeftTrigger, PadButton.LeftShoulder);
             P(GameAction.Reload, PadButton.West);
             P(GameAction.Pause, PadButton.Start);
+            P(GameAction.Scoreboard, PadButton.Select);
             return b;
         }
 

@@ -284,7 +284,7 @@ namespace Spheres
             Tutorial?.Update(me, this);
             var h = (HumanInput)me.Input;
             var binds = InputBindings.Current;
-            bool select = !h.IsKeyboard && Controllers.Held(h.Joystick, Controllers.Profile(h.Joystick), PadButton.Select);
+            bool select = !h.IsKeyboard && Controllers.Held(h.Joystick, Controllers.Profile(h.Joystick), PadButton.North);
             bool open = h.IsKeyboard ? Input.GetKeyDown(KeyCode.C) : select && !practiceSelectPrev;
             practiceSelectPrev = select;
             if (open && State == GameState.Fighting) OpenPracticeCardPicker();
@@ -332,7 +332,7 @@ namespace Spheres
             Steps.Add(new Step { Title = "Block", Hint = "Right mouse or LT. The bubble protects you from every side.", Done = p => blocked });
             Steps.Add(new Step { Title = "Defeat a target", Hint = "Targets respawn after a few seconds", Done = p => p.Kills >= 1 });
             Steps.Add(new Step { Title = "Block a fall", Hint = "Jump off the island and block just before you hit the red floor", Done = p => fallBlocked });
-            Steps.Add(new Step { Title = "Take a card", Hint = "Press C (or Select) to open the card picker", Done = p => p.Cards.Count >= 1 });
+            Steps.Add(new Step { Title = "Take a card", Hint = "Press C (or Y / Triangle) to open the card picker", Done = p => p.Cards.Count >= 1 });
             GameEvents.DamageBlocked += OnBlocked;
         }
 

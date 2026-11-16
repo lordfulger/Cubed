@@ -588,6 +588,7 @@ namespace Spheres
             float udt = Time.unscaledDeltaTime;
             Controllers.Poll();
             Rumble.Update();
+            UpdateScoreboardKey();
             Achievements.Tick(udt);
             Spheres.Net.SteamIntegration.Update();
             HandlePause();
@@ -682,6 +683,25 @@ namespace Spheres
             if (pressed) SetPaused(!Paused);
         }
 
+        /// <summary>True while a local player holds the scoreboard button (Tab / View).</summary>
+        public bool ScoreboardOpen { get; private set; }
+
+        void UpdateScoreboardKey()
+        {
+            bool open = false;
+            if (InMatch)
+            {
+                var binds = InputBindings.Current;
+                foreach (var p in Players)
+                {
+                    if (!(p.Input is HumanInput h)) continue;
+                    if (h.IsKeyboard ? binds.KeyHeld(GameAction.Scoreboard) : binds.PadHeld(GameAction.Scoreboard, h.Joystick, Controllers.Profile(h.Joystick)))
+                        open = true;
+                }
+            }
+            ScoreboardOpen = open;
+        }
+
         void OnControllerChanged(int joystick, bool connected, string name)
         {
             Toasts.Show(connected ? "Controller " + joystick + " connected" : "Controller " + joystick + " disconnected",
@@ -732,7 +752,7 @@ namespace Spheres
             if (State == GameState.Editor) return;
             bool fighting = State == GameState.RoundIntro || State == GameState.Fighting || State == GameState.RoundEnd;
             bool keyboardHuman = Players.Any(p => p.Input is HumanInput h && h.IsKeyboard);
-            bool lockIt = fighting && keyboardHuman && !Paused && Application.isFocused;
+            bool lockIt = fighting && keyboardHuman && !Paused && !ScoreboardOpen && Application.isFocused;
             var mode = lockIt ? CursorLockMode.Locked : CursorLockMode.None;
             if (Cursor.lockState != mode) Cursor.lockState = mode;
             Cursor.visible = !lockIt;
