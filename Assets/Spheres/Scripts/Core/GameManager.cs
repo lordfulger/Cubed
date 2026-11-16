@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Spheres
 {
-    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Options, ProfileScreen, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
+    public enum GameState { MainMenu, Setup, CardLibrary, Mods, Options, ProfileScreen, CharacterEditor, Editor, Online, Lobby, RoundIntro, Fighting, RoundEnd, CardPick, MatchEnd }
 
     /// <summary>One player's progress through a card pick phase.</summary>
     public class PickState
@@ -276,8 +276,9 @@ namespace Spheres
                 else if (slot.control == ControlType.Online) input = new Net.NetworkInput(slot.netOwner);
                 else input = new HumanInput(slot.control);
                 var slotCopy = slot.Clone();
-                if (slotCopy.IsLocalHuman) slotCopy.hat = Profile.Current.hat;
-                else if (slotCopy.control == ControlType.Bot) slotCopy.hat = Hats.ForBot(slotCopy.name);
+                if (slotCopy.IsLocalHuman) slotCopy.look = Profile.Current.Look(slotCopy.lookIndex).Encode();
+                else if (slotCopy.control == ControlType.Bot) slotCopy.look = CharacterLook.ForSeed(slotCopy.name).Encode();
+                else if (string.IsNullOrEmpty(slotCopy.look)) slotCopy.look = CharacterLook.ForSeed(slotCopy.name).Encode();
                 var p = Player.Create(slotCopy, index++, input);
                 Players.Add(p);
                 if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
@@ -766,7 +767,7 @@ namespace Spheres
             {
                 var control = info.Local ? localSettingsBackup.onlineControl : info.Bot ? ControlType.Bot : ControlType.Online;
                 if (info.Local && (control == ControlType.Bot || control == ControlType.Online || control == ControlType.None)) control = ControlType.KeyboardMouse;
-                var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control, hat = info.Local ? Profile.Current.hat : info.Hat };
+                var slot = new PlayerSlot { name = info.Name, team = info.Team, control = control, look = info.Local ? Profile.Current.Look(-1).Encode() : info.Hat };
                 IPlayerInput input = info.Local ? new HumanInput(control) : null;
                 var p = Player.Create(slot, info.Index, input);
                 p.MakePuppet(info.Local);

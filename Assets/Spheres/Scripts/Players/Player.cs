@@ -82,15 +82,20 @@ namespace Spheres
         /// <summary>Swap the cosmetic hat.</summary>
         public void SetHat(string id)
         {
-            if (hatRoot == null) return;
-            for (int i = hatRoot.childCount - 1; i >= 0; i--) Destroy(hatRoot.GetChild(i).gameObject);
-            if (string.IsNullOrEmpty(id)) return;
-            try { Hats.Get(id).Build(hatRoot, Color); }
-            catch (Exception e) { Debug.LogException(e); }
-            foreach (var r in hatRoot.GetComponentsInChildren<MeshRenderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            if (parts != null) FighterModel.SetHat(parts, Color, id);
         }
-        Transform rig, footL, footR, gunRoot, eyeL, eyeR, pupilL, pupilR, shieldRing;
-        static readonly Vector3 GunRest = new Vector3(0.52f, -0.25f, 0.35f);
+
+        /// <summary>Apply a new character look (face + hat).</summary>
+        public void SetLook(CharacterLook look)
+        {
+            if (parts == null || look == null) return;
+            FighterModel.BuildFace(parts, Color, look);
+            FighterModel.SetHat(parts, Color, look.hat);
+            if (Slot != null) Slot.look = look.Encode();
+        }
+        Transform rig, footL, footR, gunRoot, shieldRing;
+        FighterParts parts;
+        static Vector3 GunRest => FighterModel.GunRest;
         float walkPhase, squash, squashVel, recoil, blinkTimer = 2f, blinkTime, spawnAnim = 1f, shieldPop = 1f, lastStepSign = 1f, animLastVy;
         bool animGrounded = true, wasBlocking;
         int animLastAmmo = -1;
@@ -154,53 +159,15 @@ namespace Spheres
 
             Model = new GameObject("Model").transform;
             Model.SetParent(transform, false);
-            rig = new GameObject("Rig").transform;
-            rig.SetParent(Model, false);
-            bodyMaterial = Looks.Block(Color);
-            var dark = Mats.Solid(Color.Lerp(Color, Color.black, 0.55f));
-            var light = Looks.Block(Color.Lerp(Color, Color.white, 0.35f));
-            var white = Mats.Solid(new Color(0.95f, 0.95f, 0.97f));
-            var black = Mats.Solid(new Color(0.06f, 0.06f, 0.08f));
-            var visor = Mats.Solid(new Color(0.08f, 0.09f, 0.13f));
-
-            Prim.Cube("Body", rig, new Vector3(0f, 0.68f, 0f), new Vector3(0.9f, 1.02f, 0.9f), bodyMaterial);
-            Prim.Cube("Cap", rig, new Vector3(0f, 1.22f, 0f), new Vector3(0.76f, 0.1f, 0.76f), light);
-            Prim.Cube("Pack", rig, new Vector3(0f, 0.72f, -0.5f), new Vector3(0.58f, 0.56f, 0.16f), dark);
-            footL = Prim.Cube("FootL", rig, new Vector3(-0.22f, 0.09f, 0f), new Vector3(0.3f, 0.18f, 0.42f), dark).transform;
-            footR = Prim.Cube("FootR", rig, new Vector3(0.22f, 0.09f, 0f), new Vector3(0.3f, 0.18f, 0.42f), dark).transform;
-
-            Head = new GameObject("Head").transform;
-            Head.SetParent(rig, false);
-            Head.localPosition = new Vector3(0f, 0.95f, 0f);
-            Prim.Cube("Visor", Head, new Vector3(0f, 0.04f, 0.452f), new Vector3(0.8f, 0.34f, 0.02f), visor);
-            // Eyes glow softly (they bloom with post-processing on).
-            var eyeMat = Mats.GlowAvailable ? Mats.Glow(new Color(0.95f, 0.97f, 1f, 1f), 1.7f, 0f) : white;
-            eyeL = Prim.Cube("EyeL", Head, new Vector3(-0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), eyeMat).transform;
-            eyeR = Prim.Cube("EyeR", Head, new Vector3(0.18f, 0.05f, 0.47f), new Vector3(0.18f, 0.22f, 0.03f), eyeMat).transform;
-            pupilL = Prim.Cube("PupilL", Head, new Vector3(-0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
-            pupilR = Prim.Cube("PupilR", Head, new Vector3(0.18f, 0.03f, 0.488f), new Vector3(0.09f, 0.11f, 0.02f), black).transform;
-
-            gunRoot = new GameObject("Gun").transform;
-            gunRoot.SetParent(Head, false);
-            gunRoot.localPosition = GunRest;
-            Prim.Cube("Barrel", gunRoot, new Vector3(0f, 0f, 0f), new Vector3(0.16f, 0.16f, 0.75f), dark);
-            Prim.Cube("Grip", gunRoot, new Vector3(0f, -0.14f, -0.18f), new Vector3(0.12f, 0.2f, 0.14f), dark);
-            Prim.Cube("GunTip", gunRoot, new Vector3(0f, 0f, 0.4f), new Vector3(0.2f, 0.2f, 0.08f), Mats.GlowAvailable ? Mats.Glow(Color, 2.2f, 0f) : bodyMaterial);
-            if (Mats.GlowAvailable)
-            {
-                // Team-colored light strip: readable team identity from any angle.
-                var strip = Prim.Cube("TeamStrip", rig, new Vector3(0f, 0.44f, 0f), new Vector3(0.93f, 0.07f, 0.93f), Mats.Glow(Color, 2.4f, 0f));
-                strip.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            }
-            Prim.Cube("GunStripe", gunRoot, new Vector3(0f, 0.085f, 0.05f), new Vector3(0.1f, 0.02f, 0.4f), light);
-            Muzzle = new GameObject("Muzzle").transform;
-            Muzzle.SetParent(gunRoot, false);
-            Muzzle.localPosition = new Vector3(0f, 0f, 0.5f);
-
-            hatRoot = new GameObject("Hat").transform;
-            hatRoot.SetParent(Head, false);
-            hatRoot.localPosition = new Vector3(0f, 0.32f, 0f);
-            SetHat(Slot != null ? Slot.hat : "");
+            parts = FighterModel.Build(Model, Color, CharacterLook.Decode(Slot != null ? Slot.look : ""));
+            rig = parts.Rig;
+            Head = parts.Head;
+            footL = parts.FootL;
+            footR = parts.FootR;
+            gunRoot = parts.Gun;
+            Muzzle = parts.Muzzle;
+            hatRoot = parts.HatRoot;
+            bodyMaterial = parts.Body.sharedMaterial;
 
             Color sc = Color;
             sc.a = 0.28f;
@@ -894,8 +861,11 @@ namespace Spheres
             float eye = 1f;
             if (blinkTime > 0f) { blinkTime -= dt; eye = 0.12f; }
             if (IsStunned) eye = 0.35f;
-            eyeL.localScale = eyeR.localScale = new Vector3(0.18f, 0.22f * eye, 0.03f);
-            pupilL.localScale = pupilR.localScale = new Vector3(0.09f, 0.11f * eye, 0.02f);
+            for (int i = 0; i < parts.Eyes.Count; i++)
+            {
+                var b = parts.EyeScales[i];
+                parts.Eyes[i].localScale = new Vector3(b.x, b.y * eye, b.z);
+            }
 
             if (IsBlocking && !wasBlocking) shieldPop = 0f;
             wasBlocking = IsBlocking;

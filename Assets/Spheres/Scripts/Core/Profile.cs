@@ -22,6 +22,33 @@ namespace Spheres
         public List<CardCount> cardCounts = new List<CardCount>();
         public List<string> achievements = new List<string>();
         public string hat = "none";
+        /// <summary>Saved characters (up to 6) and the one used by default.</summary>
+        public List<CharacterLook> looks = new List<CharacterLook>();
+        public int activeLook;
+        public const int MaxLooks = 6;
+
+        /// <summary>A saved character by slot (creates defaults as needed).</summary>
+        public CharacterLook Look(int index)
+        {
+            EnsureLooks();
+            index = index < 0 ? activeLook : index;
+            return looks[Mathf.Clamp(index, 0, looks.Count - 1)];
+        }
+
+        public void EnsureLooks()
+        {
+            if (looks == null) looks = new List<CharacterLook>();
+            while (looks.Count < MaxLooks)
+            {
+                var l = looks.Count == 0 ? new CharacterLook { name = "Fighter 1", hat = string.IsNullOrEmpty(hat) ? "none" : hat }
+                                         : CharacterLook.ForSeed("starter" + looks.Count);
+                l.name = "Fighter " + (looks.Count + 1);
+                if (looks.Count > 0) l.hat = "none";
+                looks.Add(l);
+            }
+            foreach (var l in looks) l.Clamp();
+            activeLook = Mathf.Clamp(activeLook, 0, looks.Count - 1);
+        }
         public bool trainingDone;
 
         static Profile current;
@@ -42,12 +69,15 @@ namespace Spheres
                     {
                         if (p.cardCounts == null) p.cardCounts = new List<CardCount>();
                         if (p.achievements == null) p.achievements = new List<string>();
+                        p.EnsureLooks();
                         return p;
                     }
                 }
             }
             catch (Exception e) { Debug.LogException(e); }
-            return new Profile();
+            var fresh = new Profile();
+            fresh.EnsureLooks();
+            return fresh;
         }
 
         public void Save()

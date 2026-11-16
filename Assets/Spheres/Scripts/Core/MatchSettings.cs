@@ -45,6 +45,10 @@ namespace Spheres
         public int netOwner = -1;
         /// <summary>Cosmetic hat id (see Hats).</summary>
         public string hat = "";
+        /// <summary>Encoded CharacterLook (face + hat) used in the match.</summary>
+        public string look = "";
+        /// <summary>Which saved character a local human uses (-1 = the profile's active one).</summary>
+        public int lookIndex = -1;
 
         public bool IsHuman => control != ControlType.None && control != ControlType.Bot;
         public bool IsLocalHuman => IsHuman && control != ControlType.Online;

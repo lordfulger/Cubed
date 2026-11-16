@@ -47,6 +47,11 @@ namespace Spheres
         {
             if (gm == null) return;
             Announce();
+            if (gm.State != GameState.CharacterEditor && preview != null)
+            {
+                Destroy(preview.gameObject);
+                preview = null;
+            }
             UIKit.PollNavigation(!gm.InMatch && gm.State != GameState.Editor);
 
             // Couch co-op: press Start on any gamepad in Match Setup to join with it.
@@ -81,6 +86,7 @@ namespace Spheres
                 case GameState.Mods: DrawMods(); break;
                 case GameState.Options: if (OptionsUI.Draw(gm)) gm.GoToMenu(GameState.MainMenu); break;
                 case GameState.ProfileScreen: DrawProfile(); break;
+                case GameState.CharacterEditor: DrawCharacterEditor(); break;
                 case GameState.Editor: gm.Editor.DrawGUI(); break;
                 default:
                     GUI.enabled = !gm.Paused;
@@ -126,7 +132,7 @@ namespace Spheres
             UIKit.Text(new Rect(54f, 190f, 380f, 24f), "Fight. Pick cards. Get weird.", UIKit.Label, UIKit.Muted);
 
             float y = 260f;
-            const float w = 340f, h = 44f, gap = 9f;
+            const float w = 340f, h = 40f, gap = 8f;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Play")) { setupError = null; gm.GoToMenu(GameState.Setup); }
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Quick Match vs Bot"))
@@ -145,7 +151,9 @@ namespace Spheres
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Options")) gm.GoToMenu(GameState.Options);
             y += h + gap;
-            if (UIKit.Btn(new Rect(50f, y, w, h), "Profile & Hats")) gm.GoToMenu(GameState.ProfileScreen);
+            if (UIKit.Btn(new Rect(50f, y, w, h), "Character")) gm.GoToMenu(GameState.CharacterEditor);
+            y += h + gap;
+            if (UIKit.Btn(new Rect(50f, y, w, h), "Profile & Achievements")) gm.GoToMenu(GameState.ProfileScreen);
             y += h + gap;
             if (UIKit.Btn(new Rect(50f, y, w, h), "Mods (" + (SpheresAPI.Mods.Count + ContentLoader.Sources.Count) + ")")) gm.GoToMenu(GameState.Mods);
             y += h + gap;
@@ -238,6 +246,12 @@ namespace Spheres
                 if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.16f, rowH - 14f), "<color=#" + ColorUtility.ToHtmlStringRGB(Teams.GetColor(slot.team)) + ">" + Teams.GetName(slot.team) + "</color>", true))
                     slot.team = (slot.team + 1) % Teams.Max;
                 x += cw * 0.16f + 6f;
+                if (slot.IsLocalHuman)
+                {
+                    string lookLabel = slot.lookIndex < 0 ? "Character: default" : Profile.Current.Look(slot.lookIndex).name;
+                    if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.17f, rowH - 14f), lookLabel, true))
+                        slot.lookIndex = slot.lookIndex + 1 >= Profile.MaxLooks ? -1 : slot.lookIndex + 1;
+                }
                 if (slot.control == ControlType.Bot)
                 {
                     if (UIKit.Btn(new Rect(x, y + 4f, cw * 0.17f, rowH - 14f), difficultyNames[(int)slot.difficulty], true))
@@ -554,6 +568,124 @@ namespace Spheres
                 CrashLog.OpenFolder();
         }
 
+        // ------------------------------------------------------------------ character editor
+
+        CharacterPreview preview;
+        int editSlot = -1, previewTeam;
+
+        void DrawCharacterEditor()
+        {
+            var s = UIKit.Size;
+            var pr = Profile.Current;
+            pr.EnsureLooks();
+            if (editSlot < 0) editSlot = pr.activeLook;
+            var look = pr.looks[editSlot];
+            if (preview == null) preview = CharacterPreview.Create(Teams.GetColor(previewTeam), look);
+
+            float W = Mathf.Min(1180f, s.x - 40f), H = Mathf.Min(780f, s.y - 40f);
+            var panel = new Rect(s.x * 0.5f - W * 0.5f, s.y * 0.5f - H * 0.5f, W, H);
+            UIKit.Fill(panel, UIKit.Bg);
+            UIKit.Text(new Rect(panel.x + 24f, panel.y + 14f, 400f, 40f), "Character", UIKit.Header, Color.white);
+
+            // Saved character slots.
+            float tw = (W - 48f - 5f * 8f) / Profile.MaxLooks;
+            for (int i = 0; i < Profile.MaxLooks; i++)
+            {
+                string label = pr.looks[i].name + (i == pr.activeLook ? "  *" : "");
+                if (UIKit.Toggle(new Rect(panel.x + 24f + i * (tw + 8f), panel.y + 60f, tw, 34f), label, i == editSlot, true))
+                {
+                    editSlot = i;
+                    look = pr.looks[i];
+                    preview.Rebuild(look);
+                }
+            }
+
+            // Live preview.
+            float ps = Mathf.Min(H - 220f, W * 0.42f);
+            var pv = new Rect(panel.x + 24f, panel.y + 110f, ps, ps);
+            UIKit.Fill(new Rect(pv.x - 3f, pv.y - 3f, pv.width + 6f, pv.height + 6f), Teams.GetColor(previewTeam) * new Color(1f, 1f, 1f, 0.6f));
+            if (preview.Texture != null) GUI.DrawTexture(pv, preview.Texture, ScaleMode.ScaleToFit, false);
+            float sw = (ps - 7f * 6f) / 8f;
+            for (int t = 0; t < Teams.Max; t++)
+            {
+                var r = new Rect(pv.x + t * (sw + 6f), pv.yMax + 10f, sw, 26f);
+                UIKit.Fill(r, Teams.GetColor(t));
+                if (t == previewTeam) UIKit.Outline(r, Color.white, 2f);
+                if (UIKit.Clickable(r)) { previewTeam = t; preview.SetTeamColor(Teams.GetColor(t), look); }
+            }
+            UIKit.Text(new Rect(pv.x, pv.yMax + 40f, ps, 20f), "Preview team color (your body always uses your team's color)", UIKit.Small, UIKit.Muted);
+
+            // Options.
+            float x = pv.xMax + 30f, w = panel.xMax - 24f - x, y = panel.y + 110f;
+            bool changed = false;
+            UIKit.Text(new Rect(x, y, 80f, 34f), "Name", UIKit.Label, Color.white);
+            string newName = GUI.TextField(new Rect(x + 90f, y, w - 90f, 34f), look.name ?? "", 18, UIKit.Field);
+            if (newName != look.name) { look.name = newName; pr.Save(); }
+            y += 46f;
+
+            int v;
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Eyes", look.eyes, CharacterLook.EyeStyles); if (v != look.eyes) { look.eyes = v; changed = true; } y += 44f;
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Mouth", look.mouth, CharacterLook.MouthStyles); if (v != look.mouth) { look.mouth = v; changed = true; } y += 44f;
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Face detail", look.detail, CharacterLook.Details); if (v != look.detail) { look.detail = v; changed = true; } y += 44f;
+
+            UIKit.Text(new Rect(x, y, 160f, 34f), "Eye glow", UIKit.Label, Color.white);
+            float cw = Mathf.Min(40f, (w - 170f) / CharacterLook.EyeColors.Length - 6f);
+            for (int i = 0; i < CharacterLook.EyeColors.Length; i++)
+            {
+                var r = new Rect(x + 170f + i * (cw + 6f), y + 3f, cw, 30f);
+                UIKit.Fill(r, CharacterLook.EyeColors[i]);
+                if (i == look.eyeColor) UIKit.Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Color.white, 2f);
+                if (UIKit.Clickable(r) && look.eyeColor != i) { look.eyeColor = i; changed = true; }
+            }
+            y += 48f;
+
+            var hats = Hats.All.Where(hh => Hats.Unlocked(hh.Id)).ToList();
+            int hi = Mathf.Max(0, hats.FindIndex(hh => hh.Id == look.hat));
+            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Hat", hi, hats.Select(hh => hh.Name).ToArray());
+            if (v != hi) { look.hat = hats[v].Id; changed = true; }
+            y += 44f;
+            int locked = Hats.All.Count - hats.Count;
+            if (locked > 0) UIKit.Text(new Rect(x, y, w, 22f), locked + " more hats unlock through achievements.", UIKit.Small, UIKit.Muted);
+            y += 36f;
+
+            float bw = (w - 12f) / 3f;
+            if (UIKit.Btn(new Rect(x, y, bw, 40f), "Randomize", true))
+            {
+                var r = CharacterLook.ForSeed(System.Guid.NewGuid().ToString());
+                look.eyes = r.eyes; look.mouth = r.mouth; look.detail = r.detail; look.eyeColor = r.eyeColor;
+                if (Hats.Unlocked(r.hat)) look.hat = r.hat;
+                changed = true;
+            }
+            if (UIKit.Toggle(new Rect(x + bw + 6f, y, bw, 40f), editSlot == pr.activeLook ? "Default character" : "Make default", editSlot == pr.activeLook, true))
+            {
+                pr.activeLook = editSlot;
+                pr.Save();
+            }
+            if (UIKit.Btn(new Rect(x + (bw + 6f) * 2f, y, bw, 40f), "Reset", true))
+            {
+                var keepName = look.name;
+                pr.looks[editSlot] = new CharacterLook { name = keepName };
+                look = pr.looks[editSlot];
+                changed = true;
+            }
+            y += 56f;
+            UIKit.Text(new Rect(x, y, w, 60f), "Each local player picks a saved character in Match Setup. Online, other players see your character.", UIKit.Wrap, UIKit.Muted);
+
+            if (changed)
+            {
+                look.Clamp();
+                pr.Save();
+                preview.Rebuild(look);
+                Sfx.Play("pick", 0.4f, 0f);
+            }
+
+            if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back") || UIKit.BackPressed())
+            {
+                pr.Save();
+                gm.GoToMenu(GameState.MainMenu);
+            }
+        }
+
         // ------------------------------------------------------------------ profile
 
         Vector2 profileScroll;
@@ -604,11 +736,12 @@ namespace Spheres
             foreach (var hat in Hats.All)
             {
                 bool unlocked = Hats.Unlocked(hat.Id);
-                bool on = pr.hat == hat.Id || (hat.Id == "none" && string.IsNullOrEmpty(pr.hat));
+                var activeLook = pr.Look(-1);
+                bool on = activeLook.hat == hat.Id;
                 var unlockBy = Achievements.All.FirstOrDefault(a => a.Hat == hat.Id);
                 string label = unlocked ? hat.Name : "<color=#777c8f>" + hat.Name + "  (" + unlockBy?.Title + ")</color>";
                 GUI.enabled = unlocked;
-                if (UIKit.Toggle(new Rect(hx + 12f, hy, hw - 24f, 32f), label, on, true)) { pr.hat = hat.Id; pr.Save(); }
+                if (UIKit.Toggle(new Rect(hx + 12f, hy, hw - 24f, 32f), label, on, true)) { activeLook.hat = hat.Id; pr.Save(); }
                 GUI.enabled = true;
                 hy += 36f;
             }

@@ -226,7 +226,7 @@ namespace Spheres.Net
                     int protocol = m.Int();
                     string version = m.Str();
                     string name = m.Str().Trim();
-                    string hat = m.Str();
+                    string hat = m.Str(); // encoded CharacterLook
                     int token = m.Int();
                     string content = m.Str();
                     if (name.Length == 0) name = "Player " + id;
@@ -253,7 +253,7 @@ namespace Spheres.Net
                             p.Slot.control = ControlType.Online;
                             p.Slot.netOwner = id;
                             p.DisplayName = name;
-                            Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = p.Team, netOwner = id, hat = p.Slot.hat });
+                            Gm.Settings.slots.Add(new PlayerSlot { name = name, control = ControlType.Online, team = p.Team, netOwner = id, look = p.Slot.look });
                         }
                         SendWelcome(r, content);
                         r.Conn.Send(BuildFullSync());
@@ -269,7 +269,7 @@ namespace Spheres.Net
                     r.Name = name;
                     r.Welcomed = true;
                     r.Token = tokenRng.Next(1, int.MaxValue);
-                    var slot = new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id, hat = hat ?? "" };
+                    var slot = new PlayerSlot { name = name, control = ControlType.Online, team = PickTeam(), netOwner = id, look = hat ?? "" };
                     Gm.Settings.slots.Add(slot);
                     SendWelcome(r, content);
                     lastLobbyJson = "";
@@ -400,7 +400,7 @@ namespace Spheres.Net
             foreach (var p in Gm.Players)
             {
                 int owner = p.Input is NetworkInput ni ? ni.Owner : -1;
-                w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.hat : "");
+                w.Byte(p.Index).Str(p.DisplayName).Byte(p.Team).Int(owner).Bool(p.IsBot).Str(p.Slot != null ? p.Slot.look : "");
                 int cardCount = Mathf.Min(p.Cards.Count, 255);
                 w.Byte(cardCount);
                 for (int k = 0; k < cardCount; k++) w.Str(p.Cards[k].Id);
@@ -675,7 +675,7 @@ namespace Spheres.Net
                 helloSent = true;
                 Status = "Connected, waiting for the host...";
                 host.Send(new NetWriter(Msg.Hello).Int(NetConst.Protocol).Str(SpheresAPI.GameVersion).Str(Gm.Settings.onlineName)
-                    .Str(Profile.Current.hat).Int(reconnectToken).Str(ContentHash()).ToArray());
+                    .Str(Profile.Current.Look(-1).Encode()).Int(reconnectToken).Str(ContentHash()).ToArray());
             }
             if (host == null) return;
 
