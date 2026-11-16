@@ -17,11 +17,13 @@ so you can open it and press Play.
 | **Rounds & cards** | First team to N round wins takes the match. After each round a pick phase deals each picker a hand of cards. **407 cards**: 87 hand-made cards (a base set plus an expansion) and 320 generated mix-and-match cards (pure upgrades, double upgrades, trade-offs with drawbacks, effect cards and high-risk gambles). They adjust 29 stats or attach 46 effects: reflect, shockwaves, walls, blink, poison, frost, echo/burst fire, turrets, mines, orbiting shields, auras, executes, stuns, wall-piercing, boomerang and homing bounces, barriers, last stands and more. |
 | **Card options** | Cards per hand (1-10), picks per round (0-10), picks before round 1 (0-10), pick timer (off/5-120 s, picks the highlighted card when time runs out), who picks (losers / everyone / winners / nobody), new hand per pick or keep the same hand, and a Card Library (filter by hand-made, generated or rarity) to enable or disable individual cards. |
 | **Teams** | Up to 8 players on up to 8 teams (from 4v4 to an 8-player free-for-all), plus friendly fire on/off. Scoring is per team, spawns are per team, and eliminated players spectate their teammates. |
-| **Game modes** | Elimination, Deathmatch (respawns, first team to N kills), King of the Hill (hold the zone), Card Rush (every kill draws a card), and **Training**: a guided tutorial plus a practice range with target dummies and an on-demand card picker. |
-| **Profile** | Lifetime stats, favorite cards, 20 achievements with pop-up notifications, and 12 unlockable cube hats that other players see online. |
+| **Game modes** | Elimination, Deathmatch (respawns, first team to N kills), King of the Hill (hold the zone), Card Rush (every kill draws a card), **Sphere Ball** (shoot and dribble a giant ball into the other team's goal), **Hold the Orb** (score while you carry it), **Infection** (patient zero spreads it; the last survivor wins it for their team), and **Training**: a guided tutorial plus a practice range with target dummies and an on-demand card picker. |
+| **Profile & cosmetics** | Lifetime stats, favorite cards, 20 achievements with pop-up notifications, and unlockable hats, movement trails and victory poses that other players see online. The winning team celebrates on a podium at the end of a match. |
+| **Match options** | Optional catch-up curses (the clear leader gets a small handicap card), "players vote" map rotation with map thumbnails, and cosmetic weather (rain, snow, fog, storms, embers) and time of day. |
+| **Communication** | Quick-chat wheel, pings that only teammates see (with enemy pings), a kill cam showing your killer's HP and cards, and a spectator camera that cycles players or flies free. |
 | **Bots** | 4 difficulties, plus target dummies. Bots path-find across each map (step-ups, drops, gap jumps and bounce pads) and lead their shots (accounting for bullet drop), strafe, avoid ledges and lava, jump gaps, block incoming bullets, and block before they hit borders or land hard. They also pick cards. You can watch a bots-only match. |
 | **Local multiplayer** | Keyboard+mouse plus up to 8 gamepads. Split-screen handles 1-8 humans in 2x2, 3x2 or 4x2 grids. In Match Setup, press **Start** on a gamepad to join. |
-| **Online multiplayer** | Host a lobby, and friends join by IP. Games on your local network appear automatically. An optional Steam build adds friend invites and relay networking, so nobody needs to forward ports. Hosts can mix online players with split-screen players and bots on any team. The host runs the match. Your own movement is predicted locally so it responds instantly. Remote shots get latency compensation. Dropped players reconnect into their own fighter, a bot fills in while they're gone, and new players can join mid-match from the next round. Mod mismatches show a warning. |
+| **Online multiplayer** | Host a lobby, and friends join by IP. Games on your local network appear automatically. An optional Steam build adds friend invites, an in-game friends list with Join/Invite, "Join game" from Steam, the Steam Workshop for maps and content packs, and relay networking, so nobody needs to forward ports. Hosts can mix online players with split-screen players and bots on any team. The host runs the match. Your own movement is predicted locally so it responds instantly. Remote shots get latency compensation. Dropped players reconnect into their own fighter, a bot fills in while they're gone, and new players can join mid-match from the next round. Mod mismatches show a warning. |
 | **Controls** | Xbox, PlayStation and Switch controller layouts are detected per OS. Controllers hot-plug, and if a player's controller disconnects mid-match the game auto-pauses. Keyboard and gamepad bindings are fully rebindable. Gamepads work in every menu. Rumble works when Unity's Input System package is installed. |
 | **Options & accessibility** | Resolution and window mode, vsync and FPS cap, quality presets, FOV, UI scale, screen-shake and flash reduction, colorblind-safe and high-contrast team palettes, damage number toggle, and separate music and sound volume. |
 | **Blocking** | Blocking raises a full 360-degree bubble. Bullets touching it from any side are stopped, along with explosions, border hits and fall damage. |
@@ -58,13 +60,19 @@ so you can open it and press Play.
 | Jump / air jump | Space | A |
 | Reload | R | X |
 | Pick card | Click, or A/D + Space | Stick or LB/RB, then A |
+| Scoreboard (hold) | Tab | View / Select |
+| Quick-chat wheel (hold) | V, then aim/WASD or 1-8 | Click left stick, right stick to pick; d-pad sends a phrase |
+| Ping (teammates see it) | Middle mouse or Q | Click right stick |
+| Spectate while dead | Fire = next player, Space = free camera | RT = next player, A = free camera |
+| Vote for the next map | 1 / 2 / 3 or click | Y / Triangle cycles |
 | Pause | Esc | Start |
 | Menus | Mouse, or arrows + Enter / Esc | Stick or d-pad, A, B |
 | Join Match Setup | - | Start |
 
 Map editor: hold **right mouse** and use WASD/QE to fly (Shift to go fast). Left click places blocks (drag to
-paint). The mouse wheel or `[` `]` changes the build layer. `1-9` pick a brush, `X` picks the eraser, `F`
-frames the map, `Ctrl+Z`/`Ctrl+Y` undo/redo, `Ctrl+S` saves.
+paint). The mouse wheel or `[` `]` changes the build layer. `Tab` switches palette tab (Blocks, Moving, Props,
+Spawns), `1-9` pick a brush, `X` picks the eraser, `F` frames the map, `Ctrl+Z`/`Ctrl+Y` undo/redo, `Ctrl+S`
+saves. Click a moving part with a Moving brush to edit it (`Del` deletes it).
 
 ## How a match works
 

@@ -165,6 +165,18 @@ can copy that file into a mod.
 
 ---
 
+#### Translations
+
+Drop a `*.spheresloc.json` file into any content folder to add or improve a language. The English UI text is the key:
+
+```json
+{ "language": "es", "name": "Español", "entries": [ { "en": "Play", "text": "Jugar" }, { "en": "Options", "text": "Opciones" } ] }
+```
+
+The language then appears in *Options > Language*. Keys must match the English text exactly, including leading
+spaces. `Tools/extract_strings.py` lists the current keys. Code mods can call `Loc.Add("es", "My Button", "Mi botón")`
+and use `Loc.T(...)` for their own text.
+
 ## 2. Code mods (BepInEx 5)
 
 ### Project setup

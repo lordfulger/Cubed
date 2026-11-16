@@ -74,7 +74,9 @@ available to CI too.
 | **Steam lobbies and invites** | Host a lobby from **Online > Host Steam lobby**, then press **Invite friends** in Match Setup to invite people through the Steam overlay. Friends can also join from their Steam friends list. No IP addresses or port forwarding. |
 | **Relay networking** | Match traffic goes through Steam Datagram Relay. Hosts don't need to open TCP 27015, NAT isn't a problem, and players' IP addresses are hidden from each other. The host is still authoritative, as in IP play. |
 | **Achievements** | Unlocked during play, shown in the Steam overlay and on the player's profile. |
-| **Rich presence** | Friends see what you're doing ("In Match Setup", "In a match, round 3", "Editing a map") and can join a joinable lobby from your profile. |
+| **Rich presence** | Friends see what you're doing ("In Match Setup", "In a match, round 3", "Editing a map") and can join a joinable lobby from your profile. Hosts publish a `+connect_lobby` connect string, so *Join Game* works even when Spheres isn't running yet. |
+| **Friends list** | *Online* shows friends who are online. **Join** appears for friends in a Spheres lobby. **Invite** appears for everyone while you host. |
+| **Workshop** | The map editor's **Publish to Steam Workshop** button uploads the current map with a generated preview. Subscribed items (maps, card packs, block packs, translations) download on startup and load like any content folder. *Mods > Steam Workshop* browses and refreshes. |
 
 Direct IP and LAN play keep working in the Steam build. Steam and non-Steam players can play together only over
 IP/LAN, and only if both run the same game version.
@@ -90,6 +92,13 @@ IP/LAN, and only if both run the same game version.
 
 If the Steam entries aren't in the Online menu, the build was made without `SPHERES_STEAM`, or Steam failed to start.
 The Player log (docs/RELEASE.md, section 7) shows why.
+
+### Workshop setup (your own app id)
+
+1. In the Steamworks partner site, open *Workshop > General* and enable **Steam Workshop** with **ISteamUGC**.
+2. Set the "Workshop item content folder" visibility as you like, and publish the app configuration.
+3. Spacewar (480) has no Workshop. Uploads there fail with an access error, so test the Workshop on your own app id.
+4. Uploaders must accept the Steam Workshop legal agreement once. The status line says so when it's needed.
 
 ## 5. Moving to your own app id
 
