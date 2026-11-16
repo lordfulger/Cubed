@@ -1,0 +1,14 @@
+{
+    "name": "Spheres.Automation",
+    "rootNamespace": "Spheres.Automation",
+    "references": ["Spheres"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

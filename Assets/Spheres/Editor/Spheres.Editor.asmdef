@@ -1,7 +1,7 @@
 {
     "name": "Spheres.Editor",
     "rootNamespace": "Spheres.EditorTools",
-    "references": ["Spheres"],
+    "references": ["Spheres", "Spheres.Automation"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

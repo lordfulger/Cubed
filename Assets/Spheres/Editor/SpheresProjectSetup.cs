@@ -162,6 +162,50 @@ namespace Spheres.EditorTools
         public static void BuildWindowsCI() => Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Spheres.exe", false);
         public static void BuildLinuxCI() => Build(BuildTarget.StandaloneLinux64, "Builds/Linux/Spheres.x86_64", false);
 
+        /// <summary>Non-interactive setup (scene, input axes, shaders, player settings) for the automation tools.</summary>
+        internal static void PrepareForAutomation() => Setup(false);
+
+        /// <summary>
+        /// Build entry for GameCI's unity-builder (buildMethod: Spheres.EditorTools.SpheresProjectSetup.BuildCI).
+        /// Reads the arguments GameCI passes: -customBuildTarget, -customBuildPath, -customBuildName, -buildVersion.
+        /// Unlike GameCI's default build method this runs project setup first, so the scene does not have to be committed.
+        /// </summary>
+        public static void BuildCI()
+        {
+            string targetName = CommandLineValue("-customBuildTarget") ?? CommandLineValue("-buildTarget");
+            var target = EditorUserBuildSettings.activeBuildTarget;
+            if (!string.IsNullOrEmpty(targetName) && !System.Enum.TryParse(targetName, true, out target))
+            {
+                Debug.LogError("[Spheres] Unknown build target '" + targetName + "'");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            string name = CommandLineValue("-customBuildName") ?? "Spheres";
+            string ext = target == BuildTarget.StandaloneWindows64 || target == BuildTarget.StandaloneWindows ? ".exe"
+                       : target == BuildTarget.StandaloneLinux64 ? ".x86_64"
+                       : target == BuildTarget.StandaloneOSX ? ".app" : "";
+            string path = CommandLineValue("-customBuildPath");
+            if (string.IsNullOrEmpty(path)) path = Path.Combine("Builds", target.ToString(), name + ext);
+            else if ((Directory.Exists(path) && !path.EndsWith(".app")) || path.EndsWith("/") || path.EndsWith("\\")) path = Path.Combine(path, name + ext);
+            else if (ext.Length > 0 && !path.EndsWith(ext, System.StringComparison.OrdinalIgnoreCase)) path += ext;
+
+            string version = CommandLineValue("-buildVersion");
+            if (!string.IsNullOrEmpty(version) && version != "none") PlayerSettings.bundleVersion = version;
+
+            Debug.Log("[Spheres] CI build: " + target + " -> " + path + " (version " + PlayerSettings.bundleVersion + ")");
+            Build(target, path, false);
+        }
+
+        static string CommandLineValue(string name)
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (string.Equals(args[i], name, System.StringComparison.OrdinalIgnoreCase) && !args[i + 1].StartsWith("-"))
+                    return args[i + 1];
+            return null;
+        }
+
         static void Build(BuildTarget target, string path, bool reveal = true)
         {
             Setup(!Application.isBatchMode);
