@@ -83,7 +83,7 @@ namespace Spheres
             Active.Add(new Signal { From = from, Kind = kind, Position = pos, Phrase = phrase, Target = target, Time = Time.unscaledTime });
             if (kind == SignalKind.Chat)
             {
-                SpheresHud.AddFeedTextLocal("<color=#" + ColorUtility.ToHtmlStringRGB(from.Color) + ">" + from.DisplayName + ":</color> " + Phrases[Mathf.Clamp(phrase, 0, Phrases.Length - 1)]);
+                SpheresHud.AddFeedTextLocal("<color=#" + ColorUtility.ToHtmlStringRGB(from.Color) + ">" + from.DisplayName + ":</color> " + Loc.T(Phrases[Mathf.Clamp(phrase, 0, Phrases.Length - 1)]));
                 Sfx.Play("deal", 0.35f, 0f);
             }
             else if (VisibleToLocal(from)) Sfx.Play("zap", 0.3f, 0f);
@@ -162,7 +162,7 @@ namespace Spheres
                     if (s.From == viewer || !s.From.IsAlive) continue;
                     var (pos, vis, _) = project(s.From.Top + Vector3.up * 1.2f);
                     if (!vis) continue;
-                    string text = Phrases[Mathf.Clamp(s.Phrase, 0, Phrases.Length - 1)];
+                    string text = Loc.T(Phrases[Mathf.Clamp(s.Phrase, 0, Phrases.Length - 1)]);
                     float w = Mathf.Max(60f, text.Length * 8.5f + 18f);
                     float a = Mathf.Clamp01((BubbleLife - age) * 3f);
                     var r = new Rect(pos.x - w * 0.5f, pos.y - 46f - Mathf.Clamp01(age * 6f) * 6f, w, 24f);

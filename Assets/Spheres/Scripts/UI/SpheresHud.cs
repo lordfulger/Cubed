@@ -380,7 +380,7 @@ namespace Spheres
                 bool sel = hi.WheelChoice == i;
                 var r = new Rect(p.x - 62f, p.y - 15f, 124f, 30f);
                 UIKit.Fill(r, sel ? new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, 0.85f) : new Color(0.08f, 0.09f, 0.13f, 0.85f));
-                UIKit.Text(r, (hi.IsKeyboard ? (i + 1) + "  " : "") + Signals.Phrases[i], UIKit.SmallCenter, sel ? Color.black : Color.white);
+                UIKit.Text(r, (hi.IsKeyboard ? (i + 1) + "  " : "") + Loc.T(Signals.Phrases[i]), UIKit.SmallCenter, sel ? Color.black : Color.white);
             }
             UIKit.Shadowed(new Rect(c.x - 120f, c.y - 10f, 240f, 20f), hi.IsKeyboard ? "Move or aim to pick, release V" : "Right stick to pick, release", UIKit.SmallCenter, UIKit.Muted);
         }

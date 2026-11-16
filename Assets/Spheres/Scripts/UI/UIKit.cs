@@ -252,7 +252,7 @@ namespace Spheres
         {
             var old = style.normal.textColor;
             style.normal.textColor = color;
-            GUI.Label(r, text, style);
+            GUI.Label(r, Loc.T(text), style);
             style.normal.textColor = old;
         }
 
@@ -272,7 +272,7 @@ namespace Spheres
         public static bool Btn(Rect r, string text, bool small = false)
         {
             bool focused = GUI.enabled && NavFocus(r);
-            bool clicked = GUI.Button(r, text, small ? ButtonSmall : Button) || TakeSubmit(focused);
+            bool clicked = GUI.Button(r, Loc.T(text), small ? ButtonSmall : Button) || TakeSubmit(focused);
             if (clicked) Sfx.Play("ui", 0.4f, 0f);
             return clicked;
         }
@@ -293,7 +293,7 @@ namespace Spheres
             var old = style.normal.background;
             if (on) style.normal.background = Tex(Accent * 0.55f);
             bool focused = NavFocus(r);
-            bool clicked = GUI.Button(r, text, style) || TakeSubmit(focused);
+            bool clicked = GUI.Button(r, Loc.T(text), style) || TakeSubmit(focused);
             style.normal.background = old;
             if (clicked) Sfx.Play("ui", 0.4f, 0f);
             return clicked;
@@ -329,7 +329,7 @@ namespace Spheres
             bool focused = NavFocus(r);
             Text(new Rect(r.x, r.y, r.width - w, r.height), label, Label, Color.white);
             var b = new Rect(r.xMax - w, r.y + 2f, w, r.height - 4f);
-            if (RawBtn(b, "<  " + options[Mathf.Clamp(index, 0, options.Length - 1)] + "  >") || TakeSubmit(focused))
+            if (RawBtn(b, "<  " + Loc.T(options[Mathf.Clamp(index, 0, options.Length - 1)]) + "  >") || TakeSubmit(focused))
             {
                 bool backwards = Event.current != null && Event.current.button == 1;
                 index = (index + (backwards ? -1 : 1) + options.Length) % options.Length;

@@ -78,6 +78,7 @@ namespace Spheres
     {
         public const string CardExt = ".spherescards.json";
         public const string BlockExt = ".spheresblocks.json";
+        public const string LocExt = ".spheresloc.json";
         public const string MapExt = MapRegistry.Extension;
 
         public static readonly List<ContentSource> Sources = new List<ContentSource>();
@@ -137,6 +138,7 @@ namespace Spheres
                 var src = new ContentSource { Folder = folder };
                 // Blocks first so maps and cards can use them.
                 foreach (var f in Find(folder, BlockExt)) Try(src, f, () => src.Blocks += LoadBlocks(f));
+                foreach (var f in Find(folder, LocExt)) Try(src, f, () => { if (Loc.LoadFile(f) > 0) Loc.SetLanguage(Options.Current.language); });
                 foreach (var f in Find(folder, CardExt)) Try(src, f, () => src.Cards += LoadCards(f, SourceName(folder, f)));
                 foreach (var f in Find(folder, MapExt)) Try(src, f, () => src.Maps += LoadMap(f, SourceName(folder, f)));
                 if (src.Cards + src.Maps + src.Blocks > 0 || src.Errors.Count > 0) Sources.Add(src);

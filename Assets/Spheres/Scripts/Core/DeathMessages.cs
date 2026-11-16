@@ -223,7 +223,7 @@ namespace Spheres
             if (killer == victim) killer = null;
             string k = killer != null ? Colored(killer.DisplayName, killer.Color) : "Someone";
             string v = Colored(victim.DisplayName, victim.Color);
-            return list[idx].Replace("{k}", k).Replace("{v}", v);
+            return Loc.T(list[idx]).Replace("{k}", k).Replace("{v}", v);
         }
 
         static string Colored(string name, Color c) => "<color=#" + ColorUtility.ToHtmlStringRGB(c) + ">" + name + "</color>";

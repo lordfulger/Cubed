@@ -29,6 +29,8 @@ namespace Spheres
         public bool damageNumbers = true;
         /// <summary>Silly kill-feed lines ("X popped Y") instead of plain "X > Y".</summary>
         public bool funnyDeathMessages = true;
+        /// <summary>Language code ("" = follow the system language).</summary>
+        public string language = "";
         public float rumble = 1f;
         public bool holdToFire = true;
 
@@ -52,10 +54,11 @@ namespace Spheres
                 if (PlayerPrefs.HasKey(PrefsKey))
                 {
                     var o = JsonUtility.FromJson<Options>(PlayerPrefs.GetString(PrefsKey));
-                    if (o != null) return o;
+                    if (o != null) { Loc.SetLanguage(o.language); return o; }
                 }
             }
             catch (Exception e) { Debug.LogException(e); }
+            Loc.SetLanguage("");
             return new Options();
         }
 

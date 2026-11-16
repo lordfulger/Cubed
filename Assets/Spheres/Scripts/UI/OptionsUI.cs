@@ -48,6 +48,21 @@ namespace Spheres
             switch (tab)
             {
                 case 0:
+                    Header("Language");
+                    {
+                        var langs = Loc.Languages;
+                        var langNames = new string[langs.Count + 1];
+                        langNames[0] = "Automatic (system)";
+                        for (int i = 0; i < langs.Count; i++) langNames[i + 1] = langs[i].Name;
+                        int cur = 0;
+                        for (int i = 0; i < langs.Count; i++) if (langs[i].Code == o.language) cur = i + 1;
+                        int pick = UIKit.Cycle(Row(), "Language", cur, langNames);
+                        if (pick != cur)
+                        {
+                            o.language = pick == 0 ? "" : langs[pick - 1].Code;
+                            Loc.SetLanguage(o.language);
+                        }
+                    }
                     Header("Camera & aim");
                     st.mouseSensitivity = UIKit.Stepper(Row(), "Mouse sensitivity", st.mouseSensitivity, 0.2f, 0.2f, 10f, "0.0");
                     st.gamepadSensitivity = UIKit.Stepper(Row(), "Gamepad look speed", st.gamepadSensitivity, 20f, 40f, 400f);
