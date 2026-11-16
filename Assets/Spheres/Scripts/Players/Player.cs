@@ -73,6 +73,9 @@ namespace Spheres
         float hazardTick;
         float flashTimer;
         BlockInfo bounceBlock, hazardBlock, groundBlock;
+        Mechanism groundMech;
+        /// <summary>The moving part this player is standing on (carried along with it).</summary>
+        public Mechanism RidingMech { get; private set; }
 
         GameObject shield;
         Material shieldMat;
@@ -586,8 +589,24 @@ namespace Spheres
             hazardBlock = null;
             groundBlock = null;
             bool wasGrounded = Grounded;
+            // Ride moving platforms, elevators and spinners.
+            if (RidingMech != null && Grounded)
+            {
+                var carry = RidingMech.Carry(transform.position);
+                if (carry.sqrMagnitude > 0f && carry.sqrMagnitude < 9f)
+                {
+                    if (carry.y > 0f)
+                    {
+                        transform.position += new Vector3(0f, carry.y, 0f);
+                        Physics.SyncTransforms();
+                    }
+                    Controller.Move(new Vector3(carry.x, Mathf.Min(0f, carry.y), carry.z));
+                }
+            }
+            groundMech = null;
             var flags = Controller.Move(Velocity * dt);
             Grounded = (flags & CollisionFlags.Below) != 0;
+            RidingMech = Grounded ? groundMech : null;
 
             if (bounceBlock != null && preVy <= 0f)
             {
@@ -635,6 +654,19 @@ namespace Spheres
 
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            if (hit.normal.y > 0.6f)
+            {
+                var mech = hit.collider.GetComponentInParent<Mechanism>();
+                if (mech != null) groundMech = mech;
+            }
+            // Shove loose props (crates, balls) when walking into them.
+            var rb = hit.collider.attachedRigidbody;
+            if (rb != null && !rb.isKinematic && hit.moveDirection.y > -0.4f)
+            {
+                var push = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
+                float speed = new Vector3(Velocity.x, 0f, Velocity.z).magnitude;
+                rb.AddForceAtPosition(push * Mathf.Clamp(speed, 2f, 20f) * 1.5f, hit.point, ForceMode.Acceleration);
+            }
             var info = hit.collider.GetComponent<BlockInfo>();
             if (info == null || info.Type == null) return;
             if (info.Type.DamagePerSecond > 0f) hazardBlock = info;

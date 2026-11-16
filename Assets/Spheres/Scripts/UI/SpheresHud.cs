@@ -27,13 +27,15 @@ namespace Spheres
         {
             string v = Colored(victim.DisplayName, victim.Color);
             string text;
-            if (killer != null && killer != victim) text = Colored(killer.DisplayName, killer.Color) + "  >  " + v;
+            if (Options.Current.funnyDeathMessages) text = DeathMessages.Format(killer, victim, info);
+            else if (killer != null && killer != victim) text = Colored(killer.DisplayName, killer.Color) + "  >  " + v;
             else
             {
                 string how = info == null ? "died" :
                     info.Type == DamageType.Fall ? "fell" :
                     info.Type == DamageType.Border ? "hit the border" :
-                    info.Type == DamageType.Hazard ? "touched lava" : "died";
+                    info.Type == DamageType.Hazard ? "touched lava" :
+                    info.Type == DamageType.Trap ? "was caught in a trap" : "died";
                 text = v + " " + how;
             }
             AddFeedText(text);

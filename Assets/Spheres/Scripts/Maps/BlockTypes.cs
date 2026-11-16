@@ -18,6 +18,10 @@ namespace Spheres
         public bool Destructible;
         public float Health = 60f;
         public bool Transparent;
+        /// <summary>Explodes when destroyed (0 = no). Damage is dealt to players, props and nearby blocks.</summary>
+        public float ExplodeRadius, ExplodeDamage;
+        /// <summary>Emissive look (crystals).</summary>
+        public bool Glowing;
         /// <summary>Blocks the editor palette shows this type (hide internal types with false).</summary>
         public bool ShowInEditor = true;
 
@@ -48,6 +52,11 @@ namespace Spheres
             Register(new BlockType("glass", "Glass", new Color(0.7f, 0.92f, 1f, 0.35f)) { Destructible = true, Health = 40f, Transparent = true });
             Register(new BlockType("crate", "Crate", new Color(0.66f, 0.46f, 0.26f)) { Destructible = true, Health = 90f });
             Register(new BlockType("grass", "Moss", new Color(0.36f, 0.62f, 0.36f)));
+            // More breakables.
+            Register(new BlockType("wood", "Planks", new Color(0.55f, 0.38f, 0.22f)) { Destructible = true, Health = 45f });
+            Register(new BlockType("brick", "Brick", new Color(0.62f, 0.3f, 0.24f)) { Destructible = true, Health = 160f });
+            Register(new BlockType("crystal", "Crystal", new Color(0.62f, 0.4f, 1f, 0.6f)) { Destructible = true, Health = 30f, Transparent = true, Glowing = true });
+            Register(new BlockType("blast", "Blast Block", new Color(0.92f, 0.3f, 0.18f)) { Destructible = true, Health = 30f, ExplodeRadius = 4f, ExplodeDamage = 45f });
         }
 
         public static IReadOnlyList<BlockType> All => ordered;

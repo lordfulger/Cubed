@@ -63,6 +63,10 @@ namespace Spheres
         public string background = "";
         public List<BlockData> blocks = new List<BlockData>();
         public List<SpawnData> spawns = new List<SpawnData>();
+        /// <summary>Moving parts: doors, platforms, spinners, swinging spikes, saws, spike traps, pistons.</summary>
+        public List<MechData> mechs = new List<MechData>();
+        /// <summary>Loose physics props: crates, boxes, explosive barrels, beach balls.</summary>
+        public List<PropData> props = new List<PropData>();
 
         public Bounds Bounds => new Bounds(new Vector3(sizeX, sizeY, sizeZ) * 0.5f, new Vector3(sizeX, sizeY, sizeZ));
 
@@ -77,8 +81,22 @@ namespace Spheres
             sizeZ = Mathf.Clamp(sizeZ, 8, 256);
             if (blocks == null) blocks = new List<BlockData>();
             if (spawns == null) spawns = new List<SpawnData>();
+            if (mechs == null) mechs = new List<MechData>();
+            if (props == null) props = new List<PropData>();
             blocks.RemoveAll(b => b == null);
             spawns.RemoveAll(s => s == null);
+            mechs.RemoveAll(m => m == null || string.IsNullOrEmpty(m.kind));
+            props.RemoveAll(p => p == null);
+            if (mechs.Count > 256) mechs.RemoveRange(256, mechs.Count - 256);
+            if (props.Count > 400) props.RemoveRange(400, props.Count - 400);
+            foreach (var m in mechs)
+            {
+                m.w = Mathf.Clamp(m.w, 1, 64); m.h = Mathf.Clamp(m.h, 1, 64); m.d = Mathf.Clamp(m.d, 1, 64);
+                m.axis = Mathf.Clamp(m.axis, 0, 2);
+                m.length = Mathf.Clamp(m.length, 1f, 40f);
+                m.damage = Mathf.Clamp(m.damage, 0f, 500f);
+                if (string.IsNullOrEmpty(m.type)) m.type = "dark";
+            }
             foreach (var b in blocks)
             {
                 if (b.w <= 0) b.w = 1;
@@ -117,6 +135,53 @@ namespace Spheres
         public MapData Spawn(int x, int y, int z, int team)
         {
             spawns.Add(new SpawnData(x, y, z, team));
+            return this;
+        }
+
+        /// <summary>Adds a moving part (see <see cref="MechKinds.Preset"/> for defaults).</summary>
+        public MapData Mech(MechData m)
+        {
+            mechs.Add(m);
+            return this;
+        }
+
+        /// <summary>Adds a moving part from a preset and lets the caller tweak it.</summary>
+        public MapData Mech(string kind, int x, int y, int z, System.Action<MechData> tweak = null)
+        {
+            var m = MechKinds.Preset(kind, x, y, z);
+            tweak?.Invoke(m);
+            mechs.Add(m);
+            return this;
+        }
+
+        /// <summary>Adds a physics prop standing on (x, y, z), where y is the floor height.</summary>
+        public MapData Prop(string kind, float x, float y, float z, float yaw = 0f)
+        {
+            props.Add(new PropData(kind, x, y, z, yaw));
+            return this;
+        }
+
+        /// <summary>Adds a prop and its mirrors into all four quadrants.</summary>
+        public MapData PropMirror4(string kind, float x, float y, float z)
+        {
+            float mx = sizeX - x, mz = sizeZ - z;
+            Prop(kind, x, y, z);
+            if (Mathf.Abs(mx - x) > 0.01f) Prop(kind, mx, y, z, 90f);
+            if (Mathf.Abs(mz - z) > 0.01f) Prop(kind, x, y, mz, 180f);
+            if (Mathf.Abs(mx - x) > 0.01f && Mathf.Abs(mz - z) > 0.01f) Prop(kind, mx, y, mz, 270f);
+            return this;
+        }
+
+        /// <summary>A neat stack of props (a pyramid of crates, a pile of boxes).</summary>
+        public MapData PropStack(string kind, float x, float y, float z, int baseCount, float spacing = 1.05f)
+        {
+            var k = PropKinds.Get(kind);
+            for (int level = 0; level < baseCount; level++)
+            {
+                int n = baseCount - level;
+                for (int i = 0; i < n; i++)
+                    Prop(kind, x + (i - (n - 1) * 0.5f) * spacing * k.Size.x, y + level * k.Size.y, z);
+            }
             return this;
         }
 

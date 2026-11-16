@@ -412,6 +412,9 @@ namespace Spheres
                 if (next.x - r < bounds.min.x || next.x + r > bounds.max.x || next.z - r < bounds.min.z || next.z + r > bounds.max.z || next.y + r > bounds.max.y)
                     danger = true;
             }
+            // Swinging spikes, saws, spike traps: block when about to touch one.
+            if (Mechanism.All.Count > 0 && Mechanism.AnyDangerAt(self.Center + vel * 0.2f, self.Radius + 0.6f))
+                danger = true;
             if (danger)
             {
                 envBlockCooldown = 0.6f;

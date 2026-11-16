@@ -25,14 +25,16 @@ namespace Spheres.Net
         Fx,
         MatchAbort,
         Pong,
+        /// <summary>Physics prop poses and broken map blocks.</summary>
+        Props,
     }
 
-    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke }
+    public enum FxKind : byte { Burst, Pulse, Line, Sound, DamageNumber, Feed, Box, Light, Shake, Decal, Smoke, BlockGone }
 
     public static class NetConst
     {
         /// <summary>Bump when the wire format changes.</summary>
-        public const int Protocol = 8;
+        public const int Protocol = 9;
         public const int DefaultPort = 27015;
         public const float SnapshotRate = 30f;
     }

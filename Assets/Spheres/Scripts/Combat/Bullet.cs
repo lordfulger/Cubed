@@ -429,9 +429,15 @@ namespace Spheres
             var block = hit.collider.GetComponent<BlockInfo>();
             if (Owner != null) Owner.ForEachEffect(e => e.OnBulletHitTerrain(this, hit));
             if (dead) return;
+            var prop = hit.collider.GetComponentInParent<Prop>();
+            if (prop != null)
+            {
+                prop.Damage(Damage, Owner, Velocity, hit.point, 0.6f + Damage * 0.05f + Knockback * 0.04f);
+                Fx.Burst(hit.point, prop.Kind.Color, 3, 3f, 0.1f, 0.35f);
+            }
             if (block != null)
             {
-                block.Damage(Damage);
+                block.Damage(Damage, Owner);
                 Fx.Decal(hit.point, hit.normal, Mathf.Max(0.28f, Radius * 3.2f), new Color(0.04f, 0.04f, 0.05f, 0.55f));
             }
 

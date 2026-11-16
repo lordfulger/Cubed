@@ -49,6 +49,9 @@ namespace Spheres
         public float groundAccel = 1f;
         public bool destructible;
         public float health = 60f;
+        /// <summary>Explodes when destroyed (radius in cells, 0 = no).</summary>
+        public float explodeRadius;
+        public float explodeDamage = 40f;
         public bool transparent;
     }
 
@@ -231,6 +234,8 @@ namespace Spheres
                     GroundAccel = bj.groundAccel <= 0f ? 1f : bj.groundAccel,
                     Destructible = bj.destructible,
                     Health = bj.health,
+                    ExplodeRadius = bj.explodeRadius,
+                    ExplodeDamage = bj.explodeDamage,
                     Transparent = bj.transparent,
                 });
                 n++;

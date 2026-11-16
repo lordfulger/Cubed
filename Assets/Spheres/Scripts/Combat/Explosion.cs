@@ -9,7 +9,7 @@ namespace Spheres
         static readonly Collider[] buffer = new Collider[64];
 
         /// <param name="selfDamage">Should the owner be hurt by their own blast?</param>
-        public static void Create(Vector3 center, float radius, float damage, Player owner, float knockback, Color color, bool selfDamage = false)
+        public static void Create(Vector3 center, float radius, float damage, Player owner, float knockback, Color color, bool selfDamage = false, string cause = null)
         {
             if (radius <= 0f) return;
             // Fireball: hot core, colored shell, smoke and a scorch mark.
@@ -25,10 +25,14 @@ namespace Spheres
             CameraShake.Impulse(center, 0.25f + radius * 0.08f, radius * 4f + 10f);
 
             int n = Physics.OverlapSphereNonAlloc(center, radius, buffer, ~(1 << 2), QueryTriggerInteraction.Ignore);
+            // Copy: breaking blocks/props below can trigger further explosions that reuse the buffer.
+            var hits = new Collider[n];
+            System.Array.Copy(buffer, hits, n);
             var damaged = new HashSet<Player>();
+            var props = new HashSet<Prop>();
             for (int i = 0; i < n; i++)
             {
-                var col = buffer[i];
+                var col = hits[i];
                 if (col == null) continue;
                 var p = col.GetComponent<Player>();
                 if (p != null)
@@ -47,11 +51,21 @@ namespace Spheres
                         Point = center,
                         Direction = dist > 0.01f ? (to / dist + Vector3.up * 0.3f) : Vector3.up,
                         Knockback = (knockback + radius * 2f) * falloff,
+                        Cause = cause,
                     });
                     continue;
                 }
+                var prop = col.GetComponentInParent<Prop>();
+                if (prop != null)
+                {
+                    if (!props.Add(prop)) continue;
+                    Vector3 to = prop.transform.position - center;
+                    float falloff = Mathf.Lerp(1f, 0.35f, Mathf.Clamp01(to.magnitude / radius));
+                    prop.Damage(damage * falloff, owner, to + Vector3.up * radius * 0.5f, prop.transform.position, (knockback + radius * 2f) * falloff * 0.35f * prop.Kind.Mass);
+                    continue;
+                }
                 var block = col.GetComponent<BlockInfo>();
-                if (block != null) block.Damage(damage * 0.5f);
+                if (block != null) block.Damage(damage * 0.5f, owner);
             }
         }
     }

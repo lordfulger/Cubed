@@ -19,6 +19,21 @@ namespace Spheres
             MapRegistry.Register("builtin:halo_isles", HaloIsles(), "Spheres");
             MapRegistry.Register("builtin:grand_plaza", GrandPlaza(), "Spheres");
             MapRegistry.Register("builtin:duel_cell", DuelCell(), "Spheres");
+            // Moving parts, destructibles and physics props.
+            MapRegistry.Register("builtin:clockwork", Clockwork(), "Spheres");
+            MapRegistry.Register("builtin:pendulum_hall", PendulumHall(), "Spheres");
+            MapRegistry.Register("builtin:blast_doors", BlastDoors(), "Spheres");
+            MapRegistry.Register("builtin:crate_yard", CrateYard(), "Spheres");
+            MapRegistry.Register("builtin:sawmill", Sawmill(), "Spheres");
+            MapRegistry.Register("builtin:spike_garden", SpikeGarden(), "Spheres");
+            MapRegistry.Register("builtin:piston_press", PistonPress(), "Spheres");
+            MapRegistry.Register("builtin:elevator_shaft", ElevatorShaft(), "Spheres");
+            MapRegistry.Register("builtin:powder_keg", PowderKeg(), "Spheres");
+            MapRegistry.Register("builtin:glasshouse", Glasshouse(), "Spheres");
+            MapRegistry.Register("builtin:windmill", Windmill(), "Spheres");
+            MapRegistry.Register("builtin:moat_run", MoatRun(), "Spheres");
+            MapRegistry.Register("builtin:rush_hour", RushHour(), "Spheres");
+            MapRegistry.Register("builtin:tumble_tower", TumbleTower(), "Spheres");
         }
 
         static MapData New(string name, string desc, int sx, int sy, int sz) =>
@@ -383,6 +398,380 @@ namespace Spheres
             m.Spawn(9, 8, 7, 2).Spawn(14, 8, 7, 2);
             m.Spawn(9, 8, 16, 3).Spawn(14, 8, 16, 3);
             m.Spawn(10, 11, 4, -1).Spawn(13, 11, 5, -1).Spawn(10, 11, 19, -1).Spawn(13, 11, 18, -1);
+            return m;
+        }
+            // ================================================================== moving-part maps
+
+        /// <summary>Spinning sweepers, a spiked rotor overhead and pistons punching in from every side.</summary>
+        public static MapData Clockwork()
+        {
+            var m = New("Clockwork", "Jump the sweeping arm, duck the spiked rotor, and don't stand in front of the pistons.", 44, 34, 44);
+            m.background = "#1d1726";
+            m.Box(8, 7, 8, 28, 1, 28, "solid");
+            m.Box(21, 8, 21, 2, 7, 2, "dark");
+            // Low sweeper (jump it) and a spiked rotor at head height on the ledges.
+            m.Mech(MechKinds.Spinner, 12, 8, 21, k => { k.w = 20; k.h = 1; k.d = 2; k.period = 7f; k.type = "light"; });
+            m.Mech(MechKinds.Spinner, 14, 13, 21, k => { k.w = 16; k.h = 1; k.d = 2; k.period = -9f; k.deadly = true; k.damage = 30f; });
+            // Pistons from each side, one after another.
+            m.Mech(MechKinds.Piston, 8, 8, 20, k => { k.w = 2; k.h = 2; k.d = 4; k.dx = 4f; k.period = 4f; k.phase = 0f; });
+            m.Mech(MechKinds.Piston, 34, 8, 20, k => { k.w = 2; k.h = 2; k.d = 4; k.dx = -4f; k.period = 4f; k.phase = 0.5f; });
+            m.Mech(MechKinds.Piston, 20, 8, 8, k => { k.dx = 0f; k.w = 4; k.h = 2; k.d = 2; k.dz = 4f; k.period = 4f; k.phase = 0.25f; });
+            m.Mech(MechKinds.Piston, 20, 8, 34, k => { k.dx = 0f; k.w = 4; k.h = 2; k.d = 2; k.dz = -4f; k.period = 4f; k.phase = 0.75f; });
+            // Corner ledges with a step up.
+            m.BoxMirror4(10, 10, 10, 4, 1, 4, "light");
+            m.BoxMirror4(14, 8, 12, 1, 1, 2, "solid");
+            m.PropMirror4(PropKinds.Box, 12f, 11f, 12.5f);
+            m.PropMirror4(PropKinds.Barrel, 10.5f, 8f, 16.5f);
+            m.Spawn(9, 8, 9, 0).Spawn(9, 8, 11, 0);
+            m.Spawn(34, 8, 34, 1).Spawn(34, 8, 32, 1);
+            m.Spawn(34, 8, 9, 2).Spawn(34, 8, 11, 2);
+            m.Spawn(9, 8, 34, 3).Spawn(9, 8, 32, 3);
+            m.Spawn(11, 11, 11, -1).Spawn(32, 11, 32, -1).Spawn(32, 11, 11, -1).Spawn(11, 11, 32, -1);
+            return m;
+        }
+
+        /// <summary>A long hall of swinging spiked balls. Time your crossing.</summary>
+        public static MapData PendulumHall()
+        {
+            var m = New("Pendulum Hall", "Five spiked pendulums swing across a long hall. Block or time it right.", 44, 36, 24);
+            m.background = "#20141a";
+            m.Box(2, 7, 5, 40, 1, 13, "solid");
+            m.Box(2, 24, 10, 40, 1, 3, "dark");
+            m.Mech(MechKinds.Pendulum, 9, 23, 11, k => { k.axis = 0; k.length = 14f; k.angle = 55f; k.period = 3.4f; k.phase = 0f; k.w = 2; });
+            m.Mech(MechKinds.Pendulum, 15, 23, 11, k => { k.axis = 0; k.length = 14f; k.angle = 55f; k.period = 3.4f; k.phase = 0.2f; k.w = 2; });
+            m.Mech(MechKinds.Pendulum, 21, 23, 11, k => { k.axis = 0; k.length = 14f; k.angle = 55f; k.period = 3.4f; k.phase = 0.4f; k.w = 2; });
+            m.Mech(MechKinds.Pendulum, 27, 23, 11, k => { k.axis = 0; k.length = 14f; k.angle = 55f; k.period = 3.4f; k.phase = 0.6f; k.w = 2; });
+            m.Mech(MechKinds.Pendulum, 33, 23, 11, k => { k.axis = 0; k.length = 14f; k.angle = 55f; k.period = 3.4f; k.phase = 0.8f; k.w = 2; });
+            // Spike traps hugging the walls between the pendulums.
+            m.Mech(MechKinds.Spikes, 17, 8, 5, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 17, 8, 16, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 5, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 16, k => { k.phase = 0.75f; });
+            // Cover at each end.
+            m.Box(6, 8, 7, 1, 2, 2, "crate").Box(6, 8, 14, 1, 2, 2, "crate");
+            m.Box(37, 8, 7, 1, 2, 2, "crate").Box(37, 8, 14, 1, 2, 2, "crate");
+            m.Prop(PropKinds.Crate, 12.5f, 8f, 6.5f).Prop(PropKinds.Crate, 24.5f, 8f, 16.5f).Prop(PropKinds.Box, 18.5f, 8f, 11.5f);
+            m.Spawn(4, 8, 8, 0).Spawn(4, 8, 15, 0);
+            m.Spawn(39, 8, 8, 1).Spawn(39, 8, 15, 1);
+            m.Spawn(5, 8, 11, 2).Spawn(5, 8, 12, 2);
+            m.Spawn(38, 8, 11, 3).Spawn(38, 8, 12, 3);
+            m.Spawn(3, 8, 10, -1).Spawn(40, 8, 13, -1).Spawn(3, 8, 13, -1).Spawn(40, 8, 10, -1);
+            return m;
+        }
+
+        /// <summary>Two halves split by a wall with sliding blast doors and a glass window.</summary>
+        public static MapData BlastDoors()
+        {
+            var m = New("Blast Doors", "The doors open on a timer. Or take the bouncer over the wall.", 44, 30, 40);
+            m.background = "#121a24";
+            m.Box(4, 7, 4, 36, 1, 32, "solid");
+            m.Box(21, 8, 4, 2, 6, 6, "dark");
+            m.Box(21, 8, 14, 2, 2, 12, "dark");
+            m.Box(21, 10, 14, 2, 2, 3, "dark").Box(21, 10, 17, 2, 2, 6, "glass").Box(21, 10, 23, 2, 2, 3, "dark");
+            m.Box(21, 12, 14, 2, 2, 12, "dark");
+            m.Box(21, 8, 30, 2, 6, 6, "dark");
+            m.Mech(MechKinds.Door, 21, 8, 10, k => { k.w = 2; k.h = 6; k.d = 4; k.dy = 5.5f; k.period = 8f; k.phase = 0f; });
+            m.Mech(MechKinds.Door, 21, 8, 26, k => { k.w = 2; k.h = 6; k.d = 4; k.dy = 5.5f; k.period = 8f; k.phase = 0.5f; });
+            m.BoxMirrorX(17, 8, 19, 2, 1, 2, "bouncy");
+            m.BoxMirror4(10, 8, 10, 2, 2, 2, "crate");
+            m.BoxMirror4(14, 8, 15, 1, 2, 3, "brick");
+            m.PropMirror4(PropKinds.Barrel, 19f, 8f, 8.5f);
+            m.PropMirror4(PropKinds.Crate, 8.5f, 8f, 14.5f);
+            m.Spawn(7, 8, 9, 0).Spawn(9, 8, 9, 0);
+            m.Spawn(36, 8, 30, 1).Spawn(34, 8, 30, 1);
+            m.Spawn(7, 8, 30, 2).Spawn(9, 8, 30, 2);
+            m.Spawn(36, 8, 9, 3).Spawn(34, 8, 9, 3);
+            m.Spawn(6, 8, 20, -1).Spawn(37, 8, 20, -1).Spawn(12, 8, 20, -1).Spawn(31, 8, 20, -1);
+            return m;
+        }
+
+        /// <summary>A shipping yard full of crates and barrels, with a crane platform overhead.</summary>
+        public static MapData CrateYard()
+        {
+            var m = New("Crate Yard", "Shoot the crates around, mind the barrels, and ride the crane.", 44, 30, 44);
+            m.background = "#1a1d22";
+            m.Box(4, 7, 4, 36, 1, 36, "solid");
+            m.BoxMirror4(9, 8, 9, 6, 3, 3, "dark");
+            m.BoxMirror4(9, 8, 15, 3, 3, 6, "dark");
+            m.Box(19, 8, 19, 6, 1, 6, "light");
+            m.Mech(MechKinds.Platform, 6, 12, 20, k => { k.w = 4; k.h = 1; k.d = 4; k.dx = 28f; k.period = 14f; k.type = "dark"; });
+            m.PropStack(PropKinds.Crate, 16f, 8f, 26.5f, 3);
+            m.PropStack(PropKinds.Crate, 28f, 8f, 17.5f, 3);
+            m.PropMirror4(PropKinds.Barrel, 8f, 8f, 22.5f);
+            m.PropMirror4(PropKinds.Box, 17f, 8f, 13f);
+            m.PropMirror4(PropKinds.Box, 17.9f, 8f, 13.9f);
+            m.PropMirror4(PropKinds.Heavy, 14f, 8f, 30.5f);
+            m.Prop(PropKinds.Ball, 22f, 9f, 22f);
+            m.Spawn(6, 8, 6, 0).Spawn(6, 8, 8, 0);
+            m.Spawn(37, 8, 37, 1).Spawn(37, 8, 35, 1);
+            m.Spawn(37, 8, 6, 2).Spawn(37, 8, 8, 2);
+            m.Spawn(6, 8, 37, 3).Spawn(6, 8, 35, 3);
+            m.Spawn(20, 9, 20, -1).Spawn(23, 9, 23, -1).Spawn(20, 9, 23, -1).Spawn(23, 9, 20, -1);
+            return m;
+        }
+
+        /// <summary>Saw blades race along the floor under a breakable plank deck.</summary>
+        public static MapData Sawmill()
+        {
+            var m = New("Sawmill", "Saw blades patrol the lanes. The plank deck above breaks if you shoot it.", 44, 30, 36);
+            m.background = "#221a14";
+            m.Box(4, 7, 4, 36, 1, 28, "solid");
+            m.Mech(MechKinds.Saw, 8, 8, 9, k => { k.w = 3; k.d = 3; k.axis = 2; k.dx = 25f; k.period = 7f; k.phase = 0f; });
+            m.Mech(MechKinds.Saw, 33, 8, 23, k => { k.w = 3; k.d = 3; k.axis = 2; k.dx = -25f; k.period = 7f; k.phase = 0.5f; });
+            m.Box(8, 12, 15, 28, 1, 6, "wood");
+            m.BoxMirror4(8, 8, 15, 1, 4, 1, "dark");
+            m.BoxMirrorX(5, 8, 17, 2, 1, 2, "bouncy");
+            m.BoxMirror4(14, 8, 5, 1, 2, 3, "wood");
+            m.PropStack(PropKinds.Crate, 22f, 13f, 18f, 2);
+            m.Prop(PropKinds.Barrel, 20f, 8f, 13.5f).Prop(PropKinds.Barrel, 24f, 8f, 21.5f);
+            m.PropMirror4(PropKinds.Box, 11.5f, 8f, 14.5f);
+            m.Spawn(5, 8, 14, 0).Spawn(6, 8, 14, 0);
+            m.Spawn(38, 8, 20, 1).Spawn(37, 8, 20, 1);
+            m.Spawn(5, 8, 20, 2).Spawn(6, 8, 20, 2);
+            m.Spawn(38, 8, 14, 3).Spawn(37, 8, 14, 3);
+            m.Spawn(12, 13, 17, -1).Spawn(31, 13, 17, -1).Spawn(12, 13, 19, -1).Spawn(31, 13, 19, -1);
+            return m;
+        }
+
+        /// <summary>A mossy courtyard of spike traps firing in waves around a safe plaza.</summary>
+        public static MapData SpikeGarden()
+        {
+            var m = New("Spike Garden", "Spike traps fire in waves. Watch for the red warning glow.", 40, 30, 40);
+            m.background = "#14201a";
+            m.Box(5, 7, 5, 30, 1, 30, "grass");
+            m.Box(18, 8, 18, 4, 1, 4, "light");
+            // Spike traps in diagonal waves (the plaza in the middle is safe).
+            m.Mech(MechKinds.Spikes, 9, 8, 9, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 9, 8, 13, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 9, 8, 17, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 9, 8, 21, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 9, 8, 25, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 9, 8, 29, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 9, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 13, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 17, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 21, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 25, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 13, 8, 29, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 17, 8, 9, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 17, 8, 13, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 17, 8, 25, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 17, 8, 29, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 21, 8, 9, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 21, 8, 13, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 21, 8, 25, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 21, 8, 29, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 9, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 13, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 17, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 21, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 25, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 25, 8, 29, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 9, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 13, k => { k.phase = 0.5f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 17, k => { k.phase = 0.75f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 21, k => { k.phase = 0f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 25, k => { k.phase = 0.25f; });
+            m.Mech(MechKinds.Spikes, 29, 8, 29, k => { k.phase = 0.5f; });
+            m.BoxMirror4(12, 8, 12, 1, 2, 1, "solid");
+            m.BoxMirror4(7, 8, 16, 1, 2, 2, "crate");
+            m.PropMirror4(PropKinds.Ball, 16f, 8f, 7f);
+            m.Spawn(6, 8, 6, 0).Spawn(7, 8, 6, 0);
+            m.Spawn(33, 8, 33, 1).Spawn(32, 8, 33, 1);
+            m.Spawn(33, 8, 6, 2).Spawn(32, 8, 6, 2);
+            m.Spawn(6, 8, 33, 3).Spawn(7, 8, 33, 3);
+            m.Spawn(19, 9, 19, -1).Spawn(20, 9, 20, -1).Spawn(19, 9, 20, -1).Spawn(20, 9, 19, -1);
+            return m;
+        }
+
+        /// <summary>Spiked pistons slam across the floor and a crusher pounds the middle.</summary>
+        public static MapData PistonPress()
+        {
+            var m = New("Piston Press", "Spiked pistons slam in from the walls. The middle gets pancaked regularly.", 40, 30, 40);
+            m.background = "#1f1c16";
+            m.Box(4, 7, 4, 32, 1, 32, "solid");
+            m.Mech(MechKinds.Piston, 10, 8, 4, k => { k.dx = 0f; k.w = 3; k.h = 3; k.d = 2; k.dz = 8f; k.period = 5f; k.phase = 0f; k.deadly = true; k.damage = 35f; });
+            m.Mech(MechKinds.Piston, 27, 8, 4, k => { k.dx = 0f; k.w = 3; k.h = 3; k.d = 2; k.dz = 8f; k.period = 5f; k.phase = 0.4f; k.deadly = true; k.damage = 35f; });
+            m.Mech(MechKinds.Piston, 18, 8, 34, k => { k.dx = 0f; k.w = 3; k.h = 3; k.d = 2; k.dz = -8f; k.period = 5f; k.phase = 0.2f; k.deadly = true; k.damage = 35f; });
+            m.Mech(MechKinds.Piston, 4, 8, 18, k => { k.w = 2; k.h = 3; k.d = 3; k.dx = 8f; k.period = 5f; k.phase = 0.6f; k.deadly = true; k.damage = 35f; });
+            m.Mech(MechKinds.Piston, 34, 8, 22, k => { k.w = 2; k.h = 3; k.d = 3; k.dx = -8f; k.period = 5f; k.phase = 0.8f; k.deadly = true; k.damage = 35f; });
+            m.Mech(MechKinds.Piston, 18, 14, 18, k => { k.dx = 0f; k.w = 4; k.h = 2; k.d = 4; k.dy = -5f; k.period = 6f; k.phase = 0.1f; k.deadly = true; k.damage = 60f; });
+            m.BoxMirror4(14, 8, 14, 1, 3, 1, "dark");
+            m.PropMirror4(PropKinds.Crate, 7f, 8f, 12.5f);
+            m.Spawn(6, 8, 6, 0).Spawn(7, 8, 7, 0);
+            m.Spawn(33, 8, 33, 1).Spawn(32, 8, 32, 1);
+            m.Spawn(33, 8, 6, 2).Spawn(32, 8, 7, 2);
+            m.Spawn(6, 8, 33, 3).Spawn(7, 8, 32, 3);
+            m.Spawn(15, 8, 8, -1).Spawn(24, 8, 8, -1).Spawn(15, 8, 31, -1).Spawn(25, 8, 31, -1);
+            return m;
+        }
+
+        /// <summary>Three floors joined by elevators and sliding bridges.</summary>
+        public static MapData ElevatorShaft()
+        {
+            var m = New("Elevator Shaft", "Ride the elevators up three floors. Sliding bridges join the decks.", 36, 46, 36);
+            m.background = "#151a26";
+            m.Box(4, 7, 4, 28, 1, 28, "solid");
+            m.BoxMirror4(4, 17, 4, 10, 1, 10, "light");
+            m.Box(12, 27, 12, 12, 1, 12, "dark");
+            m.Mech(MechKinds.Elevator, 15, 8, 5, k => { k.w = 3; k.d = 3; k.dy = 9f; k.period = 8f; k.phase = 0f; });
+            m.Mech(MechKinds.Elevator, 18, 8, 28, k => { k.w = 3; k.d = 3; k.dy = 9f; k.period = 8f; k.phase = 0.5f; });
+            m.Mech(MechKinds.Elevator, 16, 18, 25, k => { k.w = 4; k.d = 3; k.dy = 9f; k.period = 9f; k.phase = 0.25f; });
+            m.Mech(MechKinds.Elevator, 16, 18, 8, k => { k.w = 4; k.d = 3; k.dy = 9f; k.period = 9f; k.phase = 0.75f; });
+            m.Mech(MechKinds.Platform, 6, 17, 14, k => { k.dx = 0f; k.w = 3; k.d = 3; k.dz = 5f; k.period = 6f; });
+            m.Mech(MechKinds.Platform, 27, 17, 19, k => { k.dx = 0f; k.w = 3; k.d = 3; k.dz = -5f; k.period = 6f; k.phase = 0.5f; });
+            m.Box(16, 28, 16, 4, 1, 4, "glass");
+            m.PropMirror4(PropKinds.Box, 11.5f, 18f, 11.5f);
+            m.Prop(PropKinds.Ball, 14f, 28f, 14f).Prop(PropKinds.Barrel, 22f, 28f, 22f);
+            m.Spawn(6, 8, 6, 0).Spawn(8, 8, 6, 0);
+            m.Spawn(29, 8, 29, 1).Spawn(27, 8, 29, 1);
+            m.Spawn(29, 8, 6, 2).Spawn(27, 8, 6, 2);
+            m.Spawn(6, 8, 29, 3).Spawn(8, 8, 29, 3);
+            m.Spawn(9, 18, 9, -1).Spawn(26, 18, 26, -1).Spawn(26, 18, 9, -1).Spawn(9, 18, 26, -1);
+            return m;
+        }
+
+        /// <summary>Barrels, blast blocks and brick walls. Everything explodes eventually.</summary>
+        public static MapData PowderKeg()
+        {
+            var m = New("Powder Keg", "Barrels everywhere, blast blocks in the walls. One stray shot starts a chain.", 40, 30, 40);
+            m.background = "#24160f";
+            m.Box(4, 7, 4, 32, 1, 32, "solid");
+            m.BoxMirror4(9, 8, 12, 4, 2, 1, "brick");
+            m.BoxMirror4(12, 8, 8, 1, 2, 3, "brick");
+            m.BoxMirror4(16, 8, 10, 1, 1, 1, "blast");
+            m.Box(18, 8, 18, 4, 3, 4, "brick");
+            m.Box(19, 11, 19, 2, 1, 2, "blast");
+            m.BoxMirror4(6, 8, 27, 2, 1, 2, "blast");
+            m.PropMirror4(PropKinds.Barrel, 7f, 8f, 16f);
+            m.PropMirror4(PropKinds.Barrel, 14.5f, 8f, 14.5f);
+            m.PropMirror4(PropKinds.Barrel, 15.5f, 8f, 14.5f);
+            m.PropMirror4(PropKinds.Crate, 11.5f, 8f, 20.5f);
+            m.Spawn(6, 8, 6, 0).Spawn(7, 8, 6, 0);
+            m.Spawn(33, 8, 33, 1).Spawn(32, 8, 33, 1);
+            m.Spawn(33, 8, 6, 2).Spawn(32, 8, 6, 2);
+            m.Spawn(6, 8, 33, 3).Spawn(7, 8, 33, 3);
+            m.Spawn(20, 8, 8, -1).Spawn(20, 8, 31, -1).Spawn(9, 8, 20, -1).Spawn(30, 8, 20, -1);
+            return m;
+        }
+
+        /// <summary>Glass walls, crystal pillars and a glass catwalk. Nothing here is safe cover for long.</summary>
+        public static MapData Glasshouse()
+        {
+            var m = New("Glasshouse", "Glass walls and crystal pillars shatter under fire. So does the catwalk.", 40, 30, 40);
+            m.background = "#102028";
+            m.Box(4, 7, 4, 32, 1, 32, "light");
+            m.BoxMirror4(10, 8, 14, 1, 3, 6, "glass");
+            m.BoxMirror4(14, 8, 10, 6, 3, 1, "glass");
+            m.BoxMirror4(15, 8, 15, 1, 4, 1, "crystal");
+            m.Box(19, 8, 19, 2, 4, 2, "crystal");
+            m.Box(8, 12, 19, 24, 1, 2, "glass");
+            m.BoxMirrorX(8, 8, 19, 1, 4, 2, "dark");
+            m.BoxMirrorX(5, 8, 19, 2, 1, 2, "bouncy");
+            m.PropMirror4(PropKinds.Ball, 12f, 8f, 12f);
+            m.Spawn(6, 8, 6, 0).Spawn(7, 8, 6, 0);
+            m.Spawn(33, 8, 33, 1).Spawn(32, 8, 33, 1);
+            m.Spawn(33, 8, 6, 2).Spawn(32, 8, 6, 2);
+            m.Spawn(6, 8, 33, 3).Spawn(7, 8, 33, 3);
+            m.Spawn(12, 13, 19, -1).Spawn(27, 13, 20, -1).Spawn(15, 13, 20, -1).Spawn(24, 13, 19, -1);
+            return m;
+        }
+
+        /// <summary>A giant windmill turns through the middle of a meadow, sweeping everything in its way.</summary>
+        public static MapData Windmill()
+        {
+            var m = New("Windmill", "The sails sweep through the meadow. Ride them up, or get batted away.", 44, 36, 30);
+            m.background = "#18222e";
+            m.Box(4, 7, 4, 36, 1, 22, "grass");
+            m.Box(21, 8, 13, 2, 9, 2, "dark");
+            m.Mech(MechKinds.Spinner, 10, 17, 12, k => { k.w = 24; k.h = 2; k.d = 1; k.axis = 2; k.period = 10f; k.type = "wood"; });
+            m.Mech(MechKinds.Spinner, 21, 6, 12, k => { k.w = 2; k.h = 24; k.d = 1; k.axis = 2; k.period = 10f; k.type = "wood"; });
+            m.BoxMirrorX(5, 11, 18, 5, 1, 5, "light");
+            m.BoxMirrorX(11, 8, 20, 2, 1, 2, "bouncy");
+            m.BoxMirrorX(6, 8, 13, 1, 2, 3, "wood");
+            m.PropMirror4(PropKinds.Ball, 16f, 8f, 8f);
+            m.PropMirror4(PropKinds.Box, 9.5f, 8f, 6.5f);
+            m.Spawn(6, 8, 6, 0).Spawn(6, 8, 9, 0);
+            m.Spawn(37, 8, 6, 1).Spawn(37, 8, 9, 1);
+            m.Spawn(6, 8, 24, 2).Spawn(8, 8, 24, 2);
+            m.Spawn(37, 8, 24, 3).Spawn(35, 8, 24, 3);
+            m.Spawn(7, 12, 20, -1).Spawn(36, 12, 20, -1).Spawn(8, 12, 21, -1).Spawn(35, 12, 21, -1);
+            return m;
+        }
+
+        /// <summary>Two castles across a lava moat, joined by sliding bridges.</summary>
+        public static MapData MoatRun()
+        {
+            var m = New("Moat Run", "Cross the lava moat on the sliding bridges and storm the gate.", 48, 32, 40);
+            m.background = "#2a1410";
+            m.Box(16, 5, 4, 16, 1, 32, "hazard");
+            m.Box(4, 6, 4, 12, 2, 32, "solid");
+            m.Box(32, 6, 4, 12, 2, 32, "solid");
+            m.Mech(MechKinds.Platform, 16, 7, 8, k => { k.w = 4; k.d = 4; k.dx = 12f; k.period = 8f; k.phase = 0f; });
+            m.Mech(MechKinds.Platform, 28, 7, 18, k => { k.w = 4; k.d = 4; k.dx = -12f; k.period = 8f; k.phase = 0.33f; });
+            m.Mech(MechKinds.Platform, 16, 7, 28, k => { k.w = 4; k.d = 4; k.dx = 12f; k.period = 8f; k.phase = 0.66f; });
+            m.Box(22, 7, 14, 4, 1, 2, "solid").Box(22, 7, 24, 4, 1, 2, "solid");
+            // Castle walls with openings, and a gate door each.
+            m.BoxMirrorX(12, 8, 4, 1, 3, 4, "brick");
+            m.BoxMirrorX(12, 8, 12, 1, 3, 6, "brick");
+            m.BoxMirrorX(12, 8, 22, 1, 3, 6, "brick");
+            m.BoxMirrorX(12, 8, 32, 1, 3, 4, "brick");
+            m.Mech(MechKinds.Door, 12, 8, 18, k => { k.w = 1; k.h = 3; k.d = 4; k.dy = 3.2f; k.period = 7f; k.type = "wood"; });
+            m.Mech(MechKinds.Door, 35, 8, 18, k => { k.w = 1; k.h = 3; k.d = 4; k.dy = 3.2f; k.period = 7f; k.phase = 0.5f; k.type = "wood"; });
+            m.PropMirror4(PropKinds.Barrel, 14.5f, 8f, 15f);
+            m.PropMirror4(PropKinds.Crate, 9.5f, 8f, 6.5f);
+            m.Spawn(7, 8, 10, 0).Spawn(7, 8, 12, 0);
+            m.Spawn(40, 8, 26, 1).Spawn(40, 8, 28, 1);
+            m.Spawn(7, 8, 26, 2).Spawn(7, 8, 28, 2);
+            m.Spawn(40, 8, 10, 3).Spawn(40, 8, 12, 3);
+            m.Spawn(23, 8, 14, -1).Spawn(24, 8, 15, -1).Spawn(23, 8, 24, -1).Spawn(24, 8, 25, -1);
+            return m;
+        }
+
+        /// <summary>Blocky trains rush across three lanes. They don't stop for spheres.</summary>
+        public static MapData RushHour()
+        {
+            var m = New("Rush Hour", "Trains shove you toward the borders. Ride on top or wait on the islands.", 44, 30, 44);
+            m.background = "#161822";
+            m.Box(4, 7, 4, 36, 1, 36, "solid");
+            m.Mech(MechKinds.Platform, 4, 8, 10, k => { k.w = 6; k.h = 2; k.d = 3; k.dx = 30f; k.period = 6f; k.phase = 0f; k.type = "dark"; });
+            m.Mech(MechKinds.Platform, 34, 8, 20, k => { k.w = 6; k.h = 2; k.d = 3; k.dx = -30f; k.period = 6f; k.phase = 0.3f; k.type = "dark"; });
+            m.Mech(MechKinds.Platform, 4, 8, 30, k => { k.w = 6; k.h = 2; k.d = 3; k.dx = 30f; k.period = 6f; k.phase = 0.6f; k.type = "dark"; });
+            m.Box(18, 8, 15, 8, 1, 3, "light").Box(18, 8, 25, 8, 1, 3, "light");
+            m.BoxMirrorX(8, 8, 16, 2, 2, 1, "crate");
+            m.BoxMirrorX(8, 8, 26, 2, 2, 1, "crate");
+            m.Prop(PropKinds.Crate, 19.5f, 9f, 16.5f).Prop(PropKinds.Crate, 24.5f, 9f, 26.5f);
+            m.Spawn(6, 8, 6, 0).Spawn(8, 8, 6, 0);
+            m.Spawn(35, 8, 37, 1).Spawn(37, 8, 37, 1);
+            m.Spawn(35, 8, 6, 2).Spawn(37, 8, 6, 2);
+            m.Spawn(6, 8, 37, 3).Spawn(8, 8, 37, 3);
+            m.Spawn(20, 9, 16, -1).Spawn(23, 9, 16, -1).Spawn(20, 9, 26, -1).Spawn(23, 9, 26, -1);
+            return m;
+        }
+
+        /// <summary>A rickety tower of planks and bricks with a blast block in the basement.</summary>
+        public static MapData TumbleTower()
+        {
+            var m = New("Tumble Tower", "A wobbly tower of planks, bricks and crates. Shoot the base and watch it fall apart.", 36, 40, 36);
+            m.background = "#1a1a2a";
+            m.Box(10, 7, 10, 16, 1, 16, "solid");
+            m.BoxMirror4(15, 8, 15, 1, 4, 1, "brick");
+            m.Box(15, 12, 15, 6, 1, 6, "wood");
+            m.BoxMirror4(15, 13, 15, 1, 3, 1, "brick");
+            m.Box(15, 16, 15, 6, 1, 6, "wood");
+            m.BoxMirror4(15, 17, 15, 1, 3, 1, "brick");
+            m.Box(15, 20, 15, 6, 1, 6, "wood");
+            m.Box(17, 8, 17, 2, 1, 2, "blast");
+            m.BoxMirror4(13, 8, 13, 1, 1, 1, "bouncy");
+            m.BoxMirror4(3, 9, 3, 5, 1, 5, "grass");
+            m.PropStack(PropKinds.Crate, 18f, 13f, 18f, 2);
+            m.Prop(PropKinds.Barrel, 16.5f, 17f, 16.5f).Prop(PropKinds.Ball, 18f, 21f, 18f);
+            m.PropMirror4(PropKinds.Box, 12.5f, 8f, 18f);
+            m.Spawn(11, 8, 11, 0).Spawn(12, 8, 11, 0);
+            m.Spawn(24, 8, 24, 1).Spawn(23, 8, 24, 1);
+            m.Spawn(24, 8, 11, 2).Spawn(23, 8, 11, 2);
+            m.Spawn(11, 8, 24, 3).Spawn(12, 8, 24, 3);
+            m.Spawn(5, 10, 5, -1).Spawn(30, 10, 30, -1).Spawn(30, 10, 5, -1).Spawn(5, 10, 30, -1);
             return m;
         }
     }

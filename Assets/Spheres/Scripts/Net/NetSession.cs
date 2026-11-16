@@ -363,6 +363,7 @@ namespace Spheres.Net
                 snapshotTimer = 1f / NetConst.SnapshotRate;
                 Broadcast(BuildSnapshot());
             }
+            SendProps(dt);
 
             if (Gm.State == GameState.CardPick)
             {
@@ -560,6 +561,85 @@ namespace Spheres.Net
 
         public void MirrorBox(Vector3 pos, Quaternion rot, Vector3 size, Color c, float life) =>
             FxWriter.Byte((int)FxKind.Box).Vec3(pos).Vec3(rot.eulerAngles).Vec3(size).Color(c).Float(life);
+
+        public void MirrorBlockGone(int index) =>
+            FxWriter.Byte((int)FxKind.BlockGone).UShort(index);
+
+        float propTimer, propFullTimer;
+        readonly List<Prop> propSend = new List<Prop>();
+
+        /// <summary>Host: stream moved / broken props (15 Hz) plus a full refresh every 2 s for late joiners.</summary>
+        void SendProps(float dt)
+        {
+            var map = Gm.Map;
+            if (map == null) return;
+            propTimer -= dt;
+            if (propTimer > 0f) return;
+            propTimer = 1f / 15f;
+            propFullTimer -= 1f / 15f;
+            bool full = propFullTimer <= 0f;
+            if (full) propFullTimer = 2f;
+            propSend.Clear();
+            foreach (var p in map.Props)
+            {
+                if (p == null) continue;
+                if (p.Removed)
+                {
+                    if (full || !p.SentRemoved) propSend.Add(p);
+                    continue;
+                }
+                var t = p.transform;
+                if (full || (t.position - p.SentPos).sqrMagnitude > 0.0004f || Quaternion.Angle(t.rotation, p.SentRot) > 0.5f) propSend.Add(p);
+            }
+            if (!full && propSend.Count == 0) return;
+            var w = new NetWriter(Msg.Props).Bool(full);
+            if (full)
+            {
+                var broken = map.BrokenBlocks;
+                int nb = Mathf.Min(broken.Count, 4000);
+                w.UShort(nb);
+                for (int i = 0; i < nb; i++) w.UShort(broken[i]);
+            }
+            int count = Mathf.Min(propSend.Count, 1000);
+            w.UShort(count);
+            for (int i = 0; i < count; i++)
+            {
+                var p = propSend[i];
+                w.UShort(p.Index).Bool(!p.Removed);
+                if (p.Removed) { p.SentRemoved = true; continue; }
+                var t = p.transform;
+                w.Vec3(t.position).Vec3(t.rotation.eulerAngles);
+                p.SentPos = t.position;
+                p.SentRot = t.rotation;
+            }
+            Broadcast(w.ToArray());
+        }
+
+        void ApplyProps(NetReader m)
+        {
+            var map = Gm.Map;
+            bool full = m.Bool();
+            if (full)
+            {
+                int nb = m.UShort();
+                for (int i = 0; i < nb; i++)
+                {
+                    int idx = m.UShort();
+                    if (map != null) map.NetBreakBlock(idx);
+                }
+            }
+            int count = m.UShort();
+            for (int i = 0; i < count; i++)
+            {
+                int idx = m.UShort();
+                bool alive = m.Bool();
+                var prop = map != null ? map.PropAt(idx) : null;
+                if (!alive) { if (prop != null) prop.NetRemove(); continue; }
+                var pos = m.Vec3();
+                var euler = m.Vec3();
+                if (prop != null) prop.NetTarget(pos, Quaternion.Euler(euler));
+            }
+        }
 
         public void MirrorFeed(string text) =>
             FxWriter.Byte((int)FxKind.Feed).Str(text);
@@ -828,6 +908,10 @@ namespace Spheres.Net
                     ApplyFx(m);
                     break;
 
+                case Msg.Props:
+                    if (Gm.NetClientMode) ApplyProps(m);
+                    break;
+
                 case Msg.MatchAbort:
                     if (Gm.NetClientMode) Gm.ClientExitMatch(GameState.Lobby);
                     ClearBulletViews();
@@ -998,6 +1082,12 @@ namespace Spheres.Net
                     case FxKind.Feed:
                         SpheresHud.AddFeedText(m.Str());
                         break;
+                    case FxKind.BlockGone:
+                    {
+                        int idx = m.UShort();
+                        if (Gm.Map != null) Gm.Map.NetBreakBlock(idx);
+                        break;
+                    }
                     default:
                         return; // unknown kind: can't continue parsing safely
                 }

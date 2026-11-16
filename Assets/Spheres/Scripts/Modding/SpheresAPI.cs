@@ -70,6 +70,10 @@ namespace Spheres
 
         public static void RegisterMap(string id, MapData map, string source = "Mod") => MapRegistry.Register(id, map, source);
         public static void RegisterBlockType(BlockType type) => BlockTypes.Register(type);
+        /// <summary>Add a physics prop kind (crate, barrel...) usable in maps as PropData.kind.</summary>
+        public static void RegisterPropKind(PropKind kind) => PropKinds.Register(kind);
+        /// <summary>Add a kill-feed line. Use {k} for the killer and {v} for the victim. See <see cref="DeathMessages"/>.</summary>
+        public static void AddDeathMessage(string category, string template) => DeathMessages.Add(category, template);
 
         /// <summary>Scan an extra folder for *.spherescards.json / *.spheresmap.json / *.spheresblocks.json and load it now.</summary>
         public static void LoadContentFolder(string folder)

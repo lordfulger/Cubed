@@ -14,12 +14,14 @@ namespace Spheres
         public MapData Data => Map != null ? Map.Data : null;
         public bool IsOpen { get; private set; }
 
-        enum BrushKind { Block, Spawn, Erase }
+        enum BrushKind { Block, Spawn, Erase, Mech, Prop }
 
         struct Brush
         {
             public BrushKind Kind;
             public string BlockType;
+            /// <summary>Mechanism or prop kind id.</summary>
+            public string Id;
             public int Team;
             public string Label;
             public Color Color;
@@ -27,6 +29,12 @@ namespace Spheres
 
         readonly List<Brush> brushes = new List<Brush>();
         int brushIndex;
+        /// <summary>Palette tab: 0 blocks, 1 moving parts, 2 props, 3 spawns.</summary>
+        int category;
+        static readonly string[] Categories = { "Blocks", "Moving", "Props", "Spawns" };
+        Mechanism selectedMech, hoverMech;
+        Prop hoverProp;
+        Rect mechRect;
         int layer = 8;
         bool mirrorX, mirrorZ, showGrid = true, showLoad, hidden;
         Camera cam;
@@ -62,8 +70,25 @@ namespace Spheres
             for (int team = 0; team < Teams.Max; team++)
                 brushes.Add(new Brush { Kind = BrushKind.Spawn, Team = team, Label = Teams.GetName(team) + " spawn", Color = Teams.GetColor(team) });
             brushes.Add(new Brush { Kind = BrushKind.Spawn, Team = -1, Label = "Any-team spawn", Color = Color.white });
+            foreach (var k in MechKinds.All)
+                brushes.Add(new Brush { Kind = BrushKind.Mech, Id = k, Label = MechKinds.Name(k), Color = k == MechKinds.Pendulum || k == MechKinds.Saw || k == MechKinds.Spikes ? new Color(1f, 0.35f, 0.3f) : new Color(0.45f, 0.85f, 1f) });
+            foreach (var k in PropKinds.All)
+                brushes.Add(new Brush { Kind = BrushKind.Prop, Id = k.Id, Label = k.Name, Color = k.Color });
             brushes.Add(new Brush { Kind = BrushKind.Erase, Label = "Eraser", Color = UIKit.Bad });
             brushIndex = Mathf.Clamp(brushIndex, 0, brushes.Count - 1);
+        }
+
+        static int CategoryOf(Brush b) =>
+            b.Kind == BrushKind.Block ? 0 : b.Kind == BrushKind.Mech ? 1 : b.Kind == BrushKind.Prop ? 2 : b.Kind == BrushKind.Spawn ? 3 : -1;
+
+        /// <summary>Brush indices shown in the current palette tab (eraser always last).</summary>
+        List<int> VisibleBrushes()
+        {
+            var list = new List<int>();
+            for (int i = 0; i < brushes.Count; i++)
+                if (CategoryOf(brushes[i]) == category) list.Add(i);
+            list.Add(brushes.Count - 1);
+            return list;
         }
 
         public static MapData NewMap()
@@ -141,6 +166,7 @@ namespace Spheres
             if (Map != null) DestroyImmediate(Map.gameObject);
             Map = MapRuntime.Build(data, true);
             Map.SetBorderStyle(true, true);
+            selectedMech = null;
             if (cam != null) cam.backgroundColor = Map.Background;
         }
 
@@ -196,7 +222,7 @@ namespace Spheres
             float dt = Time.unscaledDeltaTime;
             bool typing = GUIUtility.keyboardControl != 0;
             Vector2 mouseGui = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y) / UIKit.Scale;
-            bool overUi = panelRect.Contains(mouseGui) || (showLoad && loadRect.Contains(mouseGui));
+            bool overUi = panelRect.Contains(mouseGui) || (showLoad && loadRect.Contains(mouseGui)) || (selectedMech != null && mechRect.Contains(mouseGui));
             if (!overUi && (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)))
             {
                 GUIUtility.keyboardControl = 0; // leave text fields so WASD flies again
@@ -235,8 +261,11 @@ namespace Spheres
                 if (Input.GetKeyDown(KeyCode.X) && !ctrl) brushIndex = brushes.Count - 1;
                 if (Input.GetKeyDown(KeyCode.PageUp) || Input.GetKeyDown(KeyCode.RightBracket)) layer++;
                 if (Input.GetKeyDown(KeyCode.PageDown) || Input.GetKeyDown(KeyCode.LeftBracket)) layer--;
+                var vis = VisibleBrushes();
                 for (int i = 0; i < 9; i++)
-                    if (Input.GetKeyDown(KeyCode.Alpha1 + i) && i < brushes.Count) brushIndex = i;
+                    if (Input.GetKeyDown(KeyCode.Alpha1 + i) && i < vis.Count) brushIndex = vis[i];
+                if (Input.GetKeyDown(KeyCode.Tab)) { category = (category + 1) % Categories.Length; brushIndex = VisibleBrushes()[0]; }
+                if (Input.GetKeyDown(KeyCode.Delete) && selectedMech != null) { PushUndo(); Map.RemoveMech(selectedMech); selectedMech = null; }
             }
             if (!overUi)
             {
@@ -256,6 +285,8 @@ namespace Spheres
             hasCell = false;
             hoverBlock = null;
             hoverSpawn = null;
+            hoverMech = null;
+            hoverProp = null;
             if (blocked) return;
             var ray = cam.ScreenPointToRay(Input.mousePosition);
 
@@ -276,7 +307,9 @@ namespace Spheres
             {
                 hoverBlock = hit.collider.GetComponent<BlockInfo>();
                 hoverSpawn = hit.collider.GetComponent<SpawnMarker>();
-                if (hoverBlock != null || hoverSpawn != null)
+                hoverMech = hit.collider.GetComponentInParent<Mechanism>();
+                hoverProp = hit.collider.GetComponentInParent<Prop>();
+                if (hoverBlock != null || hoverSpawn != null || hoverMech != null || hoverProp != null)
                 {
                     var p = hit.point + hit.normal * 0.5f;
                     cell = new Vector3Int(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
@@ -310,7 +343,13 @@ namespace Spheres
             var brush = Current;
             if (down)
             {
-                if (brush.Kind == BrushKind.Erase && hoverBlock == null && hoverSpawn == null) return;
+                if (brush.Kind == BrushKind.Erase && hoverBlock == null && hoverSpawn == null && hoverMech == null && hoverProp == null) return;
+                if (brush.Kind == BrushKind.Mech && hoverMech != null)
+                {
+                    selectedMech = hoverMech; // click an existing part to edit it
+                    Status("Selected " + MechKinds.Name(selectedMech.Data.kind));
+                    return;
+                }
                 if (brush.Kind != BrushKind.Erase && !hasCell) return;
                 PushUndo();
                 stroking = true;
@@ -338,8 +377,45 @@ namespace Spheres
                         stroking = false;
                     }
                     break;
+                case BrushKind.Mech:
+                    if (down && hasCell)
+                    {
+                        var data = MechKinds.Preset(brush.Id, cell.x, cell.y, cell.z);
+                        if (brush.Id == MechKinds.Pendulum) data.y = Mathf.Min(Data.sizeY - 1, cell.y + Mathf.CeilToInt(data.length) + 1);
+                        Data.mechs.Add(data);
+                        selectedMech = Map.CreateMech(data, Data.mechs.Count - 1);
+                        foreach (var m in MirroredMechs(data))
+                        {
+                            Data.mechs.Add(m);
+                            Map.CreateMech(m, Data.mechs.Count - 1);
+                        }
+                        Status("Placed " + MechKinds.Name(brush.Id) + " (adjust it in the panel on the right)");
+                        stroking = false;
+                    }
+                    break;
+                case BrushKind.Prop:
+                    if (hasCell && strokeCells.Add(cell))
+                        foreach (var c in Mirrored(cell))
+                        {
+                            if (Data.props.Count >= 400) break;
+                            var pd = new PropData(brush.Id, c.x + 0.5f, c.y, c.z + 0.5f);
+                            Data.props.Add(pd);
+                            Map.CreateProp(pd, Data.props.Count - 1, true);
+                        }
+                    break;
                 case BrushKind.Erase:
-                    if (hoverBlock != null)
+                    if (hoverMech != null)
+                    {
+                        if (hoverMech == selectedMech) selectedMech = null;
+                        Map.RemoveMech(hoverMech);
+                        hoverMech = null;
+                    }
+                    else if (hoverProp != null)
+                    {
+                        Map.RemoveProp(hoverProp);
+                        hoverProp = null;
+                    }
+                    else if (hoverBlock != null)
                     {
                         if (hoverBlock.Data != null && (mirrorX || mirrorZ))
                         {
@@ -360,6 +436,19 @@ namespace Spheres
                     }
                     break;
             }
+        }
+
+        /// <summary>Copies of a moving part for the active mirror axes (travel is mirrored too).</summary>
+        IEnumerable<MechData> MirroredMechs(MechData m)
+        {
+            var list = new List<MechData>();
+            bool point = m.kind == MechKinds.Pendulum;
+            int mx = point ? Data.sizeX - 1 - m.x : Data.sizeX - m.x - m.w;
+            int mz = point ? Data.sizeZ - 1 - m.z : Data.sizeZ - m.z - m.d;
+            if (mirrorX && mx != m.x) { var c = m.Clone(); c.x = mx; c.dx = -c.dx; if (c.axis != 0) c.period = -c.period; list.Add(c); }
+            if (mirrorZ && mz != m.z) { var c = m.Clone(); c.z = mz; c.dz = -c.dz; if (c.axis != 2) c.period = -c.period; list.Add(c); }
+            if (mirrorX && mirrorZ && mx != m.x && mz != m.z) { var c = m.Clone(); c.x = mx; c.z = mz; c.dx = -c.dx; c.dz = -c.dz; list.Add(c); }
+            return list;
         }
 
         static int MirrorTeam(int team, int index)
@@ -404,13 +493,13 @@ namespace Spheres
             var brush = Current;
             if (brush.Kind == BrushKind.Erase)
             {
-                Transform t = hoverBlock != null ? hoverBlock.transform : hoverSpawn != null ? hoverSpawn.transform : null;
+                Transform t = hoverMech != null ? hoverMech.transform : hoverProp != null ? hoverProp.transform : hoverBlock != null ? hoverBlock.transform : hoverSpawn != null ? hoverSpawn.transform : null;
                 ghost.SetActive(t != null);
                 if (t != null)
                 {
                     ghost.transform.position = t.position;
                     ghost.transform.rotation = t.rotation;
-                    ghost.transform.localScale = t.lossyScale * 1.04f;
+                    ghost.transform.localScale = hoverMech != null ? hoverMech.Data.Size * 1.04f : hoverProp != null ? hoverProp.Kind.Size * 1.06f : t.lossyScale * 1.04f;
                     ghostMat.color = new Color(1f, 0.25f, 0.2f, 0.45f);
                 }
                 return;
@@ -421,6 +510,21 @@ namespace Spheres
             bool spawn = brush.Kind == BrushKind.Spawn;
             ghost.transform.localScale = spawn ? new Vector3(0.8f, 1f, 0.8f) : Vector3.one * 1.02f;
             ghost.transform.position = new Vector3(cell.x + 0.5f, cell.y + 0.5f, cell.z + 0.5f);
+            if (brush.Kind == BrushKind.Mech)
+            {
+                var preset = MechKinds.Preset(brush.Id, cell.x, cell.y, cell.z);
+                if (brush.Id != MechKinds.Pendulum && brush.Id != MechKinds.Spikes)
+                {
+                    ghost.transform.localScale = preset.Size * 1.02f;
+                    ghost.transform.position = preset.Center;
+                }
+            }
+            else if (brush.Kind == BrushKind.Prop)
+            {
+                var k = PropKinds.Get(brush.Id);
+                ghost.transform.localScale = k.Size;
+                ghost.transform.position = new Vector3(cell.x + 0.5f, cell.y + k.Size.y * 0.5f, cell.z + 0.5f);
+            }
             var c = brush.Color;
             ghostMat.color = new Color(c.r, c.g, c.b, 0.45f);
         }
@@ -533,17 +637,27 @@ namespace Spheres
                 }
             }
 
-            UIKit.Text(new Rect(x, y, w, 24f), "Brush  (1-9, X = eraser)", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(x, y, w, 24f), "Brush  (Tab = next tab, 1-9, X = eraser)", UIKit.Small, UIKit.Muted);
             y += 24f;
+            float tw = (w - 3f * 4f) / 4f;
+            for (int i = 0; i < Categories.Length; i++)
+                if (UIKit.Toggle(new Rect(x + i * (tw + 4f), y, tw, 28f), Categories[i], i == category, true))
+                {
+                    category = i;
+                    brushIndex = VisibleBrushes()[0];
+                }
+            y += 34f;
             float bw = (w - 6f) / 2f;
-            for (int i = 0; i < brushes.Count; i++)
+            var visible = VisibleBrushes();
+            for (int n = 0; n < visible.Count; n++)
             {
+                int i = visible[n];
                 var b = brushes[i];
-                var r = new Rect(x + (i % 2) * (bw + 6f), y + (i / 2) * 32f, bw, 28f);
+                var r = new Rect(x + (n % 2) * (bw + 6f), y + (n / 2) * 32f, bw, 28f);
                 if (UIKit.Toggle(r, "     " + b.Label, i == brushIndex, true)) brushIndex = i;
                 UIKit.Fill(new Rect(r.x + 6f, r.y + 7f, 14f, 14f), new Color(b.Color.r, b.Color.g, b.Color.b, 1f));
             }
-            y += Mathf.CeilToInt(brushes.Count / 2f) * 32f + 8f;
+            y += Mathf.CeilToInt(visible.Count / 2f) * 32f + 8f;
 
             layer = UIKit.StepperInt(new Rect(x, y, w, 30f), "Layer (wheel)", layer, 0, Data.sizeY - 1);
             y += 34f;
@@ -552,7 +666,7 @@ namespace Spheres
             if (UIKit.Toggle(new Rect(x + ((w - 12f) / 3f + 6f) * 2f, y, (w - 12f) / 3f, 30f), "Grid", showGrid, true)) showGrid = !showGrid;
             y += 38f;
 
-            UIKit.Text(new Rect(x, y, w, 20f), Data.blocks.Count + " blocks, " + Data.spawns.Count + " spawns", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(x, y, w, 20f), Data.blocks.Count + " blocks, " + Data.mechs.Count + " moving, " + Data.props.Count + " props, " + Data.spawns.Count + " spawns", UIKit.Small, UIKit.Muted);
             y += 26f;
 
             float hw = (w - 6f) / 2f;
@@ -579,11 +693,86 @@ namespace Spheres
             string info = hasCell ? "Cell " + cell.x + ", " + cell.y + ", " + cell.z : "";
             if (hoverBlock != null && hoverBlock.Type != null) info += "   " + hoverBlock.Type.Name;
             if (hoverSpawn != null) info += "   Spawn (" + (hoverSpawn.Data.team >= 0 ? Teams.GetName(hoverSpawn.Data.team) : "any") + ")";
+            if (hoverMech != null) info += "   " + MechKinds.Name(hoverMech.Data.kind) + " (click with a Moving brush to edit)";
+            if (hoverProp != null) info += "   " + hoverProp.Kind.Name;
             UIKit.Shadowed(new Rect(340f, s.y - 34f, s.x - 360f, 24f), info, UIKit.Small, Color.white);
             if (Time.unscaledTime - statusTime < 6f)
                 UIKit.Shadowed(new Rect(340f, 12f, s.x - 360f, 26f), status, UIKit.Label, UIKit.Accent);
 
+            if (selectedMech != null) DrawMechPanel();
             if (showLoad) DrawLoad();
+        }
+
+        static readonly string[] AxisNames = { "X", "Y (up)", "Z" };
+
+        void DrawMechPanel()
+        {
+            var s = UIKit.Size;
+            var m = selectedMech.Data;
+            float w = 300f;
+            mechRect = new Rect(s.x - w - 12f, 12f, w, Mathf.Min(s.y - 24f, 640f));
+            UIKit.Fill(mechRect, new Color(0.06f, 0.07f, 0.1f, 0.92f));
+            float x = mechRect.x + 10f, y = mechRect.y + 8f, iw = w - 20f;
+            UIKit.Text(new Rect(x, y, iw - 40f, 28f), MechKinds.Name(m.kind), UIKit.Label, UIKit.Accent);
+            if (UIKit.Btn(new Rect(mechRect.xMax - 40f, y, 30f, 26f), "X", true)) { selectedMech = null; return; }
+            y += 32f;
+            var before = JsonUtility.ToJson(m);
+            string snapshot = Data.ToJson(false);
+            const float rh = 28f, gap = 30f;
+            bool point = m.kind == MechKinds.Pendulum;
+            if (!point)
+            {
+                m.w = UIKit.StepperInt(new Rect(x, y, iw, rh), "Width", m.w, 1, 40); y += gap;
+                if (m.kind != MechKinds.Spikes && m.kind != MechKinds.Saw) { m.h = UIKit.StepperInt(new Rect(x, y, iw, rh), "Height", m.h, 1, 40); y += gap; }
+                m.d = UIKit.StepperInt(new Rect(x, y, iw, rh), "Depth", m.d, 1, 40); y += gap;
+            }
+            else
+            {
+                m.w = UIKit.StepperInt(new Rect(x, y, iw, rh), "Ball size", m.w, 1, 6); y += gap;
+                m.length = UIKit.Stepper(new Rect(x, y, iw, rh), "Arm length", m.length, 1f, 1f, 30f); y += gap;
+                m.angle = UIKit.Stepper(new Rect(x, y, iw, rh), "Swing", m.angle, 5f, 5f, 175f, "0", "°"); y += gap;
+            }
+            bool moves = m.kind == MechKinds.Door || m.kind == MechKinds.Platform || m.kind == MechKinds.Elevator || m.kind == MechKinds.Piston || m.kind == MechKinds.Saw;
+            if (moves)
+            {
+                m.dx = UIKit.Stepper(new Rect(x, y, iw, rh), "Travel X", m.dx, 1f, -40f, 40f); y += gap;
+                m.dy = UIKit.Stepper(new Rect(x, y, iw, rh), "Travel Y", m.dy, 1f, -40f, 40f); y += gap;
+                m.dz = UIKit.Stepper(new Rect(x, y, iw, rh), "Travel Z", m.dz, 1f, -40f, 40f); y += gap;
+            }
+            if (m.kind == MechKinds.Spinner || m.kind == MechKinds.Pendulum || m.kind == MechKinds.Saw)
+            {
+                m.axis = UIKit.Cycle(new Rect(x, y, iw, rh), "Axis", m.axis, AxisNames); y += gap;
+            }
+            m.period = UIKit.Stepper(new Rect(x, y, iw, rh), "Cycle time", m.period, 0.5f, -30f, 30f, "0.0", "s"); y += gap;
+            if (Mathf.Abs(m.period) < 0.5f) m.period = 0.5f;
+            m.phase = UIKit.Stepper(new Rect(x, y, iw, rh), "Offset", m.phase, 0.05f, 0f, 0.95f, "0.00"); y += gap;
+            m.deadly = UIKit.CheckRow(new Rect(x, y, iw, rh), "Deadly (hurts on touch)", m.deadly); y += gap;
+            if (m.deadly) { m.damage = UIKit.Stepper(new Rect(x, y, iw, rh), "Damage", m.damage, 5f, 5f, 200f); y += gap; }
+            if (m.kind != MechKinds.Pendulum && m.kind != MechKinds.Saw && m.kind != MechKinds.Spikes)
+            {
+                var types = BlockTypes.All.Where(t => !t.Transparent).ToList();
+                int ti = Mathf.Max(0, types.FindIndex(t => t.Id == m.type));
+                ti = UIKit.Cycle(new Rect(x, y, iw, rh), "Look", ti, types.Select(t => t.Name).ToArray());
+                m.type = types[Mathf.Clamp(ti, 0, types.Count - 1)].Id;
+                y += gap;
+            }
+            y += 4f;
+            if (UIKit.Toggle(new Rect(x, y, iw, rh), "Preview motion", Map.PreviewMotion, true)) Map.PreviewMotion = !Map.PreviewMotion;
+            y += gap + 4f;
+            if (UIKit.Btn(new Rect(x, y, iw, 30f), "Delete part (Del)", true))
+            {
+                PushUndo();
+                Map.RemoveMech(selectedMech);
+                selectedMech = null;
+                return;
+            }
+            mechRect.height = y + 40f - mechRect.y;
+            if (JsonUtility.ToJson(m) != before)
+            {
+                undo.Push(snapshot);
+                redo.Clear();
+                selectedMech = Map.RebuildMech(selectedMech);
+            }
         }
 
         void DrawLoad()

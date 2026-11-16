@@ -115,6 +115,51 @@ cell. `team: -1` means any team can use the spawn. If a team has no spawns, Sphe
 }
 ```
 
+#### Moving parts (`mechs`)
+
+Moving parts are driven by the round clock, so they line up on every machine online without extra traffic.
+
+| `kind` | What it does | Main fields |
+|---|---|---|
+| `door` | Slides by `dx/dy/dz` cells, holds open, slides back | `w h d`, `dx dy dz`, `period` |
+| `platform` | Smooth back-and-forth; riders are carried | `w h d`, `dx dy dz`, `period` |
+| `elevator` | Like a platform but rests longer at each end | `w h d`, `dy`, `period` |
+| `piston` | Slams out fast, retracts slowly (`deadly` hurts only while slamming) | `w h d`, `dx dy dz`, `period` |
+| `spinner` | Rotating bar around its center | `w h d`, `axis` (0 X, 1 Y, 2 Z), `period` (negative = reverse) |
+| `pendulum` | Spiked ball hanging from cell `x y z` | `w` (ball size), `length`, `angle`, `axis` |
+| `saw` | Spinning blade that travels along `dx/dy/dz` | `w`/`d` (diameter), `axis`, `dx dy dz` |
+| `spikes` | Floor trap on top of cell `y`: warns (red glow), stabs, retracts | `w d` |
+
+All kinds take `phase` (0-1, to stagger neighbours), `deadly`, `damage` and `type` (block type used for the look).
+Deadly parts deal `DamageType.Trap`, which blocking negates.
+
+```json
+"mechs": [
+  { "kind": "pendulum", "x": 20, "y": 23, "z": 11, "w": 2, "length": 14, "angle": 55, "axis": 0, "period": 3.4, "deadly": true, "damage": 35 },
+  { "kind": "door", "x": 21, "y": 8, "z": 10, "w": 2, "h": 6, "d": 4, "dy": 5.5, "period": 8 }
+]
+```
+
+#### Physics props (`props`)
+
+Loose objects the host simulates and streams to clients. `x z` is the center, `y` the floor height they stand on.
+Built-in kinds: `crate`, `box`, `barrel` (explodes, credits whoever shot it), `ball`, `heavy`. Code mods can add
+more with `SpheresAPI.RegisterPropKind(new PropKind { ... })`.
+
+```json
+"props": [ { "kind": "barrel", "x": 19.0, "y": 8, "z": 8.5 }, { "kind": "crate", "x": 12.5, "y": 8, "z": 6.5, "yaw": 30 } ]
+```
+
+Breakable block types: `glass`, `crate`, `wood`, `brick`, `crystal` and `blast` (explodes). A data-pack block type
+can explode too: add `"explodeRadius": 4, "explodeDamage": 40` to its `*.spheresblocks.json` entry.
+
+#### Death messages
+
+`SpheresAPI.AddDeathMessage("barrel_k", "{k} gift-wrapped a barrel for {v}")` adds a kill-feed line. Categories
+include `bullet`, `explosion`, `self`, `fall`, `border`, `lava`, `trap`, `spikes`, `pendulum`, `saw`, `piston`,
+`spinner`, `barrel` and `friendly`. Add `_k` for lines where another player gets the credit. Set `DamageInfo.Cause`
+in your own damage to use a category of your own.
+
 The easiest way to make a map is the in-game editor. It saves to `<persistentDataPath>/maps/*.spheresmap.json`, and you
 can copy that file into a mod.
 

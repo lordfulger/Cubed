@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Spheres
 {
-    public enum DamageType { Bullet, Explosion, Border, Fall, Hazard, Effect, Generic }
+    public enum DamageType { Bullet, Explosion, Border, Fall, Hazard, Effect, Generic, Trap }
 
     /// <summary>Describes one instance of damage. Effects and event handlers may change Amount.</summary>
     public class DamageInfo
@@ -18,8 +18,13 @@ namespace Spheres
         public bool Blockable = true;
         /// <summary>The bullet responsible, if any.</summary>
         public Bullet Bullet;
+        /// <summary>
+        /// Optional specific cause used for death messages, e.g. "barrel", "saw", "pendulum", "spikes",
+        /// "piston", "spinner", "blast_block". Mods may use their own (see <see cref="DeathMessages"/>).
+        /// </summary>
+        public string Cause;
 
-        public bool IsEnvironmental => Type == DamageType.Border || Type == DamageType.Fall || Type == DamageType.Hazard;
+        public bool IsEnvironmental => Type == DamageType.Border || Type == DamageType.Fall || Type == DamageType.Hazard || Type == DamageType.Trap;
     }
 
     public class DamageEventArgs

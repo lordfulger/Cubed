@@ -12,24 +12,61 @@ namespace Spheres
         public float Hp;
         /// <summary>True for blocks spawned during play (e.g. Cube Wall) that are not part of the map.</summary>
         public bool Temporary;
+        /// <summary>Position in the map's block list (-1 for temporary blocks). Used to sync breaks online.</summary>
+        public int Index = -1;
+        /// <summary>Who last damaged it (credited for blast-block kills).</summary>
+        public Player LastAttacker;
 
-        public void Damage(float amount)
+        public void Damage(float amount) => Damage(amount, null);
+
+        public void Damage(float amount, Player source)
         {
-            if (Type == null || !Type.Destructible || amount <= 0f) return;
+            if (Type == null || !Type.Destructible || amount <= 0f || broken) return;
+            if (GameManager.Instance != null && GameManager.Instance.NetClientMode) return; // host decides
+            if (source != null) LastAttacker = source;
             Hp -= amount;
             if (Hp <= 0f) Break();
+            else if (Type.Destructible && Hp < 0.5f * Type.Health) Crack();
         }
 
-        bool broken;
+        bool broken, cracked;
+
+        void Crack()
+        {
+            if (cracked) return;
+            cracked = true;
+            Fx.Burst(transform.position, Type.Color, 4, 2.5f, 0.12f, 0.5f);
+        }
+
+        public bool IsBroken => broken;
 
         public void Break()
         {
             if (broken) return;
             broken = true;
             var size = transform.lossyScale;
+            var pos = transform.position;
             int count = Mathf.Clamp(Mathf.RoundToInt(size.x * size.y * size.z * 3f), 4, 30);
-            Fx.Burst(transform.position, Type != null ? Type.Color : Color.gray, count, 7f, 0.25f, 0.9f);
-            Sfx.PlayAt("hit", transform.position, 0.6f);
+            Fx.Burst(pos, Type != null ? Type.Color : Color.gray, count, 7f, 0.25f, 0.9f);
+            Sfx.PlayAt("hit", pos, 0.6f);
+            var map = GetComponentInParent<MapRuntime>();
+            if (map != null && Index >= 0) map.NoteBroken(Index);
+            if (Index >= 0 && Net.NetSession.Mirroring) Net.NetSession.Instance.MirrorBlockGone(Index);
+            if (Type != null && Type.ExplodeRadius > 0f)
+            {
+                var t = Type;
+                var owner = LastAttacker;
+                System.Action boom = () => Explosion.Create(pos, t.ExplodeRadius * Mathf.Max(1f, Mathf.Pow(size.x * size.y * size.z, 1f / 3f)), t.ExplodeDamage, owner, 20f, new Color(1f, 0.5f, 0.15f), true, "blast_block");
+                if (map != null) map.Delay(0.15f, boom); else boom();
+            }
+            Destroy(gameObject);
+        }
+
+        /// <summary>Client: the host broke this block (its effects arrive separately).</summary>
+        public void NetBreak()
+        {
+            if (broken) return;
+            broken = true;
             Destroy(gameObject);
         }
     }
@@ -43,6 +80,7 @@ namespace Spheres
     /// <summary>
     /// The live arena: blocks, spawn points and the box of damaging borders (which can shrink).
     /// </summary>
+    [DefaultExecutionOrder(-60)]
     public class MapRuntime : MonoBehaviour
     {
         public MapData Data { get; private set; }
@@ -58,7 +96,20 @@ namespace Spheres
         /// <summary>Horizon color used for distance fog (set when the atmosphere is built).</summary>
         public Color FogColor = new Color(0.2f, 0.23f, 0.36f);
 
-        Transform blockRoot, spawnRoot, borderRoot;
+        Transform blockRoot, spawnRoot, borderRoot, mechRoot, propRoot;
+        readonly List<BlockInfo> blocksByIndex = new List<BlockInfo>();
+        readonly List<Mechanism> mechList = new List<Mechanism>();
+        readonly List<Prop> propList = new List<Prop>();
+        readonly List<int> brokenBlocks = new List<int>();
+        readonly List<(float at, System.Action action)> delayed = new List<(float, System.Action)>();
+
+        /// <summary>Round clock that drives moving parts (identical on host and clients).</summary>
+        public float Clock { get; private set; }
+        /// <summary>Editor: animate moving parts so you can preview them.</summary>
+        public bool PreviewMotion;
+        public IReadOnlyList<Mechanism> Mechanisms => mechList;
+        public IReadOnlyList<Prop> Props => propList;
+        public IReadOnlyList<int> BrokenBlocks => brokenBlocks;
         readonly Transform[] walls = new Transform[6];
 
         void OnDestroy()
@@ -85,7 +136,15 @@ namespace Spheres
             if (!string.IsNullOrEmpty(data.background) && ColorUtility.TryParseHtmlString(data.background, out var bg))
                 map.Background = bg;
 
-            foreach (var b in data.blocks) map.CreateBlock(b);
+            map.mechRoot = new GameObject("Mechanisms").transform;
+            map.mechRoot.SetParent(go.transform, false);
+            map.propRoot = new GameObject("Props").transform;
+            map.propRoot.SetParent(go.transform, false);
+
+            for (int i = 0; i < data.blocks.Count; i++) map.blocksByIndex.Add(map.CreateBlock(data.blocks[i], i));
+            for (int i = 0; i < data.mechs.Count; i++) map.CreateMech(data.mechs[i], i);
+            bool puppetProps = editorMode || (GameManager.Instance != null && GameManager.Instance.NetClientMode);
+            for (int i = 0; i < data.props.Count; i++) map.CreateProp(data.props[i], i, puppetProps);
             if (editorMode)
                 foreach (var s in data.spawns) map.CreateSpawnMarker(s);
 
@@ -98,7 +157,127 @@ namespace Spheres
 
         // ------------------------------------------------------------------ blocks
 
-        public BlockInfo CreateBlock(BlockData b)
+        public Mechanism CreateMech(MechData m, int index)
+        {
+            try
+            {
+                var mech = Mechanism.Create(m, index, mechRoot);
+                mechList.Add(mech);
+                return mech;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                return null;
+            }
+        }
+
+        public Prop CreateProp(PropData p, int index, bool puppet)
+        {
+            var prop = Prop.Create(p, index, propRoot, puppet);
+            propList.Add(prop);
+            return prop;
+        }
+
+        /// <summary>Editor: remove a moving part from the map data and scene.</summary>
+        public void RemoveMech(Mechanism m)
+        {
+            if (m == null) return;
+            Data.mechs.Remove(m.Data);
+            mechList.Remove(m);
+            DestroyImmediate(m.gameObject);
+        }
+
+        /// <summary>Editor: rebuild a moving part after its settings changed.</summary>
+        public Mechanism RebuildMech(Mechanism m)
+        {
+            if (m == null) return null;
+            var data = m.Data;
+            int idx = mechList.IndexOf(m);
+            mechList.Remove(m);
+            DestroyImmediate(m.gameObject);
+            var fresh = Mechanism.Create(data, Data.mechs.IndexOf(data), mechRoot);
+            if (idx >= 0 && idx <= mechList.Count) mechList.Insert(idx, fresh); else mechList.Add(fresh);
+            return fresh;
+        }
+
+        public void RemoveProp(Prop p)
+        {
+            if (p == null) return;
+            Data.props.Remove(p.Data);
+            propList.Remove(p);
+            DestroyImmediate(p.gameObject);
+        }
+
+        public Prop PropAt(int index) => index >= 0 && index < propList.Count ? propList[index] : null;
+
+        public BlockInfo BlockByIndex(int index) => index >= 0 && index < blocksByIndex.Count ? blocksByIndex[index] : null;
+
+        internal void NoteBroken(int index)
+        {
+            if (!brokenBlocks.Contains(index)) brokenBlocks.Add(index);
+        }
+
+        /// <summary>Client: apply a block break sent by the host.</summary>
+        public void NetBreakBlock(int index)
+        {
+            var b = BlockByIndex(index);
+            NoteBroken(index);
+            if (b != null) b.NetBreak();
+        }
+
+        /// <summary>Run an action after a delay (cleared with the map).</summary>
+        public void Delay(float seconds, System.Action action)
+        {
+            if (action != null) delayed.Add((Time.time + seconds, action));
+        }
+
+        void UpdateClock(float dt)
+        {
+            var gm = GameManager.Instance;
+            if (EditorMode)
+            {
+                Clock = PreviewMotion ? Clock + Time.unscaledDeltaTime : 0f;
+                return;
+            }
+            if (gm == null) { Clock += dt; return; }
+            float target = gm.RoundTime;
+            if (!gm.NetClientMode) { Clock = target; return; }
+            // Clients: advance locally and ease toward the host's clock from snapshots.
+            bool running = (gm.State == GameState.Fighting || gm.State == GameState.RoundEnd) && !gm.HostPaused;
+            if (running) Clock += dt;
+            float err = target - Clock;
+            if (Mathf.Abs(err) > 0.5f) Clock = target;
+            else Clock += err * Mathf.Min(1f, dt * 2f);
+        }
+
+        void DriveMechanisms()
+        {
+            float dt = Time.deltaTime;
+            UpdateClock(dt);
+            if (mechList.Count > 0)
+            {
+                foreach (var m in mechList) if (m != null) m.Drive(Clock, dt);
+                Physics.SyncTransforms();
+                var gm = GameManager.Instance;
+                bool live = !EditorMode && gm != null && gm.State == GameState.Fighting && !gm.Paused;
+                if (!EditorMode)
+                    foreach (var m in mechList) if (m != null) m.Depenetrate();
+                if (live && !gm.NetClientMode)
+                    foreach (var m in mechList) if (m != null) m.HurtPlayers(dt);
+            }
+            for (int i = 0; i < delayed.Count; i++)
+            {
+                if (Time.time < delayed[i].at) continue;
+                var a = delayed[i].action;
+                delayed.RemoveAt(i--);
+                try { a(); } catch (System.Exception e) { Debug.LogException(e); }
+            }
+        }
+
+        public BlockInfo CreateBlock(BlockData b) => CreateBlock(b, -1);
+
+        public BlockInfo CreateBlock(BlockData b, int index)
         {
             var type = BlockTypes.Get(b.type);
             Color c = type.Color;
@@ -110,7 +289,8 @@ namespace Spheres
                 c = Quantize(c);
             }
             Material mat;
-            if (type.Transparent) mat = Mats.Transparent(c);
+            if (type.Transparent && type.Glowing && Mats.GlowAvailable) mat = Mats.Glow(new Color(c.r, c.g, c.b, 0.55f), 1.8f, 0f);
+            else if (type.Transparent) mat = Mats.Transparent(c);
             else if (type.DamagePerSecond > 0f) mat = AnimatedMaterial(type, 0);
             else if (type.BounceSpeed > 0f) mat = AnimatedMaterial(type, 1);
             else mat = Looks.Block(c);
@@ -127,7 +307,14 @@ namespace Spheres
                     lava ? Vector3.one * 1.01f : new Vector3(1.01f, 0.06f / b.H, 1.01f), glow);
                 skin.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
+            if (type.ExplodeRadius > 0f && Mats.GlowAvailable)
+            {
+                // Pulsing hazard stripe so blast blocks read as "don't shoot me while standing here".
+                var stripe = Prim.Cube("Stripe", go.transform, Vector3.zero, new Vector3(1.01f, 0.18f / b.H, 1.01f), GlowOverlay(type, false));
+                stripe.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
             var info = go.AddComponent<BlockInfo>();
+            info.Index = index;
             info.Data = b;
             info.Type = type;
             info.Hp = type.Health * Mathf.Max(1f, b.W * b.H * b.D * 0.5f);
@@ -165,6 +352,7 @@ namespace Spheres
 
         void Update()
         {
+            DriveMechanisms();
             float t = Time.time;
             foreach (var (mat, c, kind) in animatedList)
             {

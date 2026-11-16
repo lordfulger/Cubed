@@ -55,6 +55,7 @@ namespace Spheres
                     o.fovOffset = UIKit.Stepper(Row(), "Field of view offset", o.fovOffset, 5f, -15f, 25f, "+0;-0;0", "°");
                     Header("HUD");
                     o.damageNumbers = UIKit.CheckRow(Row(), "Damage numbers", o.damageNumbers);
+                    o.funnyDeathMessages = UIKit.CheckRow(Row(), "Funny death messages", o.funnyDeathMessages);
                     break;
 
                 case 1:

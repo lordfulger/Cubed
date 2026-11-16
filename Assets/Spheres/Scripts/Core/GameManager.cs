@@ -622,6 +622,7 @@ namespace Spheres
 
                 case GameState.RoundEnd:
                     if (Paused) break;
+                    RoundTime += Time.deltaTime; // keeps moving parts moving through the slow-mo
                     if (StateTime > 0.9f) Time.timeScale = 1f;
                     if (StateTime >= RoundEndDuration) AfterRound();
                     break;
