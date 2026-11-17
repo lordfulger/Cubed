@@ -341,14 +341,13 @@ namespace Spheres
         {
             var st = gm.Settings;
             float y = 0f;
-            const float h = 36f;
             void Section(string name)
             {
                 y += 8f;
                 UIKit.Text(new Rect(4f, y, w, 30f), name, UIKit.Header, UIKit.Accent);
                 y += 34f;
             }
-            Rect Row(float rowH = h) { var r = new Rect(4f, y, w - 8f, rowH); y += rowH + 4f; return r; }
+            Rect Row(float rowH = 36f) { var r = new Rect(4f, y, w - 8f, rowH); y += rowH + 4f; return r; }
 
             Section("Match");
             GameMode[] modeList = { GameMode.Elimination, GameMode.Deathmatch, GameMode.KingOfTheHill, GameMode.CardRush, GameMode.SphereBall, GameMode.HoldTheOrb, GameMode.Infection };
