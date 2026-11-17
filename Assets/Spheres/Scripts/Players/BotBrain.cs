@@ -178,7 +178,7 @@ namespace Spheres
                 else if (dist > pref + 3f) move += toN;
                 else if (dist < pref - 3f) move -= toN * 0.8f;
                 move += Vector3.Cross(Vector3.up, toN) * strafeDir * 0.75f;
-                if (height > 2.2f && dist < 14f) wantJump = true;
+                if (height > 2.2f && dist < 14f && LandingSafe(self, move)) wantJump = true;
             }
             else if (map != null && !FollowingPath)
             {
@@ -202,12 +202,13 @@ namespace Spheres
             if (self.Grounded)
             {
                 if (commitJumpTimer <= 0f) move = AvoidEdges(self, move, ref wantJump);
-                // Hop over low obstacles in our path.
+                // Hop over low obstacles in our path (only if we'd land somewhere safe).
                 if (move.sqrMagnitude > 0.1f &&
                     Physics.Raycast(pos + Vector3.up * 0.4f * self.Size, move.normalized, out var obstacle, 1.1f * self.Size, Bullet.CollisionMask, QueryTriggerInteraction.Ignore) &&
-                    obstacle.collider.GetComponent<Player>() == null)
+                    obstacle.collider.GetComponent<Player>() == null && LandingSafe(self, move))
                     wantJump = true;
-                if (Random.value < 0.004f * (1f + P.Aggression)) wantJump = true;
+                // The occasional hop to be harder to hit - never toward an edge.
+                if (Random.value < 0.0015f * (1f + P.Aggression) && LandingSafe(self, move)) wantJump = true;
             }
             else
             {
@@ -236,8 +237,8 @@ namespace Spheres
             Vector3 dir = move.normalized;
             if (IsSafe(self, dir, 1.4f)) return move;
 
-            // Gap ahead: if there's ground a jump away, commit to the jump.
-            if (IsSafe(self, dir, 4.5f) && self.GetStat(Stat.JumpHeight) > 1.2f)
+            // Gap ahead: if a jump lands on ground, commit to it.
+            if (self.GetStat(Stat.JumpHeight) > 1.2f && LandingSafe(self, dir))
             {
                 wantJump = true;
                 commitJumpTimer = 0.8f;
@@ -250,6 +251,22 @@ namespace Spheres
                 if (IsSafe(self, d, 1.4f)) return d * move.magnitude;
             }
             return Vector3.zero;
+        }
+
+        /// <summary>
+        /// Would a jump in this direction (at running speed) land on safe ground? Checks where the jump ends
+        /// plus a little past it, since bots keep running after they land.
+        /// </summary>
+        bool LandingSafe(Player self, Vector3 move)
+        {
+            if (move.sqrMagnitude < 0.01f) return true; // jumping in place
+            Vector3 dir = new Vector3(move.x, 0f, move.z).normalized;
+            float g = Player.Gravity;
+            float v = Mathf.Sqrt(2f * g * Mathf.Max(0.3f, self.GetStat(Stat.JumpHeight)));
+            float air = 2f * v / g;
+            float speed = Mathf.Max(new Vector3(self.Velocity.x, 0f, self.Velocity.z).magnitude, self.GetStat(Stat.MoveSpeed) * Mathf.Clamp01(move.magnitude));
+            float range = Mathf.Clamp(speed * air, 1f, 14f);
+            return IsSafe(self, dir, range) && IsSafe(self, dir, range + 1.2f);
         }
 
         bool IsSafe(Player self, Vector3 dir, float distance)
