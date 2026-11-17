@@ -39,7 +39,7 @@ so you can open it and press Play.
 
 ## Getting started
 
-1. Install **Unity 2022.3 LTS** (any 2022.3.x works; newer versions should work too).
+1. Install **Unity 2022.3 LTS**: 2022.3.62f2 or any later 2022.3.x (avoid 62f1, which has a security flaw). **Unity 6** also works: renamed physics APIs are handled with version checks, though the game hasn't been played in Unity 6 yet.
 2. Open this folder as a project in Unity Hub.
 3. On first load the `Spheres > Setup Project` step runs automatically. It creates `Assets/Spheres/Scenes/Main.unity`,
    adds it to Build Settings, makes sure the gamepad input axes exist, and sets the build to

@@ -692,7 +692,11 @@ namespace Spheres
                 {
                     // Dribble: the ball takes your speed plus a little lift.
                     var want = push.normalized * Mathf.Max(speed * 1.3f, 4f) + Vector3.up * 1.5f;
+#if UNITY_6000_0_OR_NEWER
+                    var dv = want - rb.linearVelocity;
+#else
                     var dv = want - rb.velocity;
+#endif
                     if (Vector3.Dot(dv, push) > 0f) rb.AddForce(dv * 0.6f, ForceMode.VelocityChange);
                     prop.LastAttacker = this;
                 }

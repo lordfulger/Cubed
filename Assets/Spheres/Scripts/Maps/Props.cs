@@ -1,6 +1,13 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_6000_0_OR_NEWER
+using PhysMat = UnityEngine.PhysicsMaterial;
+using PhysMatCombine = UnityEngine.PhysicsMaterialCombine;
+#else
+using PhysMat = UnityEngine.PhysicMaterial;
+using PhysMatCombine = UnityEngine.PhysicMaterialCombine;
+#endif
 
 namespace Spheres
 {
@@ -110,7 +117,7 @@ namespace Spheres
         Quaternion netRot;
         bool hasNet, puppet;
         float spawnTime;
-        static PhysicMaterial bouncyMat, woodMat;
+        static PhysMat bouncyMat, woodMat;
 
         void OnEnable() { if (!All.Contains(this)) All.Add(this); }
         void OnDisable() => All.Remove(this);
@@ -217,19 +224,24 @@ namespace Spheres
 
             if (k.Bounciness > 0f)
             {
-                if (bouncyMat == null) bouncyMat = new PhysicMaterial("PropBouncy") { bounciness = 0.85f, bounceCombine = PhysicMaterialCombine.Maximum, dynamicFriction = 0.3f, staticFriction = 0.3f };
+                if (bouncyMat == null) bouncyMat = new PhysMat("PropBouncy") { bounciness = 0.85f, bounceCombine = PhysMatCombine.Maximum, dynamicFriction = 0.3f, staticFriction = 0.3f };
                 col.sharedMaterial = bouncyMat;
             }
             else
             {
-                if (woodMat == null) woodMat = new PhysicMaterial("PropWood") { bounciness = 0.1f, dynamicFriction = 0.55f, staticFriction = 0.6f };
+                if (woodMat == null) woodMat = new PhysMat("PropWood") { bounciness = 0.1f, dynamicFriction = 0.55f, staticFriction = 0.6f };
                 col.sharedMaterial = woodMat;
             }
 
             Body = gameObject.AddComponent<Rigidbody>();
             Body.mass = k.Mass;
+#if UNITY_6000_0_OR_NEWER
+            Body.linearDamping = 0.05f;
+            Body.angularDamping = 0.2f;
+#else
             Body.drag = 0.05f;
             Body.angularDrag = 0.2f;
+#endif
             Body.interpolation = RigidbodyInterpolation.Interpolate;
             Body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             if (puppet)
@@ -280,7 +292,11 @@ namespace Spheres
         {
             if (Body != null && !Body.isKinematic)
             {
+#if UNITY_6000_0_OR_NEWER
+                Body.linearVelocity = Vector3.zero;
+#else
                 Body.velocity = Vector3.zero;
+#endif
                 Body.angularVelocity = Vector3.zero;
             }
             transform.position = pos;
