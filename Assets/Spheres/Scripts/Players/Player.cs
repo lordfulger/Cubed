@@ -600,18 +600,6 @@ namespace Spheres
             float accel = Grounded
                 ? GroundAccel * (groundBlock != null && groundBlock.Type != null ? groundBlock.Type.GroundAccel : 1f)
                 : AirAccel * GetStat(Stat.AirControl);
-            // Sliding along walls: if we're pressing into a wall we touched a moment ago, steer the desired
-            // movement along it at full speed instead of grinding to a halt.
-            if (Time.time - wallTime < 0.12f && desired.sqrMagnitude > 0.01f)
-            {
-                float into = Vector3.Dot(desired, wallNormal);
-                if (into < 0f)
-                {
-                    var along = desired - wallNormal * into;
-                    if (along.sqrMagnitude > 0.04f) desired = along.normalized * desired.magnitude;
-                    else desired = along;
-                }
-            }
             Vector3 horizontal = new Vector3(Velocity.x, 0f, Velocity.z);
             bool knockback = horizontal.magnitude > speed + 0.5f;
             if (Grounded && !knockback)
@@ -702,17 +690,10 @@ namespace Spheres
             else hazardTick = 0f;
         }
 
-        Vector3 wallNormal;
-        float wallTime = -1f;
+        static readonly System.Collections.Generic.Dictionary<Rigidbody, float> pushedAt = new System.Collections.Generic.Dictionary<Rigidbody, float>();
 
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
-            // Remember steep surfaces we bump into so movement can slide along them.
-            if (Mathf.Abs(hit.normal.y) < 0.3f && hit.collider.GetComponent<Player>() == null && (hit.collider.attachedRigidbody == null || hit.collider.attachedRigidbody.isKinematic))
-            {
-                wallNormal = new Vector3(hit.normal.x, 0f, hit.normal.z).normalized;
-                wallTime = Time.time;
-            }
             if (hit.normal.y > 0.6f)
             {
                 var mech = hit.collider.GetComponentInParent<Mechanism>();
@@ -740,6 +721,10 @@ namespace Spheres
                 else
                 {
                     // Shove props along at walking pace (heavier ones move slower) instead of grinding against them.
+                    // Once per physics step, so the push doesn't scale with frame rate.
+                    if (pushedAt.TryGetValue(rb, out float at) && at == Time.fixedTime) return;
+                    if (pushedAt.Count > 256) pushedAt.Clear();
+                    pushedAt[rb] = Time.fixedTime;
                     float want = Mathf.Max(speed, 3f) * Mathf.Clamp(2.5f / Mathf.Max(0.1f, rb.mass), 0.3f, 1.1f);
 #if UNITY_6000_0_OR_NEWER
                     float along = Vector3.Dot(rb.linearVelocity, push.normalized);
@@ -769,14 +754,20 @@ namespace Spheres
         void TryStepUp(Vector3 move)
         {
             if (Time.time < stepUpCooldown) return;
+            stepUpCooldown = Time.time + 0.15f; // also throttles the checks while running along tall walls
             float size = Size;
             Vector3 dir = new Vector3(move.x, 0f, move.z).normalized;
             Vector3 feet = transform.position;
             float reach = Controller.radius * size + 0.35f;
-            const float maxStep = 1.15f;
+            // Never higher than half a real jump (so jump-lowering cards still matter), scaled with size.
+            float maxStep = Mathf.Min(1.15f * size, GetStat(Stat.JumpHeight) * 0.5f);
             // Is there an obstacle right in front at foot height?
             if (!Physics.Raycast(feet + Vector3.up * 0.2f, dir, out var front, reach + 0.1f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
             if (front.collider.GetComponent<Player>() != null || front.normal.y > 0.6f) return;
+            // Props get pushed, not climbed.
+            if (front.collider.GetComponentInParent<Prop>() != null || (front.collider.attachedRigidbody != null && !front.collider.attachedRigidbody.isKinematic)) return;
+            // Only when running roughly into it, not when sliding along it.
+            if (Vector3.Dot(dir, -new Vector3(front.normal.x, 0f, front.normal.z).normalized) < 0.6f) return;
             // Find its top a little past the edge, and make sure there's room to stand there.
             Vector3 probe = feet + dir * (reach + 0.25f) + Vector3.up * (maxStep + 0.1f);
             if (!Physics.Raycast(probe, Vector3.down, out var top, maxStep + 0.1f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
@@ -787,10 +778,16 @@ namespace Spheres
             if (topBlock != null && topBlock.Type != null && topBlock.Type.DamagePerSecond > 0f) return;
             if (top.collider.GetComponent<Player>() != null) return;
             if (Mechanism.All.Count > 0 && Mechanism.AnyDangerAt(top.point + Vector3.up * 0.5f, 0.6f)) return;
+            // There must be somewhere to land: the top continues past the edge (not a thin wall over a drop).
+            Vector3 beyond = feet + dir * (reach + 0.85f) + Vector3.up * (maxStep + 0.1f);
+            if (!Physics.Raycast(beyond, Vector3.down, out var far, maxStep + 0.6f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
+            if (Mathf.Abs(far.point.y - top.point.y) > 0.35f) return;
+            var farBlock = far.collider.GetComponent<BlockInfo>();
+            if (farBlock != null && farBlock.Type != null && farBlock.Type.DamagePerSecond > 0f) return;
             float headroom = Controller.height * size;
             if (Physics.CheckCapsule(top.point + Vector3.up * (Controller.radius * size + 0.05f), top.point + Vector3.up * (headroom - Controller.radius * size), Controller.radius * size * 0.9f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
             Velocity.y = Mathf.Sqrt(2f * Gravity * (h + 0.25f));
-            Velocity += dir * 1.5f;
+            Velocity += dir * 0.8f;
             Grounded = false;
             stepUpCooldown = Time.time + 0.25f;
         }
