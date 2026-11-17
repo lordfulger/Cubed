@@ -85,7 +85,7 @@ namespace Spheres
                 // ---- Blocks with abilities -----------------------------------------------
                 C("pulse_guard", "Pulse Guard", "Blocking releases a shockwave that damages and pushes enemies.", Rarity.Uncommon, Utility)
                     .Effect("pulse_guard").Mul(Stat.BlockCooldown, 0.9f),
-                C("mirror_guard", "Mirror Guard", "Blocked bullets are reflected back.", Rarity.Rare, Utility)
+                C("mirror_guard", "Mirror Guard", "Blocked bullets fly straight back at the shooter.", Rarity.Rare, Utility)
                     .Effect("mirror_guard"),
                 C("cube_wall", "Cube Wall", "Blocking raises a temporary wall in front of you.", Rarity.Uncommon, Utility)
                     .Effect("cube_wall"),

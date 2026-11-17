@@ -368,6 +368,7 @@ namespace Spheres
                 st.pointsToWinRound = UIKit.StepperInt(Row(), "Fights to win a round (2 = best of 3)", st.pointsToWinRound, 1, 5);
             st.roundTimeLimit = UIKit.Stepper(Row(), "Round time limit", st.roundTimeLimit, 30f, 0f, 600f, "0", "s", "Off");
             st.friendlyFire = UIKit.CheckRow(Row(), "Friendly fire", st.friendlyFire);
+            st.reflectOnBlock = UIKit.CheckRow(Row(), "Blocking reflects bullets", st.reflectOnBlock);
 
             Section("Cards");
             st.cardsPerHand = UIKit.StepperInt(Row(), "Cards shown per pick", st.cardsPerHand, 1, 10);

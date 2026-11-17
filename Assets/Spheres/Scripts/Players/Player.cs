@@ -977,6 +977,19 @@ namespace Spheres
                 try { if (Effects[i].TryReflectBullet(bullet)) return true; }
                 catch (Exception e) { Debug.LogException(e); }
             }
+            // Every block reflects: the bullet bounces off the bubble like a mirror and now belongs to the blocker.
+            var s = Settings;
+            if (s == null || s.reflectOnBlock)
+            {
+                Vector3 normal = bullet.Position - Center;
+                if (normal.sqrMagnitude < 0.0001f) normal = -bullet.Velocity;
+                normal.Normalize();
+                Vector3 dir = Vector3.Reflect(bullet.Velocity.normalized, normal);
+                if (Vector3.Dot(dir, normal) < 0.1f) dir = (dir + normal).normalized; // always leave the bubble
+                bullet.Reflect(this, dir);
+                Fx.Burst(bullet.Position, Color.Lerp(Color, Color.white, 0.5f), 5, 5f, 0.1f, 0.25f);
+                return true;
+            }
             return false;
         }
 

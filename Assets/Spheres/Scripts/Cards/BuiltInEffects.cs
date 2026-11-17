@@ -8,7 +8,7 @@ namespace Spheres
         internal static void RegisterAll()
         {
             CardEffectRegistry.Register<PulseGuardEffect>("pulse_guard", "Blocking releases a damaging shockwave.");
-            CardEffectRegistry.Register<MirrorGuardEffect>("mirror_guard", "Blocked bullets are reflected.");
+            CardEffectRegistry.Register<MirrorGuardEffect>("mirror_guard", "Blocked bullets fly straight back at whoever shot them.");
             CardEffectRegistry.Register<CubeWallEffect>("cube_wall", "Blocking raises a temporary wall.");
             CardEffectRegistry.Register<PhaseStepEffect>("phase_step", "Blocking teleports you forward.");
             CardEffectRegistry.Register<FrostTipsEffect>("frost_tips", "Hits slow the target.");

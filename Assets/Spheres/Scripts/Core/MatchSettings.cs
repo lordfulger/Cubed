@@ -123,6 +123,8 @@ namespace Spheres
 
         // Combat
         public bool friendlyFire;
+        /// <summary>Blocking bounces bullets back off the bubble (instead of just stopping them).</summary>
+        public bool reflectOnBlock = true;
 
         // Preferences
         public float mouseSensitivity = 2f;
