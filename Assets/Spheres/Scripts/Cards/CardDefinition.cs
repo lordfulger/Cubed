@@ -33,6 +33,9 @@ namespace Spheres
         public Func<Player, bool> CanAppear;
         /// <summary>Optional code that runs when the card is picked.</summary>
         public Action<Player> OnApply;
+        /// <summary>Optional: force which cartoon the card shows (heart, bolt, sword, shield, bomb...), or supply your own picture.</summary>
+        public string ArtScene;
+        public UnityEngine.Texture2D ArtTexture;
 
         public CardDefinition() { }
 
@@ -56,12 +59,20 @@ namespace Spheres
         {
             switch (r)
             {
-                case Rarity.Uncommon: return new Color(0.35f, 0.85f, 0.45f);
-                case Rarity.Rare: return new Color(0.35f, 0.6f, 1f);
-                case Rarity.Legendary: return new Color(1f, 0.6f, 0.15f);
-                default: return new Color(0.75f, 0.75f, 0.78f);
+                case Rarity.Uncommon: return new Color(0.3f, 0.85f, 0.45f);
+                case Rarity.Rare: return new Color(0.3f, 0.55f, 1f);
+                case Rarity.Legendary: return new Color(1f, 0.72f, 0.18f);
+                default: return new Color(0.72f, 0.74f, 0.8f);
             }
         }
+
+        public static readonly Color CurseColor = new Color(0.62f, 0.32f, 0.85f);
+        public bool IsCurse => Tags.Contains("curse");
+
+        /// <summary>The color a card is drawn in: its rarity (purple for curses).</summary>
+        public static Color FrameColor(CardDefinition c) => c != null && c.IsCurse ? CurseColor : RarityColor(c != null ? c.Rarity : Rarity.Common);
+
+        public static string RarityName(CardDefinition c) => c.IsCurse ? "CURSE" : c.Rarity.ToString().ToUpperInvariant();
 
         public override string ToString() => Title + " (" + Id + ")";
     }

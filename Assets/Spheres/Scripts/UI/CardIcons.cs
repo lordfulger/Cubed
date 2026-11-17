@@ -113,13 +113,14 @@ namespace Spheres
         /// <summary>Draw a card's icon tile.</summary>
         public static void Draw(Rect r, CardDefinition c, float alpha)
         {
-            UIKit.Fill(r, new Color(c.Color.r * 0.35f, c.Color.g * 0.35f, c.Color.b * 0.35f, 0.95f * alpha));
-            UIKit.Outline(r, new Color(c.Color.r, c.Color.g, c.Color.b, alpha), 2f);
+            var cc = CardDefinition.FrameColor(c); // rarity color (purple for curses)
+            UIKit.Fill(r, new Color(cc.r * 0.3f, cc.g * 0.3f, cc.b * 0.3f, 0.95f * alpha));
+            UIKit.Outline(r, new Color(cc.r, cc.g, cc.b, alpha), 2f);
             var old = GUI.color;
             var inner = new Rect(r.x + r.width * 0.14f, r.y + r.height * 0.14f, r.width * 0.72f, r.height * 0.72f);
             GUI.color = new Color(0f, 0f, 0f, 0.5f * alpha);
             GUI.DrawTexture(new Rect(inner.x + 2f, inner.y + 2f, inner.width, inner.height), Glyph(PrimaryGlyph(c)));
-            GUI.color = Color.Lerp(c.Color, Color.white, 0.55f) * new Color(1f, 1f, 1f, alpha);
+            GUI.color = Color.Lerp(cc, Color.white, 0.55f) * new Color(1f, 1f, 1f, alpha);
             GUI.DrawTexture(inner, Glyph(PrimaryGlyph(c)));
             if (HasDrawback(c))
             {

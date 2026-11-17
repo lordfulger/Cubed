@@ -361,52 +361,149 @@ namespace Spheres
         // ------------------------------------------------------------------ cards
 
         /// <summary>Draws a card. Returns its stat/description layout height.</summary>
+        static GUIStyle cardTitle, cardTitleSmall, cardDesc, cardDescSmall, cardStat, cardStatSmall, cardCaption, cardPill;
+
+        /// <summary>
+        /// A card: rarity-colored frame (silver / green / blue / gold, purple for curses) with a cartoon of what it
+        /// does, a foil shine on Rare and Legendary cards and twinkles on Legendary ones.
+        /// </summary>
         public static void DrawCard(Rect r, CardDefinition c, bool highlighted, float alpha = 1f)
         {
             if (c == null) return;
-            var rc = CardDefinition.RarityColor(c.Rarity);
-            if (c.Rarity >= Rarity.Rare)
+            if (cardTitle == null)
             {
-                float glow = 0.18f + 0.12f * Mathf.Sin(Time.unscaledTime * (c.Rarity == Rarity.Legendary ? 5f : 3f));
-                Fill(new Rect(r.x - 4f, r.y - 4f, r.width + 8f, r.height + 8f), new Color(rc.r, rc.g, rc.b, glow * alpha));
+                cardTitle = new GUIStyle(HeaderCenter) { fontSize = 20, wordWrap = true, clipping = TextClipping.Clip };
+                cardTitleSmall = new GUIStyle(cardTitle) { fontSize = 16 };
+                cardDesc = new GUIStyle(WrapCenter) { fontSize = 14 };
+                cardDescSmall = new GUIStyle(cardDesc) { fontSize = 12 };
+                cardStat = new GUIStyle(SmallCenter) { fontSize = 14, fontStyle = FontStyle.Bold };
+                cardStatSmall = new GUIStyle(cardStat) { fontSize = 12 };
+                cardCaption = new GUIStyle(HeaderCenter) { fontSize = 22, fontStyle = FontStyle.Bold };
+                cardPill = new GUIStyle(SmallCenter) { fontSize = 11, fontStyle = FontStyle.Bold };
             }
-            if (highlighted) Fill(new Rect(r.x - 6f, r.y - 6f, r.width + 12f, r.height + 12f), new Color(rc.r, rc.g, rc.b, 0.35f * alpha));
-            Fill(r, new Color(0.1f, 0.11f, 0.16f, 0.97f * alpha));
-            Fill(new Rect(r.x, r.y, r.width, 54f), new Color(c.Color.r * 0.75f, c.Color.g * 0.75f, c.Color.b * 0.75f, alpha));
-            Outline(r, new Color(rc.r, rc.g, rc.b, alpha), highlighted ? 4f : 2f);
+            bool small = r.width < 170f;
+            var rc = CardDefinition.FrameColor(c);
+            float t = Time.unscaledTime;
+            bool rare = c.Rarity >= Rarity.Rare && !c.IsCurse, legendary = c.Rarity == Rarity.Legendary && !c.IsCurse;
+            if (highlighted) r.y -= 6f;
 
-            float pad = 10f;
-            float y = r.y + 6f;
-            var title = new GUIStyle(HeaderCenter) { fontSize = r.width < 170f ? 17 : 20, wordWrap = true };
-            Shadowed(new Rect(r.x + pad, y, r.width - pad * 2f, 30f), c.Title, title, new Color(1f, 1f, 1f, alpha));
-            y += 30f;
-            Text(new Rect(r.x + pad, y, r.width - pad * 2f, 18f), c.Rarity.ToString().ToUpperInvariant(), SmallCenter, new Color(rc.r, rc.g, rc.b, alpha));
-            y += 24f;
-
-            // Big cube icon.
-            float icon = Mathf.Min(r.width * 0.32f, 56f);
-            var iconRect = new Rect(r.center.x - icon * 0.5f, y, icon, icon);
-            CardIcons.Draw(iconRect, c, alpha);
-            y += icon + 10f;
-
-            var wrap = new GUIStyle(WrapCenter) { fontSize = r.width < 170f ? 13 : 15 };
-            float descH = wrap.CalcHeight(new GUIContent(c.Description), r.width - pad * 2f);
-            Text(new Rect(r.x + pad, y, r.width - pad * 2f, descH), c.Description, wrap, new Color(0.92f, 0.93f, 0.97f, alpha));
-            y += descH + 8f;
-
-            var small = new GUIStyle(SmallCenter) { fontSize = r.width < 170f ? 13 : 15 };
-            foreach (var m in c.Modifiers)
+            // Shadow and glow.
+            Fill(new Rect(r.x + 5f, r.y + 7f, r.width, r.height), new Color(0f, 0f, 0f, 0.35f * alpha));
+            if (rare || highlighted)
             {
-                if (y > r.yMax - 36f) break;
-                string text = StatInfo.Format(m, out int polarity);
+                float glow = highlighted ? 0.45f : 0.16f + 0.12f * Mathf.Sin(t * (legendary ? 5f : 3f));
+                for (int k = 3; k >= 1; k--)
+                    Fill(new Rect(r.x - k * 3f, r.y - k * 3f, r.width + k * 6f, r.height + k * 6f), new Color(rc.r, rc.g, rc.b, glow * alpha / k));
+            }
+
+            var old = GUI.color;
+            // Frame: rarity gradient.
+            GUI.color = new Color(rc.r, rc.g, rc.b, alpha);
+            GUI.DrawTexture(r, CardArt.Gradient);
+            // Inner panel: dark with a hint of the rarity color.
+            var inner = new Rect(r.x + 5f, r.y + 5f, r.width - 10f, r.height - 10f);
+            var dark = Color.Lerp(new Color(0.07f, 0.075f, 0.11f), rc, 0.12f);
+            GUI.color = new Color(dark.r * 1.7f, dark.g * 1.7f, dark.b * 1.7f, alpha);
+            GUI.DrawTexture(inner, CardArt.Gradient);
+            GUI.color = old;
+            Outline(r, new Color(Mathf.Min(1f, rc.r * 1.3f), Mathf.Min(1f, rc.g * 1.3f), Mathf.Min(1f, rc.b * 1.3f), alpha), highlighted ? 3f : 1.5f);
+
+            // Title band.
+            float pad = 9f;
+            var band = new Rect(inner.x, inner.y, inner.width, small ? 30f : 36f);
+            GUI.color = new Color(rc.r * 0.8f, rc.g * 0.8f, rc.b * 0.8f, alpha);
+            GUI.DrawTexture(band, CardArt.Gradient);
+            GUI.color = old;
+            Shadowed(new Rect(band.x + 4f, band.y + 1f, band.width - 8f, band.height), c.Title, small ? cardTitleSmall : cardTitle, new Color(1f, 1f, 1f, alpha));
+            float y = band.yMax + 5f;
+
+            // Picture.
+            float artW = inner.width - 8f, artH = artW * (CardArt.Height / (float)CardArt.Width);
+            artH = Mathf.Min(artH, r.height * 0.4f);
+            var art = new Rect(inner.x + 4f, y, artW, artH);
+            Fill(new Rect(art.x - 2f, art.y - 2f, art.width + 4f, art.height + 4f), new Color(0.03f, 0.03f, 0.05f, alpha));
+            var tex = CardArt.Get(c, out string caption);
+            if (tex != null)
+            {
+                GUI.color = new Color(1f, 1f, 1f, alpha);
+                GUI.DrawTexture(art, tex, ScaleMode.ScaleAndCrop);
+                GUI.color = old;
+            }
+            else Fill(art, new Color(rc.r * 0.5f, rc.g * 0.5f, rc.b * 0.5f, alpha));
+            // Category badge (the old pixel icon) in the picture's corner.
+            float badge = small ? 20f : 24f;
+            CardIcons.Draw(new Rect(art.x + 3f, art.y + 3f, badge, badge), c, alpha);
+            // Comic caption.
+            if (!string.IsNullOrEmpty(caption) && !small)
+            {
+                var m = GUI.matrix;
+                var pivot = new Vector2(art.xMax - 46f, art.y + 18f);
+                GUIUtility.RotateAroundPivot(-9f + Mathf.Sin(t * 2f + c.Id.Length) * 2f, pivot);
+                var cr = new Rect(pivot.x - 60f, pivot.y - 14f, 120f, 28f);
+                for (int dx = -2; dx <= 2; dx += 2)
+                    for (int dy = -2; dy <= 2; dy += 2)
+                        if (dx != 0 || dy != 0) Text(new Rect(cr.x + dx, cr.y + dy, cr.width, cr.height), caption, cardCaption, new Color(0.08f, 0.08f, 0.12f, alpha));
+                Text(cr, caption, cardCaption, new Color(1f, 0.92f, 0.3f, alpha));
+                GUI.matrix = m;
+            }
+            y = art.yMax + 6f;
+
+            // Rarity pill.
+            string rn = CardDefinition.RarityName(c);
+            float pw = cardPill.CalcSize(new GUIContent(rn)).x + 18f;
+            var pill = new Rect(r.center.x - pw * 0.5f, y, pw, 17f);
+            Fill(pill, new Color(rc.r, rc.g, rc.b, 0.9f * alpha));
+            Text(pill, rn, cardPill, new Color(0.06f, 0.06f, 0.09f, alpha));
+            y = pill.yMax + 6f;
+
+            // Description and stats.
+            var desc = small ? cardDescSmall : cardDesc;
+            float descH = desc.CalcHeight(new GUIContent(c.Description), inner.width - pad * 2f);
+            Text(new Rect(inner.x + pad, y, inner.width - pad * 2f, descH), c.Description, desc, new Color(0.93f, 0.94f, 0.98f, alpha));
+            y += descH + 6f;
+            var stat = small ? cardStatSmall : cardStat;
+            foreach (var mod in c.Modifiers)
+            {
+                if (y > inner.yMax - 22f) break;
+                string text = StatInfo.Format(mod, out int polarity);
                 Color col = polarity > 0 ? Good : polarity < 0 ? Bad : Muted;
                 col.a = alpha;
-                Text(new Rect(r.x + pad, y, r.width - pad * 2f, 20f), text, small, col);
-                y += 20f;
+                Text(new Rect(inner.x + pad, y, inner.width - pad * 2f, 18f), text, stat, col);
+                y += 18f;
             }
+            if (c.Source != "Spheres" && c.Source != "Curse")
+                Text(new Rect(inner.x + pad, inner.yMax - 18f, inner.width - pad * 2f, 16f), c.Source, SmallCenter, new Color(0.6f, 0.62f, 0.7f, alpha));
 
-            if (c.Source != "Spheres")
-                Text(new Rect(r.x + pad, r.yMax - 22f, r.width - pad * 2f, 18f), c.Source, SmallCenter, new Color(0.6f, 0.62f, 0.7f, alpha));
+            // Foil shine sweeping across Rare and Legendary cards.
+            if (rare && alpha > 0.05f)
+            {
+                GUI.BeginGroup(r);
+                var m = GUI.matrix;
+                float period = legendary ? 2.4f : 3.6f;
+                float k = Mathf.Repeat(t / period + c.Id.Length * 0.37f, 1f);
+                float bx = Mathf.Lerp(-r.width * 0.6f, r.width * 1.6f, k);
+                GUIUtility.RotateAroundPivot(22f, new Vector2(bx, r.height * 0.5f));
+                GUI.color = new Color(1f, 1f, 1f, (legendary ? 0.3f : 0.2f) * alpha);
+                GUI.DrawTexture(new Rect(bx - 22f, -r.height * 0.4f, 44f, r.height * 1.8f), CardArt.Shine);
+                GUI.matrix = m;
+                GUI.color = old;
+                GUI.EndGroup();
+            }
+            // Legendary twinkles.
+            if (legendary && alpha > 0.05f)
+            {
+                for (int i = 0; i < 7; i++)
+                {
+                    float sx = Mathf.Repeat(Mathf.Sin(i * 12.9898f + c.Id.Length) * 43758.5453f, 1f);
+                    float sy = Mathf.Repeat(Mathf.Sin(i * 78.233f + c.Id.Length) * 12543.123f, 1f);
+                    float tw = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(t * 2.3f + i * 1.9f)), 6f);
+                    if (tw < 0.02f) continue;
+                    float sz = (small ? 10f : 14f) * (0.6f + tw * 0.6f);
+                    GUI.color = new Color(1f, 0.95f, 0.75f, tw * alpha);
+                    GUI.DrawTexture(new Rect(r.x + sx * r.width - sz * 0.5f, r.y + sy * r.height - sz * 0.5f, sz, sz), CardArt.Sparkle);
+                }
+                GUI.color = old;
+            }
         }
     }
 }
