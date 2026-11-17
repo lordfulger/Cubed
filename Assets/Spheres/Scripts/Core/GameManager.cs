@@ -722,6 +722,7 @@ namespace Spheres
             Safe("map vote", UpdateLocalVoteInput);
             Safe("achievements", () => Achievements.Tick(udt));
             Safe("weather", () => Weather.Update(udt));
+            Safe("deck gear", () => DeckVisuals.Tick(udt));
             Safe("steam", Spheres.Net.SteamIntegration.Update);
             if (!launchJoinChecked && State == GameState.MainMenu)
             {
