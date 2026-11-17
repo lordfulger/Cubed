@@ -24,6 +24,12 @@ namespace Spheres
             new Item { Name = "Shadow", UnlockedBy = "bot_slayer" },
             new Item { Name = "Stardust", UnlockedBy = "collector" },
             new Item { Name = "Rainbow", UnlockedBy = "winner" },
+            new Item { Name = "Sunset" },
+            new Item { Name = "Bubblegum", UnlockedBy = "regular" },
+            new Item { Name = "Neon", UnlockedBy = "round_pro" },
+            new Item { Name = "Toxic", UnlockedBy = "hunter" },
+            new Item { Name = "Gold Dust", UnlockedBy = "rare_taste" },
+            new Item { Name = "Ghost", UnlockedBy = "untouchable" },
         };
 
         public static readonly Item[] Poses =
@@ -35,6 +41,11 @@ namespace Spheres
             new Item { Name = "Moonwalk", UnlockedBy = "online" },
             new Item { Name = "Backflip", UnlockedBy = "flawless" },
             new Item { Name = "Victory Lap", UnlockedBy = "veteran" },
+            new Item { Name = "Bow" },
+            new Item { Name = "Hop Scotch", UnlockedBy = "regular" },
+            new Item { Name = "Float", UnlockedBy = "iron_wall" },
+            new Item { Name = "Tornado", UnlockedBy = "round_pro" },
+            new Item { Name = "Shake", UnlockedBy = "clutch" },
         };
 
         public static bool Unlocked(Item item) =>
@@ -84,11 +95,27 @@ namespace Spheres
                     }, new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
                     time = 0.6f; width = 0.3f;
                     break;
+                case 8: g = Keys(0.85f, new Color(1f, 0.85f, 0.3f), new Color(1f, 0.4f, 0.45f), new Color(0.55f, 0.25f, 0.85f)); time = 0.5f; width = 0.28f; break;
+                case 9: g = Keys(0.85f, new Color(1f, 0.6f, 0.85f), Color.white, new Color(1f, 0.45f, 0.75f), new Color(0.6f, 0.9f, 1f)); time = 0.45f; width = 0.24f; break;
+                case 10: g = Keys(0.95f, new Color(0.3f, 1f, 1f), new Color(1f, 0.25f, 0.9f)); time = 0.35f; width = 0.14f; break;
+                case 11: g = Keys(0.85f, new Color(0.75f, 1f, 0.2f), new Color(0.2f, 0.7f, 0.15f), new Color(0.05f, 0.25f, 0.05f)); time = 0.55f; width = 0.32f; break;
+                case 12: g = Keys(0.9f, new Color(1f, 0.95f, 0.6f), new Color(1f, 0.75f, 0.2f), new Color(0.8f, 0.5f, 0.1f)); time = 0.8f; width = 0.1f; break;
+                case 13: g = Keys(0.4f, new Color(0.9f, 0.95f, 1f), new Color(0.75f, 0.8f, 1f)); time = 0.7f; width = 0.5f; break;
             }
             tr.colorGradient = g;
             tr.time = time;
             tr.widthCurve = new AnimationCurve(new Keyframe(0f, width), new Keyframe(1f, 0f));
             return tr;
+        }
+
+        /// <summary>Gradient through several colors, fading out from the given alpha.</summary>
+        static Gradient Keys(float alpha, params Color[] colors)
+        {
+            var g = new Gradient();
+            var ck = new GradientColorKey[colors.Length];
+            for (int i = 0; i < colors.Length; i++) ck[i] = new GradientColorKey(colors[i], colors.Length == 1 ? 0f : i / (float)(colors.Length - 1));
+            g.SetKeys(ck, new[] { new GradientAlphaKey(alpha, 0f), new GradientAlphaKey(0f, 1f) });
+            return g;
         }
 
         static Gradient Fade(Color a, Color b)
@@ -140,6 +167,49 @@ namespace Spheres
                     pos = new Vector3(Mathf.Cos(t * 2.2f), Mathf.Abs(Mathf.Sin(t * 8f)) * 0.2f, Mathf.Sin(t * 2.2f)) * 0.7f;
                     rot = Quaternion.LookRotation(new Vector3(-Mathf.Sin(t * 2.2f), 0f, Mathf.Cos(t * 2.2f)));
                     break;
+                case 7: // bow every 2 s
+                {
+                    float k = Mathf.Repeat(t, 2f);
+                    float f = k < 0.9f ? Mathf.Sin(k / 0.9f * Mathf.PI) : 0f;
+                    rot = Quaternion.Euler(f * 40f, 0f, 0f);
+                    pos.z = f * 0.12f;
+                    break;
+                }
+                case 8: // hop scotch: hop from side to side
+                {
+                    float ph = t * 2.6f;
+                    float side = Mathf.Floor(ph) % 2f == 0f ? -1f : 1f;
+                    float f = ph - Mathf.Floor(ph);
+                    pos.x = Mathf.Lerp(-side, side, Mathf.SmoothStep(0f, 1f, f)) * 0.35f;
+                    pos.y = Mathf.Sin(f * Mathf.PI) * 0.45f;
+                    rot = Quaternion.Euler(0f, 0f, -side * Mathf.Sin(f * Mathf.PI) * 15f);
+                    float sq = 1f - Mathf.Clamp01(0.15f - f) * 0.8f;
+                    scale = new Vector3(2f - sq, sq, 2f - sq);
+                    break;
+                }
+                case 9: // float: hover and drift
+                    pos.y = 0.45f + Mathf.Sin(t * 1.6f) * 0.12f;
+                    rot = Quaternion.Euler(Mathf.Sin(t * 1.1f) * 6f, t * 40f, Mathf.Cos(t * 1.3f) * 6f);
+                    break;
+                case 10: // tornado: rise while spinning fast
+                {
+                    float k = Mathf.Repeat(t, 2.4f) / 2.4f;
+                    float lift = Mathf.Sin(k * Mathf.PI);
+                    pos.y = lift * 0.8f;
+                    rot = Quaternion.Euler(0f, t * 360f + lift * 900f, 0f);
+                    float st = 1f - lift * 0.15f;
+                    scale = new Vector3(st, 2f - st, st);
+                    break;
+                }
+                case 11: // shake it out
+                {
+                    float k = Mathf.Repeat(t, 1.5f);
+                    float amp = k < 0.7f ? Mathf.Sin(k / 0.7f * Mathf.PI) : 0f;
+                    rot = Quaternion.Euler(0f, Mathf.Sin(t * 28f) * 12f * amp, Mathf.Sin(t * 34f) * 10f * amp);
+                    float sh = 1f + amp * 0.06f * Mathf.Sin(t * 30f);
+                    scale = new Vector3(sh, 1f / sh, sh);
+                    break;
+                }
                 default: // bounce
                     float b = Mathf.Abs(Mathf.Sin(t * 4.5f));
                     pos.y = b * 0.5f;

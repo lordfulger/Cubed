@@ -737,7 +737,43 @@ namespace Spheres
         // ------------------------------------------------------------------ character editor
 
         CharacterPreview preview;
-        int editSlot = -1, previewTeam;
+        int editSlot = -1, previewTeam, charTab;
+        // Locked items you are trying on (shown on the preview but not saved).
+        string tryHat;
+        int tryTrail = -1, tryPose = -1;
+        string builtPreview;
+        Vector2 hatScroll;
+        static readonly string[] CharTabs = { "Face", "Body", "Head", "Gear", "Style" };
+
+        void ClearTryOn()
+        {
+            tryHat = null;
+            tryTrail = tryPose = -1;
+        }
+
+        static string LockText(string achievementId)
+        {
+            var a = Achievements.All.FirstOrDefault(x => x.Id == achievementId);
+            return a == null ? "Locked" : "Locked - unlock with \"" + Loc.T(a.Title) + "\": " + Loc.T(a.Description);
+        }
+
+        /// <summary>A labeled row of color swatches. Returns the clicked index (or -2 for none). Index -1 draws "special".</summary>
+        int SwatchRow(float x, float y, float w, string label, int first, int count, int selected, Func<int, Color> color, Action<Rect> special = null)
+        {
+            UIKit.Text(new Rect(x, y, 160f, 34f), label, UIKit.Label, Color.white);
+            int n = count - first;
+            float sw = Mathf.Min(34f, (w - 170f) / n - 5f);
+            int clicked = -2;
+            for (int i = first; i < count; i++)
+            {
+                var r = new Rect(x + 170f + (i - first) * (sw + 5f), y + 3f, sw, 30f);
+                if (i < 0 && special != null) special(r);
+                else UIKit.Fill(r, color(i));
+                if (i == selected) UIKit.Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Color.white, 2f);
+                if (UIKit.Clickable(r) && i != selected) clicked = i;
+            }
+            return clicked;
+        }
 
         void DrawCharacterEditor()
         {
@@ -746,7 +782,11 @@ namespace Spheres
             pr.EnsureLooks();
             if (editSlot < 0) editSlot = pr.activeLook;
             var look = pr.looks[editSlot];
-            if (preview == null) preview = CharacterPreview.Create(Teams.GetColor(previewTeam), look);
+            if (preview == null)
+            {
+                preview = CharacterPreview.Create(Teams.GetColor(previewTeam), look);
+                builtPreview = null;
+            }
 
             float W = Mathf.Min(1180f, s.x - 40f), H = Mathf.Min(780f, s.y - 40f);
             var panel = new Rect(s.x * 0.5f - W * 0.5f, s.y * 0.5f - H * 0.5f, W, H);
@@ -762,7 +802,7 @@ namespace Spheres
                 {
                     editSlot = i;
                     look = pr.looks[i];
-                    preview.Rebuild(look);
+                    ClearTryOn();
                 }
             }
 
@@ -786,11 +826,12 @@ namespace Spheres
                 var r = new Rect(pv.x + t * (sw + 6f), pv.yMax + 10f, sw, 26f);
                 UIKit.Fill(r, Teams.GetColor(t));
                 if (t == previewTeam) UIKit.Outline(r, Color.white, 2f);
-                if (UIKit.Clickable(r)) { previewTeam = t; preview.SetTeamColor(Teams.GetColor(t), look); }
+                if (UIKit.Clickable(r)) { previewTeam = t; preview.Team = Teams.GetColor(t); }
             }
             UIKit.Text(new Rect(pv.x, pv.yMax + 40f, ps, 20f), "Preview on a team (team shows as the glowing band)", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(pv.x, pv.yMax + 64f, ps, 40f), "Each local player picks a saved character in Match Setup. Online, other players see your character.", UIKit.Wrap, UIKit.Muted);
 
-            // Options.
+            // Options column: name, category tabs, then the tab's rows.
             float x = pv.xMax + 30f, w = panel.xMax - 24f - x, y = panel.y + 110f;
             bool changed = false;
             UIKit.Text(new Rect(x, y, 80f, 34f), "Name", UIKit.Label, Color.white);
@@ -798,95 +839,184 @@ namespace Spheres
             if (newName != look.name) { look.name = newName; pr.Save(); }
             y += 46f;
 
-            int v;
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Eyes", look.eyes, CharacterLook.EyeStyles); if (v != look.eyes) { look.eyes = v; changed = true; } y += 44f;
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Mouth", look.mouth, CharacterLook.MouthStyles); if (v != look.mouth) { look.mouth = v; changed = true; } y += 44f;
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Face detail", look.detail, CharacterLook.Details); if (v != look.detail) { look.detail = v; changed = true; } y += 44f;
-
-            UIKit.Text(new Rect(x, y, 160f, 34f), "Eye glow", UIKit.Label, Color.white);
-            float cw = Mathf.Min(40f, (w - 170f) / CharacterLook.EyeColors.Length - 6f);
-            for (int i = 0; i < CharacterLook.EyeColors.Length; i++)
-            {
-                var r = new Rect(x + 170f + i * (cw + 6f), y + 3f, cw, 30f);
-                UIKit.Fill(r, CharacterLook.EyeColors[i]);
-                if (i == look.eyeColor) UIKit.Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Color.white, 2f);
-                if (UIKit.Clickable(r) && look.eyeColor != i) { look.eyeColor = i; changed = true; }
-            }
-            y += 48f;
-
-            // Body color: your own color, or your team's.
-            UIKit.Text(new Rect(x, y, 160f, 34f), "Body color", UIKit.Label, Color.white);
-            int nb = CharacterLook.BodyColors.Length + 1;
-            float bw2 = Mathf.Min(34f, (w - 170f) / nb - 5f);
-            for (int i = -1; i < CharacterLook.BodyColors.Length; i++)
-            {
-                var r = new Rect(x + 170f + (i + 1) * (bw2 + 5f), y + 3f, bw2, 30f);
-                if (i < 0)
+            float tabW = (w - (CharTabs.Length - 1) * 6f) / CharTabs.Length;
+            for (int i = 0; i < CharTabs.Length; i++)
+                if (UIKit.Toggle(new Rect(x + i * (tabW + 6f), y, tabW, 38f), CharTabs[i], charTab == i) && charTab != i)
                 {
-                    // "Team" swatch: split into a few team colors.
-                    for (int k = 0; k < 4; k++) UIKit.Fill(new Rect(r.x + k * r.width / 4f, r.y, r.width / 4f, r.height), Teams.GetColor(k));
+                    charTab = i;
+                    ClearTryOn();
                 }
-                else UIKit.Fill(r, CharacterLook.BodyColors[i]);
-                if (i == look.bodyColor) UIKit.Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Color.white, 2f);
-                if (UIKit.Clickable(r) && look.bodyColor != i) { look.bodyColor = i; changed = true; }
-            }
-            UIKit.Text(new Rect(x, y + 34f, w, 18f), look.bodyColor < 0 ? "Team color" : CharacterLook.BodyColorNames[look.bodyColor], UIKit.Small, UIKit.Muted);
-            y += 58f;
+            y += 50f;
+            float bottom = panel.yMax - 76f;
+            UIKit.Fill(new Rect(x - 8f, y - 6f, w + 16f, bottom - y + 6f), UIKit.Panel);
 
-            var hats = Hats.All.Where(hh => Hats.Unlocked(hh.Id)).ToList();
-            int hi = Mathf.Max(0, hats.FindIndex(hh => hh.Id == look.hat));
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Hat", hi, hats.Select(hh => hh.Name).ToArray());
-            if (v != hi) { look.hat = hats[v].Id; changed = true; }
-            y += 44f;
-            int locked = Hats.All.Count - hats.Count;
-            if (locked > 0) UIKit.Text(new Rect(x, y, w, 22f), locked + " more hats unlock through achievements.", UIKit.Small, UIKit.Muted);
-            y += 28f;
-
-            // Trails and victory poses (locked ones show what unlocks them).
-            string[] trailNames = Cosmetics.Trails.Select(c => Cosmetics.Unlocked(c) ? c.Name : c.Name + " (locked: " + Cosmetics.UnlockHint(c) + ")").ToArray();
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Trail", look.trail, trailNames);
-            if (v != look.trail && Cosmetics.Unlocked(Cosmetics.Trails[v])) { look.trail = v; changed = true; }
-            else if (v != look.trail) Toasts.Show("Locked", "Unlock \"" + Cosmetics.Trails[v].Name + "\" with the " + Cosmetics.UnlockHint(Cosmetics.Trails[v]) + " achievement.", UIKit.Muted);
-            y += 44f;
-            string[] poseNames = Cosmetics.Poses.Select(c => Cosmetics.Unlocked(c) ? c.Name : c.Name + " (locked: " + Cosmetics.UnlockHint(c) + ")").ToArray();
-            v = UIKit.Cycle(new Rect(x, y, w, 38f), "Victory pose", look.pose, poseNames);
-            if (v != look.pose && Cosmetics.Unlocked(Cosmetics.Poses[v])) { look.pose = v; changed = true; }
-            else if (v != look.pose) Toasts.Show("Locked", "Unlock \"" + Cosmetics.Poses[v].Name + "\" with the " + Cosmetics.UnlockHint(Cosmetics.Poses[v]) + " achievement.", UIKit.Muted);
-            y += 48f;
-
-            float bw = (w - 12f) / 3f;
-            if (UIKit.Btn(new Rect(x, y, bw, 40f), "Randomize", true))
+            int v;
+            switch (charTab)
             {
-                var r = CharacterLook.ForSeed(System.Guid.NewGuid().ToString());
+                case 0: // face
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Eyes", look.eyes, CharacterLook.EyeStyles); if (v != look.eyes) { look.eyes = v; changed = true; } y += 44f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Mouth", look.mouth, CharacterLook.MouthStyles); if (v != look.mouth) { look.mouth = v; changed = true; } y += 44f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Face detail", look.detail, CharacterLook.Details); if (v != look.detail) { look.detail = v; changed = true; } y += 48f;
+                    v = SwatchRow(x, y, w, "Eye glow", 0, CharacterLook.EyeColors.Length, look.eyeColor, i => CharacterLook.EyeColors[i]);
+                    if (v >= 0) { look.eyeColor = v; changed = true; }
+                    UIKit.Text(new Rect(x + 170f, y + 36f, w - 170f, 18f), CharacterLook.EyeColorNames[look.eyeColor], UIKit.Small, UIKit.Muted);
+                    break;
+
+                case 1: // body
+                {
+                    v = SwatchRow(x, y, w, "Body color", -1, CharacterLook.BodyColors.Length, look.bodyColor, i => CharacterLook.BodyColors[i],
+                        r => { for (int k = 0; k < 4; k++) UIKit.Fill(new Rect(r.x + k * r.width / 4f, r.y, r.width / 4f, r.height), Teams.GetColor(k)); });
+                    if (v >= -1) { look.bodyColor = v; changed = true; }
+                    UIKit.Text(new Rect(x + 170f, y + 36f, w - 170f, 18f), look.bodyColor < 0 ? "Team color" : CharacterLook.BodyColorNames[look.bodyColor], UIKit.Small, UIKit.Muted);
+                    y += 62f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Pattern", look.pattern, CharacterLook.Patterns); if (v != look.pattern) { look.pattern = v; changed = true; } y += 48f;
+                    var team = Teams.GetColor(previewTeam);
+                    v = SwatchRow(x, y, w, "Second color", 0, CharacterLook.SecondaryNames.Length, look.color2,
+                        i => i == CharacterLook.SecondaryTeam ? team : CharacterLook.SecondaryColors[i], null);
+                    // "Auto" and "Team" swatches get a marker so they read as special.
+                    float sw2 = Mathf.Min(34f, (w - 170f) / CharacterLook.SecondaryNames.Length - 5f);
+                    var auto = new Rect(x + 170f, y + 3f, sw2, 30f);
+                    UIKit.Fill(auto, new Color(0.25f, 0.27f, 0.33f));
+                    UIKit.Text(auto, "A", UIKit.SmallCenter, Color.white);
+                    var teamR = new Rect(x + 170f + CharacterLook.SecondaryTeam * (sw2 + 5f), y + 3f, sw2, 30f);
+                    UIKit.Text(teamR, "T", UIKit.SmallCenter, Color.black);
+                    if (look.color2 == 0) UIKit.Outline(new Rect(auto.x - 3f, auto.y - 3f, auto.width + 6f, auto.height + 6f), Color.white, 2f);
+                    if (v >= 0) { look.color2 = v; changed = true; }
+                    UIKit.Text(new Rect(x + 170f, y + 36f, w - 170f, 18f), (look.color2 == 0 ? "Auto (matches your body)" : CharacterLook.SecondaryNames[look.color2]) + "  - pattern, feet and gear", UIKit.Small, UIKit.Muted);
+                    y += 62f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Finish", look.finish, CharacterLook.Finishes); if (v != look.finish) { look.finish = v; changed = true; } y += 44f;
+                    if (look.finish == CharacterLook.FinishGlow && look.pattern == 0)
+                        UIKit.Text(new Rect(x, y, w, 22f), "Pick a pattern to see it glow.", UIKit.Small, UIKit.Muted);
+                    break;
+                }
+
+                case 2: // head
+                {
+                    string shownHat = tryHat ?? look.hat;
+                    var shown = Hats.Get(shownHat);
+                    UIKit.Text(new Rect(x, y, w, 26f), "Hat: <b>" + Loc.T(shown.Name) + "</b>", UIKit.Label, Color.white);
+                    var by = Hats.UnlockedBy(shownHat);
+                    if (tryHat != null && by != null) UIKit.Text(new Rect(x, y + 26f, w, 20f), LockText(by.Id), UIKit.Small, new Color(1f, 0.8f, 0.3f));
+                    else
+                    {
+                        int lockedCount = Hats.All.Count(h => !Hats.Unlocked(h.Id));
+                        UIKit.Text(new Rect(x, y + 26f, w, 20f), Hats.All.Count - 1 + " hats" + (lockedCount > 0 ? ", " + lockedCount + " unlock through achievements (gold mark)." : "."), UIKit.Small, UIKit.Muted);
+                    }
+                    y += 54f;
+                    int cols = Mathf.Max(2, Mathf.FloorToInt((w - 20f) / 140f));
+                    float cw = (w - 20f - (cols - 1) * 6f) / cols, ch = 32f;
+                    int rows = Mathf.CeilToInt(Hats.All.Count / (float)cols);
+                    var view = new Rect(x, y, w, bottom - y - 4f);
+                    var content = new Rect(0f, 0f, w - 20f, rows * (ch + 6f));
+                    hatScroll = GUI.BeginScrollView(view, hatScroll, content);
+                    for (int i = 0; i < Hats.All.Count; i++)
+                    {
+                        var hat = Hats.All[i];
+                        var r = new Rect((i % cols) * (cw + 6f), (i / cols) * (ch + 6f), cw, ch);
+                        bool unlocked = Hats.Unlocked(hat.Id);
+                        string label = unlocked ? Loc.T(hat.Name) : "<color=#8a8fa3>" + Loc.T(hat.Name) + "</color>";
+                        if (UIKit.Toggle(r, label, hat.Id == shownHat, true))
+                        {
+                            if (unlocked) { look.hat = hat.Id; tryHat = null; changed = true; }
+                            else tryHat = hat.Id;
+                        }
+                        if (!unlocked) UIKit.Fill(new Rect(r.x, r.y, 4f, r.height), new Color(1f, 0.78f, 0.25f, 0.9f));
+                    }
+                    GUI.EndScrollView();
+                    break;
+                }
+
+                case 3: // gear
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Feet", look.feet, CharacterLook.FeetStyles); if (v != look.feet) { look.feet = v; changed = true; } y += 44f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Back item", look.back, CharacterLook.BackItems); if (v != look.back) { look.back = v; changed = true; } y += 44f;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Blaster", look.blaster, CharacterLook.BlasterSkins); if (v != look.blaster) { look.blaster = v; changed = true; } y += 48f;
+                    UIKit.Text(new Rect(x, y, w, 40f), "Feet and gear use your second color (Body tab). The blaster tip always glows in your team color.", UIKit.Wrap, UIKit.Muted);
+                    break;
+
+                case 4: // style: trails and victory poses (locked ones can be previewed)
+                {
+                    int shownTrail = tryTrail >= 0 ? tryTrail : look.trail;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Trail", shownTrail, Cosmetics.Trails.Select(c => c.Name).ToArray());
+                    if (v != shownTrail)
+                    {
+                        if (Cosmetics.Unlocked(Cosmetics.Trails[v])) { look.trail = v; tryTrail = -1; changed = true; }
+                        else tryTrail = v;
+                    }
+                    y += 42f;
+                    if (tryTrail >= 0) UIKit.Text(new Rect(x, y, w, 20f), LockText(Cosmetics.Trails[tryTrail].UnlockedBy), UIKit.Small, new Color(1f, 0.8f, 0.3f));
+                    y += 28f;
+                    int shownPose = tryPose >= 0 ? tryPose : look.pose;
+                    v = UIKit.Cycle(new Rect(x, y, w, 38f), "Victory pose", shownPose, Cosmetics.Poses.Select(c => c.Name).ToArray());
+                    if (v != shownPose)
+                    {
+                        if (Cosmetics.Unlocked(Cosmetics.Poses[v])) { look.pose = v; tryPose = -1; changed = true; }
+                        else tryPose = v;
+                    }
+                    y += 42f;
+                    if (tryPose >= 0) UIKit.Text(new Rect(x, y, w, 20f), LockText(Cosmetics.Poses[tryPose].UnlockedBy), UIKit.Small, new Color(1f, 0.8f, 0.3f));
+                    y += 30f;
+                    int lockedT = Cosmetics.Trails.Count(c => !Cosmetics.Unlocked(c)), lockedP = Cosmetics.Poses.Count(c => !Cosmetics.Unlocked(c));
+                    UIKit.Text(new Rect(x, y, w, 60f), "The preview plays your pose and trail. Locked ones can be previewed; " + (lockedT + lockedP) + " still unlock through achievements.", UIKit.Wrap, UIKit.Muted);
+                    break;
+                }
+            }
+
+            // Bottom row.
+            float bw = (w - 12f) / 3f, byy = panel.yMax - 64f;
+            if (UIKit.Btn(new Rect(x, byy, bw, 46f), "Randomize", true))
+            {
+                var r = CharacterLook.ForSeed(Guid.NewGuid().ToString());
                 look.eyes = r.eyes; look.mouth = r.mouth; look.detail = r.detail; look.eyeColor = r.eyeColor;
-                if (Hats.Unlocked(r.hat)) look.hat = r.hat;
+                look.pattern = r.pattern; look.color2 = r.color2; look.finish = r.finish;
+                look.feet = r.feet; look.back = r.back; look.blaster = r.blaster;
+                var hats = Hats.All.Where(h => Hats.Unlocked(h.Id)).ToList();
+                look.hat = hats[UnityEngine.Random.Range(0, hats.Count)].Id;
+                var trails = Enumerable.Range(0, Cosmetics.Trails.Length).Where(i => Cosmetics.Unlocked(Cosmetics.Trails[i])).ToList();
+                look.trail = trails[UnityEngine.Random.Range(0, trails.Count)];
+                var poses = Enumerable.Range(0, Cosmetics.Poses.Length).Where(i => Cosmetics.Unlocked(Cosmetics.Poses[i])).ToList();
+                look.pose = poses[UnityEngine.Random.Range(0, poses.Count)];
+                ClearTryOn();
                 changed = true;
             }
-            if (UIKit.Toggle(new Rect(x + bw + 6f, y, bw, 40f), editSlot == pr.activeLook ? "Default character" : "Make default", editSlot == pr.activeLook, true))
+            if (UIKit.Toggle(new Rect(x + bw + 6f, byy, bw, 46f), editSlot == pr.activeLook ? "Default character" : "Make default", editSlot == pr.activeLook, true))
             {
                 pr.activeLook = editSlot;
                 pr.Save();
             }
-            if (UIKit.Btn(new Rect(x + (bw + 6f) * 2f, y, bw, 40f), "Reset", true))
+            if (UIKit.Btn(new Rect(x + (bw + 6f) * 2f, byy, bw, 46f), "Reset", true))
             {
                 var keepName = look.name;
                 pr.looks[editSlot] = new CharacterLook { name = keepName };
                 look = pr.looks[editSlot];
+                ClearTryOn();
                 changed = true;
             }
-            y += 56f;
-            UIKit.Text(new Rect(x, y, w, 60f), "Each local player picks a saved character in Match Setup. Online, other players see your character.", UIKit.Wrap, UIKit.Muted);
 
             if (changed)
             {
                 look.Clamp();
                 pr.Save();
-                preview.Rebuild(look);
                 Sfx.Play("pick", 0.4f, 0f);
             }
 
+            // Preview what you see (including locked items you're trying on); rebuild only when it changes.
+            var shownLook = look.Clone();
+            if (tryHat != null) shownLook.hat = tryHat;
+            if (tryTrail >= 0) shownLook.trail = tryTrail;
+            if (tryPose >= 0) shownLook.pose = tryPose;
+            bool style = charTab == 4;
+            preview.Pose = style ? shownLook.pose : -1;
+            string key = shownLook.Encode() + "|" + previewTeam;
+            if (key != builtPreview)
+            {
+                builtPreview = key;
+                preview.Rebuild(shownLook);
+            }
+            preview.SetTrail(style ? shownLook.trail : 0);
+
             if (UIKit.Btn(new Rect(panel.x + 20f, panel.yMax - 64f, 200f, 46f), "Back") || UIKit.BackPressed())
             {
+                ClearTryOn();
                 pr.Save();
                 gm.GoToMenu(GameState.MainMenu);
             }
@@ -894,7 +1024,7 @@ namespace Spheres
 
         // ------------------------------------------------------------------ profile
 
-        Vector2 profileScroll;
+        Vector2 profileScroll, profileHatScroll;
 
         void DrawProfile()
         {
@@ -938,7 +1068,10 @@ namespace Spheres
             float hx = x + cw + 16f, hw = W * 0.28f;
             UIKit.Fill(new Rect(hx, y, hw, H - 160f), UIKit.Panel);
             UIKit.Text(new Rect(hx + 12f, y + 12f, hw, 28f), "Hats", UIKit.Header, UIKit.Accent);
-            float hy = y + 50f;
+            // Scrolls: there are many hats.
+            var hatView = new Rect(hx + 4f, y + 48f, hw - 8f, H - 160f - 56f);
+            profileHatScroll = GUI.BeginScrollView(hatView, profileHatScroll, new Rect(0f, 0f, hatView.width - 20f, Hats.All.Count * 36f));
+            float hy = 0f;
             foreach (var hat in Hats.All)
             {
                 bool unlocked = Hats.Unlocked(hat.Id);
@@ -947,10 +1080,11 @@ namespace Spheres
                 var unlockBy = Achievements.All.FirstOrDefault(a => a.Hat == hat.Id);
                 string label = unlocked ? hat.Name : "<color=#777c8f>" + hat.Name + "  (" + unlockBy?.Title + ")</color>";
                 GUI.enabled = unlocked;
-                if (UIKit.Toggle(new Rect(hx + 12f, hy, hw - 24f, 32f), label, on, true)) { activeLook.hat = hat.Id; pr.Save(); }
+                if (UIKit.Toggle(new Rect(8f, hy, hatView.width - 36f, 32f), label, on, true)) { activeLook.hat = hat.Id; pr.Save(); }
                 GUI.enabled = true;
                 hy += 36f;
             }
+            GUI.EndScrollView();
 
             // Achievements
             float ax = hx + hw + 16f, aw = panel.xMax - 24f - ax;
