@@ -213,7 +213,7 @@ namespace Spheres.EditorTools
             if (PlayerSettings.colorSpace != ColorSpace.Linear) PlayerSettings.colorSpace = ColorSpace.Linear;
             ForceDomainReload();
             UseBuiltInRenderPipeline();
-            EnsureLegacyInputEnabled(interactive);
+            EnsureLegacyInputEnabled(true);
             if (PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Spheres";
 #if UNITY_2021_2_OR_NEWER
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
