@@ -31,7 +31,22 @@ namespace Spheres
             if (builtInsLoaded) return;
             builtInsLoaded = true;
             BuiltInMaps.RegisterAll();
+            RegisterRandomArena();
         }
+
+        /// <summary>
+        /// The "Random Arena" entry (id "random"). Choosing it generates a fresh map every round
+        /// (see <see cref="MapGenerator"/> and GameManager.LoadMapForRound); its Data is just a
+        /// sample used for menu previews and thumbnails.
+        /// </summary>
+        static void RegisterRandomArena()
+        {
+            try { Register(MapGenerator.RandomId, MapGenerator.Sample(), MapGenerator.Source); }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        /// <summary>True for the "Random Arena" entry.</summary>
+        public static bool IsRandom(string id) => MapGenerator.IsRandom(id);
 
         public static IReadOnlyList<MapEntry> All
         {

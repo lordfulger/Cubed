@@ -423,9 +423,13 @@ namespace Spheres
             OverviewCamera.rect = n == 0 ? new Rect(0f, 0f, 1f, 1f) : cells[Mathf.Min(n, cells.Length - 1)];
         }
 
+        /// <summary>The arena generated for the "Random Arena" entry, kept for the fights of one round.</summary>
+        MapData randomArena;
+
         void LoadMapForRound(bool first)
         {
             MapData data;
+            string previousId = CurrentMapId;
             if (editorTestMap != null)
             {
                 data = editorTestMap.Clone();
@@ -450,7 +454,20 @@ namespace Spheres
                     entry = MapRegistry.Get(CurrentMapId);
                 if (entry == null) entry = MapRegistry.GetOrDefault(Settings.mapId);
                 CurrentMapId = entry.Id;
-                data = entry.Data.Clone();
+                if (MapGenerator.IsRandom(entry.Id))
+                {
+                    // A brand-new arena each round; the fights within a round keep it (like a voted map).
+                    // Clients get the generated map as JSON from the host, like any other map.
+                    bool keep = !first && voted == null && !LastWasRoundWin && randomArena != null && previousId == entry.Id
+                        && (Settings.mapRotation == MapRotation.Fixed || Settings.mapRotation == MapRotation.Vote);
+                    if (!keep)
+                    {
+                        int teams = ActiveTeams.Count > 0 ? ActiveTeams.Max() + 1 : 4;
+                        randomArena = MapGenerator.Generate(UnityEngine.Random.Range(1, int.MaxValue), Mathf.Max(4, teams));
+                    }
+                    data = randomArena.Clone();
+                }
+                else data = entry.Data.Clone();
             }
             ReplaceMap(data);
         }

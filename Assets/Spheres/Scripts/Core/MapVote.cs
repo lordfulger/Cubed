@@ -139,12 +139,44 @@ namespace Spheres
         public static Texture2D Get(MapData m, string key = null)
         {
             if (m == null) return null;
+            bool mystery = MapGenerator.IsRandom(key);
             key = key ?? m.name;
             key += "|" + m.blocks.Count + "|" + m.mechs.Count + "|" + m.sizeX + "x" + m.sizeZ;
             if (cache.TryGetValue(key, out var tex) && tex != null) return tex;
             tex = Render(m);
+            if (mystery) QuestionMark(tex);
             cache[key] = tex;
             return tex;
+        }
+
+        static readonly string[] QuestionGlyph = { ".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.." };
+
+        /// <summary>Random Arena: dim the sample map and stamp a big "?" over it (a new map is made every round).</summary>
+        static void QuestionMark(Texture2D tex)
+        {
+            int res = tex.width;
+            var px = tex.GetPixels32();
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32((byte)(px[i].r * 0.45f), (byte)(px[i].g * 0.45f), (byte)(px[i].b * 0.45f), 255);
+            int cell = res / 11, gw = 5 * cell, gh = 7 * cell;
+            int x0 = (res - gw) / 2, y0 = (res - gh) / 2;
+            var shadow = new Color32(10, 12, 20, 255);
+            var ink = new Color32(255, 214, 92, 255);
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int off = pass == 0 ? 3 : 0;
+                for (int gy = 0; gy < 7; gy++)
+                    for (int gx = 0; gx < 5; gx++)
+                    {
+                        if (QuestionGlyph[gy][gx] != '#') continue;
+                        // Texture rows run bottom-up.
+                        int bx = x0 + gx * cell + off, by = y0 + (6 - gy) * cell - off;
+                        for (int y = by; y < by + cell; y++)
+                            for (int x = bx; x < bx + cell; x++)
+                                if (x >= 0 && y >= 0 && x < res && y < res) px[y * res + x] = pass == 0 ? shadow : ink;
+                    }
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
         }
 
         public static void Clear()

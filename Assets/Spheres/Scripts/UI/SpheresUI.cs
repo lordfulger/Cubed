@@ -502,7 +502,7 @@ namespace Spheres
             Section("Map");
             var maps = MapRegistry.All;
             int mi = Mathf.Max(0, maps.ToList().FindIndex(m => m.Id == st.mapId));
-            string[] mapNames = maps.Select(m => m.Data.name + (m.Source != "Spheres" ? " (" + m.Source + ")" : "")).ToArray();
+            string[] mapNames = maps.Select(m => m.Data.name + (m.Source != "Spheres" && !MapRegistry.IsRandom(m.Id) ? " (" + m.Source + ")" : "")).ToArray();
             if (mapNames.Length > 0)
             {
                 int newMi = UIKit.Cycle(Row(), "Map", mi, mapNames);
@@ -519,7 +519,9 @@ namespace Spheres
                 var tex = MapThumbnails.Get(thumbEntry.Data, thumbEntry.Id);
                 if (tex != null) GUI.DrawTexture(new Rect(tr.x + 4f, tr.y, 120f, 120f), tex, ScaleMode.ScaleToFit);
                 var d = thumbEntry.Data;
-                string info = "<b>" + d.name + "</b>\n" + d.description + "\n<color=#8890a8>" + d.sizeX + "×" + d.sizeY + "×" + d.sizeZ
+                string info = MapRegistry.IsRandom(thumbEntry.Id)
+                    ? "<b>" + MapGenerator.RandomName + "</b>\n" + MapGenerator.RandomDescription + ".\n<color=#8890a8>" + MapGenerator.Summary + "</color>"
+                    : "<b>" + d.name + "</b>\n" + d.description + "\n<color=#8890a8>" + d.sizeX + "×" + d.sizeY + "×" + d.sizeZ
                     + (d.mechs.Count > 0 ? ", " + d.mechs.Count + " moving parts" : "") + (d.props.Count > 0 ? ", " + d.props.Count + " props" : "") + "</color>";
                 UIKit.Text(new Rect(tr.x + 134f, tr.y, tr.width - 138f, 120f), info, UIKit.Wrap, Color.white);
             }

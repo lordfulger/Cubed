@@ -789,6 +789,7 @@ namespace Spheres
             UIKit.Fill(loadRect, UIKit.Panel);
             UIKit.Text(new Rect(loadRect.x + 14f, loadRect.y + 8f, 300f, 30f), "Load map", UIKit.Header, Color.white);
             if (UIKit.Btn(new Rect(loadRect.xMax - 44f, loadRect.y + 8f, 34f, 30f), "X", true)) showLoad = false;
+            if (UIKit.Btn(new Rect(loadRect.xMax - 230f, loadRect.y + 8f, 180f, 30f), "New random map", true)) LoadRandomMap();
             var view = new Rect(loadRect.x + 8f, loadRect.y + 46f, loadRect.width - 16f, loadRect.height - 54f);
             var maps = MapRegistry.All.ToList();
             var content = new Rect(0f, 0f, view.width - 20f, maps.Count * 40f);
@@ -801,6 +802,7 @@ namespace Spheres
                 UIKit.Text(new Rect(r.x + 8f, r.y, r.width - 200f, r.height), m.Data.name + "  <color=#8890a8>" + m.Source + "</color>", UIKit.Label, Color.white);
                 if (UIKit.Btn(new Rect(r.xMax - (m.IsUserMap ? 180f : 90f), r.y + 4f, 84f, 28f), "Edit", true))
                 {
+                    if (MapRegistry.IsRandom(m.Id)) { LoadRandomMap(); continue; }
                     PushUndo();
                     Rebuild(m.Data.Clone());
                     if (!m.IsUserMap) Data.name = m.Data.name + " (copy)";
@@ -814,6 +816,18 @@ namespace Spheres
                 }
             }
             GUI.EndScrollView();
+        }
+
+        /// <summary>Load panel: open a freshly generated arena (see MapGenerator) for editing.</summary>
+        void LoadRandomMap()
+        {
+            PushUndo();
+            var data = MapGenerator.Generate(UnityEngine.Random.Range(1, int.MaxValue));
+            Rebuild(data);
+            showLoad = false;
+            layer = Mathf.Clamp(layer, 0, Data.sizeY - 1);
+            FrameMap();
+            Status("Generated " + data.name);
         }
     }
 }
