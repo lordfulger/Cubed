@@ -45,6 +45,14 @@ namespace Spheres
         static Color bannerColor = Color.white;
         static float bannerTime = -99f;
 
+        /// <summary>Big announcement on this machine only (combos, which every machine works out itself).</summary>
+        public static void ShowBannerLocal(string text, Color color)
+        {
+            bannerText = text;
+            bannerColor = color;
+            bannerTime = Time.unscaledTime;
+        }
+
         /// <summary>Big centered announcement (GOAL!, curses). Mirrored online.</summary>
         public static void ShowBanner(string text, Color color)
         {
@@ -324,11 +332,43 @@ namespace Spheres
                 UIKit.Shadowed(new Rect(row.x + icon + 10f, cy, area.width - icon - 14f, rowH), label, UIKit.Small, hot ? Color.white : new Color(1f, 1f, 1f, 0.78f));
                 cy += rowH;
             }
+
+            // Active combos (any two keywords in your deck combine).
+            var combos = Combos.Active(p.Cards);
+            if (combos.Count == 0 || cy > area.yMax - 20f) return;
+            cy += 4f;
+            UIKit.Shadowed(new Rect(area.x + 10f, cy, area.width, 16f), "COMBOS (" + combos.Count + ")", UIKit.Small, new Color(1f, 0.85f, 0.3f, 0.9f));
+            cy += 17f;
+            foreach (var (combo, level) in combos.OrderByDescending(x => x.level))
+            {
+                if (cy > area.yMax) break;
+                var row = new Rect(area.x + 6f, cy, area.width - 4f, 16f);
+                bool hot = interactive && row.Contains(mouse);
+                if (hot)
+                {
+                    UIKit.Fill(row, new Color(1f, 0.85f, 0.3f, 0.2f));
+                    comboTip = combo.Description + "  (level " + level + ")";
+                    comboTipAnchor = new Rect(row.x + groupOffset.x, row.y + groupOffset.y, row.width, row.height);
+                }
+                UIKit.Shadowed(new Rect(row.x + 6f, cy, area.width - 10f, 16f), combo.Name + (level > 1 ? "  Lv" + level : ""), UIKit.Small, hot ? Color.white : new Color(1f, 0.92f, 0.6f, 0.8f));
+                cy += 16f;
+            }
         }
+
+        static string comboTip;
+        static Rect comboTipAnchor;
 
         /// <summary>Draw the full card for whatever is hovered/focused this frame (drawn last, on top).</summary>
         static void DrawTooltip()
         {
+            if (!string.IsNullOrEmpty(comboTip))
+            {
+                var tr = new Rect(comboTipAnchor.xMax + 10f, comboTipAnchor.y - 6f, 300f, 46f);
+                UIKit.Fill(tr, new Color(0.05f, 0.05f, 0.08f, 0.95f));
+                UIKit.Outline(tr, new Color(1f, 0.85f, 0.3f), 1.5f);
+                UIKit.Text(new Rect(tr.x + 8f, tr.y + 4f, tr.width - 16f, tr.height - 8f), comboTip, UIKit.Wrap, Color.white);
+                if (Event.current.type == EventType.Repaint) comboTip = null;
+            }
             if (tooltipCard == null) return;
             const float w = 210f, h = 300f;
             float x = tooltipAnchor.xMax + 12f;
@@ -565,6 +605,13 @@ namespace Spheres
                     continue;
                 }
                 UIKit.DrawCard(r, st.Hand[i], hl);
+                // Which combos taking this card would unlock.
+                var unlock = Combos.WouldUnlock(st.Player, st.Hand[i]);
+                if (unlock.Count > 0)
+                {
+                    string u = "+ " + string.Join("\n+ ", unlock.Take(2).Select(x => x.Name)) + (unlock.Count > 2 ? "\n+ " + (unlock.Count - 2) + " more" : "");
+                    UIKit.Shadowed(new Rect(r.x, r.yMax + 4f, r.width, 48f), u, UIKit.SmallCenter, new Color(1f, 0.85f, 0.3f));
+                }
             }
             if (mouseUser && e.type == EventType.Repaint) lastMouse = e.mousePosition;
 

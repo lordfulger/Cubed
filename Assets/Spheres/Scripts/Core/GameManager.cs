@@ -122,6 +122,7 @@ namespace Spheres
             AutoUpdater.Ensure(gameObject);
             Accounts.Ensure(gameObject);
             BugReport.Ensure(gameObject);
+            Combos.Hook();
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
         }

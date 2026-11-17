@@ -29,6 +29,8 @@ namespace Spheres
         public float Lifetime;
         public int BouncesLeft;
         public int PierceLeft;
+        /// <summary>Spawned by a combo payload (doesn't trigger further combos).</summary>
+        public bool FromCombo;
         /// <summary>How many walls the bullet may pass through.</summary>
         public int TerrainPierceLeft;
         /// <summary>Seconds since spawn.</summary>
@@ -129,7 +131,7 @@ namespace Spheres
         void ResetState()
         {
             Owner = null; Team = -1; Velocity = Vector3.zero; Gravity = 0f; Damage = 0f; Radius = 0.12f; Knockback = 0f;
-            Homing = 0f; ExplosionRadius = 0f; Lifetime = 4f; BouncesLeft = 0; PierceLeft = 0; BounceCount = 0; CanHitOwner = false;
+            Homing = 0f; FromCombo = false; ExplosionRadius = 0f; Lifetime = 4f; BouncesLeft = 0; PierceLeft = 0; BounceCount = 0; CanHitOwner = false;
             TerrainPierceLeft = 0; Age = 0f; Color = Color.white;
             AlreadyHit.Clear();
             Data.Clear();
@@ -144,7 +146,7 @@ namespace Spheres
             else Destroy(gameObject);
         }
 
-        void BuildVisual()
+        public void BuildVisual()
         {
             if (visual == null) visual = CreateVisual(gameObject, Radius, Color);
             else UpdateVisual(visual, gameObject, Radius, Color);

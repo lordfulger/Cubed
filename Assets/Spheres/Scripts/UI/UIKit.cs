@@ -454,7 +454,15 @@ namespace Spheres
             var pill = new Rect(r.center.x - pw * 0.5f, y, pw, 17f);
             Fill(pill, new Color(rc.r, rc.g, rc.b, 0.9f * alpha));
             Text(pill, rn, cardPill, new Color(0.06f, 0.06f, 0.09f, alpha));
-            y = pill.yMax + 6f;
+            y = pill.yMax + 4f;
+            // Keywords: any two in your deck form a combo.
+            var kws = Combos.Of(c);
+            if (kws.Length > 0 && !small)
+            {
+                Text(new Rect(inner.x + 4f, y, inner.width - 8f, 15f), string.Join("  ·  ", kws), cardPill, new Color(1f, 0.85f, 0.4f, 0.85f * alpha));
+                y += 15f;
+            }
+            y += 2f;
 
             // Description and stats.
             var desc = small ? cardDescSmall : cardDesc;
