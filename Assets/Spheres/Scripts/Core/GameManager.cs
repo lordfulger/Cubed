@@ -121,6 +121,7 @@ namespace Spheres
             gameObject.AddComponent<SpheresUI>();
             AutoUpdater.Ensure(gameObject);
             Accounts.Ensure(gameObject);
+            BugReport.Ensure(gameObject);
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
         }

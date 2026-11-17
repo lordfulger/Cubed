@@ -1149,6 +1149,7 @@ namespace Spheres
             st.musicVolume = UIKit.Stepper(new Rect(r.x + 20f, y, w - 40f, 36f), "Music volume", st.musicVolume * 100f, 10f, 0f, 100f, "0", "%") / 100f;
             y += 42f;
             st.invertY = UIKit.CheckRow(new Rect(r.x + 20f, y, w - 40f, 36f), "Invert Y", st.invertY);
+            if (UIKit.Btn(new Rect(r.x, r.yMax + 10f, w, 34f), "Report a bug (F8): saves a screenshot + log", true)) BugReport.Capture();
             y += 56f;
             if (UIKit.Btn(new Rect(r.x + 40f, y, w - 80f, 46f), "Resume") || UIKit.BackPressed()) { gm.SaveSettings(); gm.SetPaused(false); }
             y += 56f;
