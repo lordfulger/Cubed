@@ -117,6 +117,7 @@ namespace Spheres
             ExpansionCards.RegisterAll();
             CardGenerator.RegisterAll();
             CurseCards.RegisterAll();
+            BossCards.RegisterAll();
         }
     }
 }

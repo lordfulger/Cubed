@@ -41,6 +41,7 @@ namespace Spheres
                 case GameMode.SphereBall: return "Sphere Ball";
                 case GameMode.HoldTheOrb: return "Hold the Orb";
                 case GameMode.Infection: return "Infection";
+                case GameMode.Boss: return "Boss Battle";
                 default: return "Elimination";
             }
         }
@@ -55,6 +56,7 @@ namespace Spheres
                 case GameMode.Practice: return "Free practice with target dummies.";
                 case GameMode.SphereBall: return "Shoot and bump the giant ball into another team's goal. Respawns on.";
                 case GameMode.HoldTheOrb: return "Grab the orb and keep it alive. Your team scores while you carry it.";
+                case GameMode.Boss: return "Everyone vs one giant sphere. It grows and takes cards every wave. Beat every wave to win.";
                 case GameMode.Infection: return "One player starts infected. Everyone they get turns. The last survivor wins it for their team.";
                 default: return "Last team standing wins the round.";
             }
@@ -76,6 +78,7 @@ namespace Spheres
             HillHolder = -1;
             BuildModeObjects();
             if (Mode == GameMode.Infection) StartInfection();
+            if (Mode == GameMode.Boss) PlaceBoss();
         }
 
         /// <summary>Also used by network clients after loading a map so they see the same hill.</summary>
@@ -238,6 +241,7 @@ namespace Spheres
             respawnAt.Clear();
             OrbCarrier = null;
             ModeProp = null;
+            Boss = null;
         }
 
         bool practiceSelectPrev;

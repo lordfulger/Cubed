@@ -439,7 +439,7 @@ namespace Spheres
             Rect Row(float rowH = 36f) { var r = new Rect(4f, y, w - 8f, rowH); y += rowH + 4f; return r; }
 
             Section("Match");
-            GameMode[] modeList = { GameMode.Elimination, GameMode.Deathmatch, GameMode.KingOfTheHill, GameMode.CardRush, GameMode.SphereBall, GameMode.HoldTheOrb, GameMode.Infection };
+            GameMode[] modeList = { GameMode.Elimination, GameMode.Deathmatch, GameMode.KingOfTheHill, GameMode.CardRush, GameMode.SphereBall, GameMode.HoldTheOrb, GameMode.Infection, GameMode.Boss };
             string[] modes = modeList.Select(GameManager.ModeName).ToArray();
             int modeIdx = Mathf.Max(0, System.Array.IndexOf(modeList, st.mode));
             st.mode = modeList[UIKit.Cycle(Row(), "Mode", modeIdx, modes)];
@@ -452,7 +452,7 @@ namespace Spheres
             st.catchUpCurses = UIKit.CheckRow(Row(), "Catch-up curses (leader gets a handicap card)", st.catchUpCurses);
             if (st.catchUpCurses) st.curseLead = UIKit.StepperInt(Row(), "   Lead needed (rounds)", st.curseLead, 1, 10);
             st.endless = UIKit.CheckRow(Row(), "Endless match (never ends - build insane decks)", st.endless);
-            if (!st.endless) st.roundsToWin = UIKit.StepperInt(Row(), "Rounds to win", st.roundsToWin, 1, 20);
+            if (!st.endless) st.roundsToWin = UIKit.StepperInt(Row(), st.mode == GameMode.Boss ? "Waves to beat" : "Rounds to win", st.roundsToWin, 1, 20);
             if (st.mode == GameMode.Elimination || st.mode == GameMode.CardRush)
                 st.pointsToWinRound = UIKit.StepperInt(Row(), "Fights to win a round (2 = best of 3)", st.pointsToWinRound, 1, 5);
             st.roundTimeLimit = UIKit.Stepper(Row(), "Round time limit", st.roundTimeLimit, 30f, 0f, 600f, "0", "s", "Off");

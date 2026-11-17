@@ -32,7 +32,7 @@ namespace Spheres
 
     public enum BotDifficulty { Easy, Normal, Hard, Brutal, Dummy }
 
-    public enum GameMode { Elimination, Deathmatch, KingOfTheHill, CardRush, Practice, SphereBall, HoldTheOrb, Infection }
+    public enum GameMode { Elimination, Deathmatch, KingOfTheHill, CardRush, Practice, SphereBall, HoldTheOrb, Infection, Boss }
 
     [Serializable]
     public class PlayerSlot

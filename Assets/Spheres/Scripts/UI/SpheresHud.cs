@@ -738,6 +738,21 @@ namespace Spheres
                 string holder = gm.HillHolder >= 0 ? Teams.GetName(gm.HillHolder) + " has the orb" : "The orb is loose!";
                 UIKit.Shadowed(new Rect(0f, y + 2f, UIKit.Size.x, 22f), holder, UIKit.SmallCenter, gm.HillHolder >= 0 ? Teams.GetColor(gm.HillHolder) : new Color(1f, 0.85f, 0.3f));
             }
+            else if (mode == GameMode.Boss && gm.InMatch)
+            {
+                var boss = gm.Boss != null ? gm.Boss : gm.Players.FirstOrDefault(p => p.Team == GameManager.BossTeam);
+                if (boss != null)
+                {
+                    float w = Mathf.Min(620f, UIKit.Size.x - 200f), x = UIKit.Size.x * 0.5f - w * 0.5f;
+                    float hp = boss.Health / Mathf.Max(1f, boss.MaxHealth);
+                    UIKit.Shadowed(new Rect(x, y - 4f, w, 22f), "<b>" + boss.DisplayName + "</b>   wave " + (gm.TeamScores[0] + 1) + " / " + gm.RoundsTarget, UIKit.LabelCenter, new Color(1f, 0.55f, 0.45f));
+                    var bar = new Rect(x, y + 20f, w, 14f);
+                    UIKit.Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), new Color(0f, 0f, 0f, 0.7f));
+                    UIKit.Bar(bar, hp, Color.Lerp(new Color(1f, 0.2f, 0.15f), new Color(1f, 0.7f, 0.2f), hp), new Color(0.2f, 0.05f, 0.05f, 0.8f));
+                    for (int k = 1; k <= 2; k++) UIKit.Fill(new Rect(bar.x + bar.width * k / 3f - 1f, bar.y, 2f, bar.height), new Color(0f, 0f, 0f, 0.6f));
+                    UIKit.Text(bar, Mathf.CeilToInt(boss.Health) + " / " + Mathf.CeilToInt(boss.MaxHealth), UIKit.SmallCenter, Color.white);
+                }
+            }
             else if (mode == GameMode.Infection && gm.InMatch)
             {
                 int surv = gm.Players.Count(p => p.Team == GameManager.SurvivorTeam && p.IsAlive);
@@ -835,6 +850,7 @@ namespace Spheres
                 int w = gm.LastRoundWinner;
                 bool point = gm.PointsToWin > 1 && !gm.LastWasRoundWin;
                 string text = w >= 0 ? Teams.GetName(w).ToUpperInvariant() + (point ? " WINS THE FIGHT" : " WINS THE ROUND") : "DRAW";
+                if (gm.IsBossMode) text = w == GameManager.BossTeam ? "THE BOSS WINS" : w >= 0 ? "BOSS DEFEATED!  WAVE " + gm.TeamScores[w] + " CLEARED" : "DRAW";
                 UIKit.Fill(new Rect(0f, full.y + 10f, UIKit.Size.x, 90f), new Color(0f, 0f, 0f, 0.5f));
                 var style = new GUIStyle(UIKit.Title) { fontSize = 54 };
                 UIKit.Shadowed(full, text, style, w >= 0 ? Teams.GetColor(w) : Color.white);
@@ -851,7 +867,8 @@ namespace Spheres
             int win = gm.MatchWinner;
             UIKit.Outline(r, Teams.GetColor(win), 3f);
             var titleStyle = new GUIStyle(UIKit.Title) { fontSize = 40 };
-            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!", titleStyle, Teams.GetColor(win));
+            string winText = gm.IsBossMode ? (win == GameManager.BossTeam ? "THE BOSS WINS..." : "YOU BEAT THE BOSS!") : Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!";
+            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), winText, titleStyle, Teams.GetColor(win));
 
             float y = r.y + 90f;
             float[] cols = { 16f, 250f, 320f, 400f, 500f };
