@@ -71,6 +71,7 @@ namespace Spheres
                     Header("HUD");
                     o.damageNumbers = UIKit.CheckRow(Row(), "Damage numbers", o.damageNumbers);
                     o.funnyDeathMessages = UIKit.CheckRow(Row(), "Funny death messages", o.funnyDeathMessages);
+                    o.deckVisuals = UIKit.CheckRow(Row(), "Show decks on fighters (barrels, armor, auras)", o.deckVisuals);
                     if (AutoUpdater.Supported)
                     {
                         Header("Updates");

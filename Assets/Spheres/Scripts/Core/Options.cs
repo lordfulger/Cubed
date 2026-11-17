@@ -33,6 +33,8 @@ namespace Spheres
         public int musicSource;
         /// <summary>Show the song name when the music changes.</summary>
         public bool showSongNames;
+        /// <summary>Show each fighter's deck on their body and blaster (extra barrels, armor, auras...).</summary>
+        public bool deckVisuals = true;
         /// <summary>Silly kill-feed lines ("X popped Y") instead of plain "X > Y".</summary>
         public bool funnyDeathMessages = true;
         /// <summary>Language code ("" = follow the system language).</summary>

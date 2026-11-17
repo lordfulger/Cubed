@@ -45,6 +45,14 @@ namespace Spheres
         static Color bannerColor = Color.white;
         static float bannerTime = -99f;
 
+        /// <summary>Big announcement on this machine only (combos, which every machine works out itself).</summary>
+        public static void ShowBannerLocal(string text, Color color)
+        {
+            bannerText = text;
+            bannerColor = color;
+            bannerTime = Time.unscaledTime;
+        }
+
         /// <summary>Big centered announcement (GOAL!, curses). Mirrored online.</summary>
         public static void ShowBanner(string text, Color color)
         {
@@ -324,11 +332,43 @@ namespace Spheres
                 UIKit.Shadowed(new Rect(row.x + icon + 10f, cy, area.width - icon - 14f, rowH), label, UIKit.Small, hot ? Color.white : new Color(1f, 1f, 1f, 0.78f));
                 cy += rowH;
             }
+
+            // Active combos (any two keywords in your deck combine).
+            var combos = Combos.Active(p.Cards);
+            if (combos.Count == 0 || cy > area.yMax - 20f) return;
+            cy += 4f;
+            UIKit.Shadowed(new Rect(area.x + 10f, cy, area.width, 16f), "COMBOS (" + combos.Count + ")", UIKit.Small, new Color(1f, 0.85f, 0.3f, 0.9f));
+            cy += 17f;
+            foreach (var (combo, level) in combos.OrderByDescending(x => x.level))
+            {
+                if (cy > area.yMax) break;
+                var row = new Rect(area.x + 6f, cy, area.width - 4f, 16f);
+                bool hot = interactive && row.Contains(mouse);
+                if (hot)
+                {
+                    UIKit.Fill(row, new Color(1f, 0.85f, 0.3f, 0.2f));
+                    comboTip = combo.Description + "  (level " + level + ")";
+                    comboTipAnchor = new Rect(row.x + groupOffset.x, row.y + groupOffset.y, row.width, row.height);
+                }
+                UIKit.Shadowed(new Rect(row.x + 6f, cy, area.width - 10f, 16f), combo.Name + (level > 1 ? "  Lv" + level : ""), UIKit.Small, hot ? Color.white : new Color(1f, 0.92f, 0.6f, 0.8f));
+                cy += 16f;
+            }
         }
+
+        static string comboTip;
+        static Rect comboTipAnchor;
 
         /// <summary>Draw the full card for whatever is hovered/focused this frame (drawn last, on top).</summary>
         static void DrawTooltip()
         {
+            if (!string.IsNullOrEmpty(comboTip))
+            {
+                var tr = new Rect(comboTipAnchor.xMax + 10f, comboTipAnchor.y - 6f, 300f, 46f);
+                UIKit.Fill(tr, new Color(0.05f, 0.05f, 0.08f, 0.95f));
+                UIKit.Outline(tr, new Color(1f, 0.85f, 0.3f), 1.5f);
+                UIKit.Text(new Rect(tr.x + 8f, tr.y + 4f, tr.width - 16f, tr.height - 8f), comboTip, UIKit.Wrap, Color.white);
+                if (Event.current.type == EventType.Repaint) comboTip = null;
+            }
             if (tooltipCard == null) return;
             const float w = 210f, h = 300f;
             float x = tooltipAnchor.xMax + 12f;
@@ -565,6 +605,13 @@ namespace Spheres
                     continue;
                 }
                 UIKit.DrawCard(r, st.Hand[i], hl);
+                // Which combos taking this card would unlock.
+                var unlock = Combos.WouldUnlock(st.Player, st.Hand[i]);
+                if (unlock.Count > 0)
+                {
+                    string u = "+ " + string.Join("\n+ ", unlock.Take(2).Select(x => x.Name)) + (unlock.Count > 2 ? "\n+ " + (unlock.Count - 2) + " more" : "");
+                    UIKit.Shadowed(new Rect(r.x, r.yMax + 4f, r.width, 48f), u, UIKit.SmallCenter, new Color(1f, 0.85f, 0.3f));
+                }
             }
             if (mouseUser && e.type == EventType.Repaint) lastMouse = e.mousePosition;
 
@@ -691,6 +738,21 @@ namespace Spheres
                 string holder = gm.HillHolder >= 0 ? Teams.GetName(gm.HillHolder) + " has the orb" : "The orb is loose!";
                 UIKit.Shadowed(new Rect(0f, y + 2f, UIKit.Size.x, 22f), holder, UIKit.SmallCenter, gm.HillHolder >= 0 ? Teams.GetColor(gm.HillHolder) : new Color(1f, 0.85f, 0.3f));
             }
+            else if (mode == GameMode.Boss && gm.InMatch)
+            {
+                var boss = gm.Boss != null ? gm.Boss : gm.Players.FirstOrDefault(p => p.Team == GameManager.BossTeam);
+                if (boss != null)
+                {
+                    float w = Mathf.Min(620f, UIKit.Size.x - 200f), x = UIKit.Size.x * 0.5f - w * 0.5f;
+                    float hp = boss.Health / Mathf.Max(1f, boss.MaxHealth);
+                    UIKit.Shadowed(new Rect(x, y - 4f, w, 22f), "<b>" + boss.DisplayName + "</b>   wave " + (gm.TeamScores[0] + 1) + " / " + gm.RoundsTarget, UIKit.LabelCenter, new Color(1f, 0.55f, 0.45f));
+                    var bar = new Rect(x, y + 20f, w, 14f);
+                    UIKit.Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), new Color(0f, 0f, 0f, 0.7f));
+                    UIKit.Bar(bar, hp, Color.Lerp(new Color(1f, 0.2f, 0.15f), new Color(1f, 0.7f, 0.2f), hp), new Color(0.2f, 0.05f, 0.05f, 0.8f));
+                    for (int k = 1; k <= 2; k++) UIKit.Fill(new Rect(bar.x + bar.width * k / 3f - 1f, bar.y, 2f, bar.height), new Color(0f, 0f, 0f, 0.6f));
+                    UIKit.Text(bar, Mathf.CeilToInt(boss.Health) + " / " + Mathf.CeilToInt(boss.MaxHealth), UIKit.SmallCenter, Color.white);
+                }
+            }
             else if (mode == GameMode.Infection && gm.InMatch)
             {
                 int surv = gm.Players.Count(p => p.Team == GameManager.SurvivorTeam && p.IsAlive);
@@ -788,6 +850,7 @@ namespace Spheres
                 int w = gm.LastRoundWinner;
                 bool point = gm.PointsToWin > 1 && !gm.LastWasRoundWin;
                 string text = w >= 0 ? Teams.GetName(w).ToUpperInvariant() + (point ? " WINS THE FIGHT" : " WINS THE ROUND") : "DRAW";
+                if (gm.IsBossMode) text = w == GameManager.BossTeam ? "THE BOSS WINS" : w >= 0 ? "BOSS DEFEATED!  WAVE " + gm.TeamScores[w] + " CLEARED" : "DRAW";
                 UIKit.Fill(new Rect(0f, full.y + 10f, UIKit.Size.x, 90f), new Color(0f, 0f, 0f, 0.5f));
                 var style = new GUIStyle(UIKit.Title) { fontSize = 54 };
                 UIKit.Shadowed(full, text, style, w >= 0 ? Teams.GetColor(w) : Color.white);
@@ -804,7 +867,8 @@ namespace Spheres
             int win = gm.MatchWinner;
             UIKit.Outline(r, Teams.GetColor(win), 3f);
             var titleStyle = new GUIStyle(UIKit.Title) { fontSize = 40 };
-            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!", titleStyle, Teams.GetColor(win));
+            string winText = gm.IsBossMode ? (win == GameManager.BossTeam ? "THE BOSS WINS..." : "YOU BEAT THE BOSS!") : Teams.GetName(win).ToUpperInvariant() + " TEAM WINS!";
+            UIKit.Shadowed(new Rect(r.x, r.y + 20f, w, 50f), winText, titleStyle, Teams.GetColor(win));
 
             float y = r.y + 90f;
             float[] cols = { 16f, 250f, 320f, 400f, 500f };
@@ -828,6 +892,18 @@ namespace Spheres
                 if (UIKit.Btn(new Rect(r.xMax - 240f, by, 220f, 42f), "Leave")) { gm.Net.Leave(); gm.ReturnToMenu(); }
                 return;
             }
+            // Tournament: show the bracket and move on to the next duel.
+            if (gm.Bracket != null)
+            {
+                var b = gm.Bracket;
+                UIKit.Fill(new Rect(r.x, r.yMax + 8f, w, 150f), new Color(0.05f, 0.06f, 0.09f, 0.92f));
+                UIKit.Text(new Rect(r.x + 12f, r.yMax + 12f, w - 24f, 22f), b.Finished ? "<b>" + b.Champion.name + " is the champion!</b>" : "Tournament bracket", UIKit.Label, UIKit.Accent);
+                b.Draw(new Rect(r.x + 8f, r.yMax + 40f, w - 16f, 112f));
+                if (!b.Finished && UIKit.Btn(new Rect(r.x + 20f, by, w - 40f, 42f), "<b>Next match</b>")) gm.NextTournamentMatch();
+                else if (b.Finished && UIKit.Btn(new Rect(r.x + 20f, by, w - 40f, 42f), "<b>Finish tournament</b>")) gm.ReturnToMenu();
+                return;
+            }
+            if (gm.InDaily) UIKit.Text(new Rect(r.x + 20f, by - 84f, w - 40f, 24f), "Daily challenge  -  " + DailyChallenge.BestText(), UIKit.SmallCenter, UIKit.Accent);
             // Keep the same fighters and cards and play on.
             float kw = (w - 60f) / 2f;
             if (UIKit.Btn(new Rect(r.x + 20f, by - 52f, kw, 42f), "<b>Keep Going</b> (+" + Mathf.Max(1, gm.Settings.roundsToWin) + " rounds)")) gm.KeepGoing(false);

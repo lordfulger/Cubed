@@ -10,6 +10,9 @@ namespace Spheres
         public bool Reloading { get; private set; }
         public float ReloadProgress => Reloading && reloadDuration > 0f ? 1f - reloadTimer / reloadDuration : 1f;
         public float Cooldown { get; private set; }
+
+        /// <summary>Shorten the time until the next shot (combo "frenzy" and similar effects).</summary>
+        public void CooldownBonus(float fraction) => Cooldown *= Mathf.Clamp01(1f - fraction);
         /// <summary>Total shots fired this round (used by some effects).</summary>
         public int ShotsFired;
 

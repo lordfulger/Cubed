@@ -121,6 +121,8 @@ namespace Spheres
             gameObject.AddComponent<SpheresUI>();
             AutoUpdater.Ensure(gameObject);
             Accounts.Ensure(gameObject);
+            BugReport.Ensure(gameObject);
+            Combos.Hook();
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
         }
@@ -221,6 +223,7 @@ namespace Spheres
             Weather.Active = false;
             Weather.Clear();
             EndTraining();
+            EndParty();
             if (NetClientMode) ClientExitMatch(GameState.MainMenu);
             if (Net != null && Net.IsHosting && InMatch)
             {
@@ -283,7 +286,7 @@ namespace Spheres
 
         public void SaveSettings()
         {
-            if (NetClientMode || trainingBackup != null)
+            if (NetClientMode || trainingBackup != null || partyBackup != null)
             {
                 Sfx.Volume = Settings.volume;
                 return; // temporary rules are active; preferences are copied back on exit
@@ -334,6 +337,7 @@ namespace Spheres
                 else if (slot.control == ControlType.Online) input = new Net.NetworkInput(slot.netOwner);
                 else input = new HumanInput(slot.control);
                 var slotCopy = slot.Clone();
+                if (Settings.mode == GameMode.Boss) slotCopy.team = 0; // everyone together against the boss
                 if (slotCopy.IsLocalHuman) slotCopy.look = Profile.Current.Look(slotCopy.lookIndex).Encode();
                 else if (slotCopy.control == ControlType.Bot) slotCopy.look = CharacterLook.ForSeed(slotCopy.name).Encode();
                 else if (string.IsNullOrEmpty(slotCopy.look)) slotCopy.look = CharacterLook.ForSeed(slotCopy.name).Encode();
@@ -341,6 +345,7 @@ namespace Spheres
                 Players.Add(p);
                 if (input is HumanInput human) Cameras.Add(PlayerCamera.Create(p, human));
             }
+            if (Settings.mode == GameMode.Boss) Players.Add(CreateBoss(index++));
             ActiveTeams.AddRange(Players.Select(p => p.Team).Distinct().OrderBy(t => t));
             LayoutCameras();
             LoadMapForRound(true);
@@ -513,7 +518,8 @@ namespace Spheres
                 BeginRound();
                 return;
             }
-            if (!Endless && w >= 0 && TeamScores[w] >= RoundsTarget)
+            bool bossWon = IsBossMode && w == BossTeam; // the boss only needs to win once
+            if (bossWon || (!Endless && w >= 0 && TeamScores[w] >= RoundsTarget))
             {
                 MatchWinner = w;
                 foreach (var p in Players) p.Frozen = true;
@@ -565,6 +571,14 @@ namespace Spheres
         {
             ApplyCatchUpCurses();
             List<Player> pickers;
+            if (IsBossMode)
+            {
+                BossBetweenWaves();
+                pickers = Players.Where(p => p.Team != BossTeam).ToList();
+                if (Settings.picksPerRound <= 0 || pickers.Count == 0) BeginRound();
+                else StartPickPhase(pickers, Settings.picksPerRound, false);
+                return;
+            }
             switch (Settings.pickRule)
             {
                 case PickRule.Losers: pickers = Players.Where(p => w < 0 || p.Team != w).ToList(); break;
@@ -708,6 +722,7 @@ namespace Spheres
             Safe("map vote", UpdateLocalVoteInput);
             Safe("achievements", () => Achievements.Tick(udt));
             Safe("weather", () => Weather.Update(udt));
+            Safe("deck gear", () => DeckVisuals.Tick(udt));
             Safe("steam", Spheres.Net.SteamIntegration.Update);
             if (!launchJoinChecked && State == GameState.MainMenu)
             {
