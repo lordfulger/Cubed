@@ -524,6 +524,8 @@ namespace Spheres.Net
             for (int i = 0; i < Teams.Max; i++) w.Byte(Gm.TeamScores[i]);
             w.Bool(Gm.Paused).Float(Gm.Map != null ? Gm.Map.Shrink : 0f);
             w.UShort(Gm.RoundsTarget).Bool(Gm.Endless);
+            for (int i = 0; i < Teams.Max; i++) w.Byte(Gm.PointScores[i]);
+            w.Bool(Gm.LastWasRoundWin);
             w.SByte(Gm.HillHolder);
             for (int i = 0; i < Teams.Max; i++) w.Float(Gm.HillProgress[i]).Byte(Gm.RoundKills[i]);
 
@@ -1009,6 +1011,9 @@ namespace Spheres.Net
             int target = m.UShort();
             bool endless = m.Bool();
             Gm.ClientSetTarget(target, endless);
+            var points = new int[Teams.Max];
+            for (int i = 0; i < Teams.Max; i++) points[i] = m.Byte();
+            Gm.ClientSetPoints(points, m.Bool());
             int holder = m.SByte();
             var hill = new float[Teams.Max];
             var teamKills = new int[Teams.Max];

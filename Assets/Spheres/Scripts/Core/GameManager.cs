@@ -47,6 +47,14 @@ namespace Spheres
         public readonly List<PlayerCamera> Cameras = new List<PlayerCamera>();
         public readonly List<int> ActiveTeams = new List<int>();
         public readonly int[] TeamScores = new int[Teams.Max];
+        /// <summary>Fights won toward the current round (first to <see cref="PointsToWin"/> takes the round).</summary>
+        public readonly int[] PointScores = new int[Teams.Max];
+        /// <summary>True when the last fight also won its team the round (then cards get picked).</summary>
+        public bool LastWasRoundWin { get; private set; }
+        /// <summary>Fights needed to win a round (only Elimination and Card Rush split rounds into fights).</summary>
+        public int PointsToWin => Mode == GameMode.Elimination || Mode == GameMode.CardRush ? Mathf.Clamp(Settings.pointsToWinRound, 1, 9) : 1;
+        /// <summary>The round being played (1-based), counting rounds won so far.</summary>
+        public int RoundDisplay => TeamScores.Sum() + 1;
         public readonly List<PickState> Picks = new List<PickState>();
         public int RoundNumber { get; private set; }
         public int LastRoundWinner { get; private set; } = -1;
@@ -311,6 +319,8 @@ namespace Spheres
 
             editorTestMap = testMap;
             Array.Clear(TeamScores, 0, TeamScores.Length);
+            Array.Clear(PointScores, 0, PointScores.Length);
+            LastWasRoundWin = false;
             RoundNumber = 0;
             MatchWinner = -1;
             LastRoundWinner = -1;
@@ -422,7 +432,7 @@ namespace Spheres
                 string voted = !first ? ResolveMapVote() : null;
                 if (voted != null) entry = MapRegistry.Get(voted);
                 else if (!first && Settings.mapRotation == MapRotation.Vote && all.Count > 0)
-                    entry = all[UnityEngine.Random.Range(0, all.Count)];
+                    entry = LastWasRoundWin ? all[UnityEngine.Random.Range(0, all.Count)] : MapRegistry.Get(CurrentMapId); // keep the voted map for the whole round
                 else if (!first && Settings.mapRotation == MapRotation.Cycle && all.Count > 0)
                 {
                     int idx = all.ToList().FindIndex(e => e.Id == CurrentMapId);
@@ -475,7 +485,17 @@ namespace Spheres
         {
             if (Mode == GameMode.Infection) RestoreHomeTeams();
             LastRoundWinner = winner;
-            if (winner >= 0 && winner < TeamScores.Length) TeamScores[winner]++;
+            LastWasRoundWin = false;
+            if (winner >= 0 && winner < TeamScores.Length)
+            {
+                PointScores[winner]++;
+                if (PointScores[winner] >= PointsToWin)
+                {
+                    TeamScores[winner]++;
+                    LastWasRoundWin = true;
+                    Array.Clear(PointScores, 0, PointScores.Length);
+                }
+            }
             SetState(GameState.RoundEnd);
             Time.timeScale = 0.35f;
             Sfx.Play("win", 0.7f, 0f);
@@ -486,6 +506,12 @@ namespace Spheres
         {
             Time.timeScale = 1f;
             int w = LastRoundWinner;
+            // Only a won round leads to card picks; a single fight (point) goes straight to the next fight.
+            if (!LastWasRoundWin)
+            {
+                BeginRound();
+                return;
+            }
             if (!Endless && w >= 0 && TeamScores[w] >= RoundsTarget)
             {
                 MatchWinner = w;
@@ -522,6 +548,12 @@ namespace Spheres
         }
 
         /// <summary>Clients: round target and endless flag from snapshots.</summary>
+        public void ClientSetPoints(int[] points, bool roundWin)
+        {
+            for (int i = 0; i < PointScores.Length && i < points.Length; i++) PointScores[i] = points[i];
+            LastWasRoundWin = roundWin;
+        }
+
         public void ClientSetTarget(int target, bool endless)
         {
             RoundsTarget = Mathf.Max(1, target);
@@ -895,6 +927,8 @@ namespace Spheres
             NetClientMode = true;
             editorTestMap = null;
             Array.Clear(TeamScores, 0, TeamScores.Length);
+            Array.Clear(PointScores, 0, PointScores.Length);
+            LastWasRoundWin = false;
             RoundNumber = 0;
             MatchWinner = -1;
             LastRoundWinner = -1;

@@ -429,7 +429,7 @@ namespace Spheres
             UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.35f));
             UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.94f));
             UIKit.Outline(r, new Color(1f, 1f, 1f, 0.12f), 1f);
-            string mode = GameManager.ModeName(gm.Settings.mode) + "  -  Round " + Mathf.Max(1, gm.RoundNumber) + (gm.Endless ? "  -  endless" : "  -  first to " + gm.RoundsTarget);
+            string mode = GameManager.ModeName(gm.Settings.mode) + "  -  Round " + gm.RoundDisplay + (gm.Endless ? "  -  endless" : "  -  first to " + gm.RoundsTarget);
             UIKit.Text(new Rect(r.x + 20f, r.y + 10f, W - 40f, 32f), "<b>Scoreboard</b>   <color=#8890a8>" + mode + "</color>", UIKit.Header, Color.white);
 
             float[] cols = { 20f, 260f, 320f, 380f, 460f, 540f };
@@ -634,9 +634,17 @@ namespace Spheres
                         UIKit.Fill(new Rect(r.x + 10f + i * (pw + 3f), r.y + 26f, pw, 10f), i < score ? col : new Color(1f, 1f, 1f, 0.15f));
                 }
                 else UIKit.Text(new Rect(r.x + 10f, r.y + 22f, w - 14f, 20f), score + " / " + target, UIKit.Small, Color.white);
+                // Fight wins toward this round (small dots, top right).
+                int ptw = gm.PointsToWin;
+                if (ptw > 1)
+                    for (int i = 0; i < ptw; i++)
+                    {
+                        var dot = new Rect(r.xMax - 10f - (ptw - i) * 11f, r.y + 6f, 8f, 8f);
+                        UIKit.Fill(dot, i < gm.PointScores[t] ? Color.white : new Color(1f, 1f, 1f, 0.2f));
+                    }
                 x += w + gap;
             }
-            UIKit.Shadowed(new Rect(0f, 58f, UIKit.Size.x, 18f), "Round " + Mathf.Max(1, gm.RoundNumber) + (target == 0 ? "  -  endless" : "  -  first to " + target), UIKit.SmallCenter, UIKit.Muted);
+            UIKit.Shadowed(new Rect(0f, 58f, UIKit.Size.x, 18f), "Round " + gm.RoundDisplay + (gm.PointsToWin > 1 ? "  (first to " + gm.PointsToWin + " fights)" : "") + (target == 0 ? "  -  endless" : "  -  first to " + target + " rounds"), UIKit.SmallCenter, UIKit.Muted);
 
             var map = gm.Map;
             if (gm.State == GameState.Fighting && map != null && map.Shrink > 0f && map.Shrink < 1f && Mathf.Repeat(Time.unscaledTime, 1f) < 0.65f)
@@ -763,7 +771,11 @@ namespace Spheres
                 var style = new GUIStyle(UIKit.Huge) { fontSize = Mathf.RoundToInt(84 + frac * 30f) };
                 UIKit.Shadowed(full, n.ToString(), style, Color.white);
                 if (gm.RoundNumber > 0)
-                    UIKit.Shadowed(new Rect(0f, full.yMax, UIKit.Size.x, 30f), "Round " + gm.RoundNumber, UIKit.HeaderCenter, UIKit.Muted);
+                {
+                    int fight = gm.PointScores.Sum() + 1;
+                    string sub = gm.PointsToWin > 1 ? "Round " + gm.RoundDisplay + "  -  fight " + fight : "Round " + gm.RoundDisplay;
+                    UIKit.Shadowed(new Rect(0f, full.yMax, UIKit.Size.x, 30f), sub, UIKit.HeaderCenter, UIKit.Muted);
+                }
             }
             else if (gm.State == GameState.Fighting && gm.StateTime < 0.7f)
             {
@@ -774,7 +786,8 @@ namespace Spheres
             else if (gm.State == GameState.RoundEnd)
             {
                 int w = gm.LastRoundWinner;
-                string text = w >= 0 ? Teams.GetName(w).ToUpperInvariant() + " WINS THE ROUND" : "DRAW";
+                bool point = gm.PointsToWin > 1 && !gm.LastWasRoundWin;
+                string text = w >= 0 ? Teams.GetName(w).ToUpperInvariant() + (point ? " WINS THE FIGHT" : " WINS THE ROUND") : "DRAW";
                 UIKit.Fill(new Rect(0f, full.y + 10f, UIKit.Size.x, 90f), new Color(0f, 0f, 0f, 0.5f));
                 var style = new GUIStyle(UIKit.Title) { fontSize = 54 };
                 UIKit.Shadowed(full, text, style, w >= 0 ? Teams.GetColor(w) : Color.white);

@@ -81,6 +81,8 @@ namespace Spheres
         public bool catchUpCurses;
         public int curseLead = 2;
         public int roundsToWin = 5;
+        /// <summary>Elimination / Card Rush: fights a team must win to take a round (2 = best of 3). Cards are picked after each round.</summary>
+        public int pointsToWinRound = 2;
         /// <summary>The match never ends: keep picking cards and fighting forever.</summary>
         public bool endless;
         public float roundTimeLimit = 0f;
