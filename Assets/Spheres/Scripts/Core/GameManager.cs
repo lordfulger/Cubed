@@ -120,6 +120,7 @@ namespace Spheres
             gameObject.AddComponent<MusicPlayer>();
             gameObject.AddComponent<SpheresUI>();
             AutoUpdater.Ensure(gameObject);
+            Accounts.Ensure(gameObject);
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
         }

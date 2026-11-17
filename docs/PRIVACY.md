@@ -107,3 +107,10 @@ protection authority. Our legal basis for processing crash reports is (consent /
 
 We'll update this page when the game's data use changes, and change the "Last updated" date. [For significant
 changes we'll also mention it in the patch notes.]
+
+## Online accounts (optional)
+
+If you create a Spheres account (main menu > Sign in), your username and password are handled by Unity Gaming Services
+Authentication. Your password is never stored by the game. Your profile (characters, cosmetics, unlocks, achievements and
+stats) is backed up to Unity Cloud Save so it can load on other PCs. Signing out keeps a local copy. Playing without an
+account sends nothing.

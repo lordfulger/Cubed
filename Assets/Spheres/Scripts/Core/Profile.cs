@@ -80,9 +80,34 @@ namespace Spheres
             return fresh;
         }
 
+        /// <summary>When this profile was last saved (Unix ms), used to pick the newest copy when syncing.</summary>
+        public long savedAt;
+
+        /// <summary>Raised after every save (the account system backs the profile up).</summary>
+        public static event Action Saved;
+
         public void Save()
         {
+            savedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             try { File.WriteAllText(FilePath, JsonUtility.ToJson(this, true)); }
+            catch (Exception e) { Debug.LogException(e); }
+            try { Saved?.Invoke(); }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        /// <summary>Replace this PC's profile with one from the cloud.</summary>
+        public static void ReplaceFromJson(string json)
+        {
+            try
+            {
+                var p = JsonUtility.FromJson<Profile>(json);
+                if (p == null) return;
+                if (p.cardCounts == null) p.cardCounts = new List<CardCount>();
+                if (p.achievements == null) p.achievements = new List<string>();
+                p.EnsureLooks();
+                File.WriteAllText(FilePath, JsonUtility.ToJson(p, true));
+                current = p;
+            }
             catch (Exception e) { Debug.LogException(e); }
         }
 

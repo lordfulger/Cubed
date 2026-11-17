@@ -167,9 +167,98 @@ namespace Spheres
                 }
                 y += 40f + 8f;
             }
+            DrawAccountBadge(new Rect(s.x - 340f, s.y - 70f, 320f, 50f));
             if (UIKit.Btn(new Rect(50f, s.y - 90f, w, 44f), "Quit")) Application.Quit();
             UIKit.Text(new Rect(54f, s.y - 130f, 380f, 20f), "Gamepad: stick/d-pad to move, A select, B back", UIKit.Small, UIKit.Muted);
             UIKit.Text(new Rect(54f, s.y - 36f, 380f, 20f), "v" + SpheresAPI.GameVersion + (ContentLoader.BepInExLoaded ? "  -  BepInEx active" : ""), UIKit.Small, UIKit.Muted);
+        }
+
+        // ---------------------------------------------------------------- account
+
+        bool accountOpen, accountCreating;
+        string accUser = "", accPass = "", accPass2 = "";
+
+        void DrawAccountBadge(Rect r)
+        {
+            var acc = Accounts.Instance;
+            if (acc == null) return;
+            UIKit.Fill(r, new Color(0.05f, 0.06f, 0.09f, 0.85f));
+            string who = acc.SignedIn ? "Signed in as <b>" + acc.Username + "</b>" : acc.Busy ? acc.Status : "Not signed in";
+            UIKit.Text(new Rect(r.x + 12f, r.y, r.width - 130f, r.height), who, UIKit.Small, Color.white);
+            if (UIKit.Btn(new Rect(r.xMax - 112f, r.y + 9f, 102f, 32f), acc.SignedIn ? "Account" : "Sign in", true)) accountOpen = !accountOpen;
+            if (accountOpen) DrawAccountWindow();
+        }
+
+        void DrawAccountWindow()
+        {
+            var acc = Accounts.Instance;
+            var s = UIKit.Size;
+            var r = new Rect(s.x * 0.5f - 260f, s.y * 0.5f - 230f, 520f, 460f);
+            UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.55f));
+            UIKit.Fill(r, UIKit.Panel);
+            UIKit.Outline(r, UIKit.Accent, 2f);
+            float x = r.x + 24f, w = r.width - 48f, y = r.y + 16f;
+            UIKit.Text(new Rect(x, y, w - 50f, 36f), "Spheres Account", UIKit.Header, Color.white);
+            if (UIKit.Btn(new Rect(r.xMax - 54f, y, 34f, 32f), "X", true)) { accountOpen = false; return; }
+            y += 50f;
+
+            if (!Accounts.Configured)
+            {
+                UIKit.Text(new Rect(x, y, w, 200f),
+                    "Online accounts aren't set up in this build yet.\n\n<color=#8890a8>For the developer: link the project to Unity Gaming Services " +
+                    "(Edit > Project Settings > Services), then enable Authentication > Username & Password and Cloud Save in the Unity dashboard. " +
+                    "Full steps: docs/ACCOUNTS.md.</color>", UIKit.Wrap, Color.white);
+                return;
+            }
+
+            if (acc.SignedIn)
+            {
+                UIKit.Text(new Rect(x, y, w, 30f), "Signed in as <b>" + acc.Username + "</b>", UIKit.Label, Color.white);
+                y += 34f;
+                UIKit.Text(new Rect(x, y, w, 60f), "Your characters, unlocks and stats are backed up to your account and load on any PC you sign in on.", UIKit.Wrap, UIKit.Muted);
+                y += 64f;
+                string sync = acc.LastSync == default ? "Not synced yet" : "Last synced " + acc.LastSync.ToString("HH:mm");
+                UIKit.Text(new Rect(x, y, w, 24f), sync, UIKit.Small, UIKit.Muted);
+                y += 32f;
+                GUI.enabled = !acc.Busy;
+                if (UIKit.Btn(new Rect(x, y, w * 0.5f - 6f, 40f), "Sync now", true)) acc.SyncNow();
+                if (UIKit.Btn(new Rect(x + w * 0.5f + 6f, y, w * 0.5f - 6f, 40f), "Sign out", true)) acc.SignOut();
+                GUI.enabled = true;
+                y += 56f;
+            }
+            else
+            {
+                if (UIKit.Toggle(new Rect(x, y, w * 0.5f - 4f, 34f), "Sign in", !accountCreating, true)) accountCreating = false;
+                if (UIKit.Toggle(new Rect(x + w * 0.5f + 4f, y, w * 0.5f - 4f, 34f), "Create account", accountCreating, true)) accountCreating = true;
+                y += 48f;
+                UIKit.Text(new Rect(x, y, 120f, 34f), "Username", UIKit.Label, Color.white);
+                accUser = GUI.TextField(new Rect(x + 130f, y, w - 130f, 34f), accUser ?? "", 20, UIKit.Field);
+                y += 42f;
+                UIKit.Text(new Rect(x, y, 120f, 34f), "Password", UIKit.Label, Color.white);
+                accPass = GUI.PasswordField(new Rect(x + 130f, y, w - 130f, 34f), accPass ?? "", '*', 30, UIKit.Field);
+                y += 42f;
+                if (accountCreating)
+                {
+                    UIKit.Text(new Rect(x, y, 120f, 34f), "Again", UIKit.Label, Color.white);
+                    accPass2 = GUI.PasswordField(new Rect(x + 130f, y, w - 130f, 34f), accPass2 ?? "", '*', 30, UIKit.Field);
+                    y += 40f;
+                    UIKit.Text(new Rect(x, y, w, 40f), "8-30 characters with an upper-case letter, a lower-case letter, a number and a symbol.", UIKit.Wrap, UIKit.Muted);
+                    y += 40f;
+                }
+                GUI.enabled = !acc.Busy;
+                bool enter = Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
+                if (UIKit.Btn(new Rect(x, y, w, 44f), accountCreating ? "<b>Create account</b>" : "<b>Sign in</b>") || (enter && GUI.enabled))
+                {
+                    if (accountCreating && accPass != accPass2) Toasts.Show("Passwords don't match", "Type the same password twice.", UIKit.Bad);
+                    else if (accountCreating) acc.SignUp(accUser.Trim(), accPass);
+                    else acc.SignIn(accUser.Trim(), accPass);
+                }
+                GUI.enabled = true;
+                y += 54f;
+                if (acc.SignedIn) { accPass = accPass2 = ""; }
+            }
+            if (!string.IsNullOrEmpty(acc.Error)) UIKit.Text(new Rect(x, y, w, 50f), acc.Error, UIKit.Wrap, UIKit.Bad);
+            else if (!string.IsNullOrEmpty(acc.Status)) UIKit.Text(new Rect(x, y, w, 50f), acc.Status, UIKit.Wrap, UIKit.Good);
         }
 
         /// <summary>Replace the slot list with a quick layout: the first slot is the keyboard player.</summary>
