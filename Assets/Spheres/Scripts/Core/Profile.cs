@@ -18,6 +18,8 @@ namespace Spheres
     public class Profile
     {
         public int matchesPlayed, matchesWon, roundsWon, kills, deaths, blocks, cardsPicked, onlineMatches;
+        /// <summary>Bullets (not border or fall hits) blocked, and Rare-or-better cards picked.</summary>
+        public int bulletBlocks, rareCards;
         public float damageDealt, playSeconds;
         public List<CardCount> cardCounts = new List<CardCount>();
         public List<string> achievements = new List<string>();
@@ -137,6 +139,7 @@ namespace Spheres
         public void AddCard(CardDefinition c)
         {
             cardsPicked++;
+            if (c.Rarity >= Rarity.Rare) rareCards++;
             var cc = cardCounts.FirstOrDefault(x => x.id == c.Id);
             if (cc == null) cardCounts.Add(new CardCount { id = c.Id, count = 1 });
             else cc.count++;
@@ -161,20 +164,25 @@ namespace Spheres
             new Achievement { Id = "card_shark", Title = "Card Shark", Description = "Pick 50 cards.", Hat = "tophat" },
             new Achievement { Id = "collector", Title = "Collector", Description = "Pick 100 different cards.", Hat = "monocle" },
             new Achievement { Id = "stacked", Title = "Stacked", Description = "Hold 12 cards in one match." },
-            new Achievement { Id = "gambler", Title = "High Roller", Description = "Pick a Legendary card." },
+            new Achievement { Id = "gambler", Title = "High Roller", Description = "Pick a Legendary card.", Hat = "crystalcrown" },
             new Achievement { Id = "wall_sitter", Title = "Safety First", Description = "Block 25 border or fall hits.", Hat = "cone" },
             new Achievement { Id = "blocker", Title = "Bubble Boy", Description = "Successfully block 200 times.", Hat = "halo" },
-            new Achievement { Id = "untouchable", Title = "Untouchable", Description = "Win a round without taking damage." },
-            new Achievement { Id = "clutch", Title = "Clutch", Description = "Win a round with less than 10 HP." },
+            new Achievement { Id = "untouchable", Title = "Untouchable", Description = "Win a round without taking damage.", Hat = "astronaut" },
+            new Achievement { Id = "clutch", Title = "Clutch", Description = "Win a round with less than 10 HP.", Hat = "lightning" },
             new Achievement { Id = "sharpshooter", Title = "Sharpshooter", Description = "Deal 10,000 damage in total.", Hat = "visor" },
-            new Achievement { Id = "flawless", Title = "Flawless", Description = "Win a match without losing a round." },
-            new Achievement { Id = "brawler", Title = "Free-for-All Champion", Description = "Win a match with 6 or more teams." },
+            new Achievement { Id = "flawless", Title = "Flawless", Description = "Win a match without losing a round.", Hat = "flame" },
+            new Achievement { Id = "brawler", Title = "Free-for-All Champion", Description = "Win a match with 6 or more teams.", Hat = "viking" },
             new Achievement { Id = "bot_slayer", Title = "Machine Breaker", Description = "Win against a Brutal bot.", Hat = "horns" },
             new Achievement { Id = "architect", Title = "Architect", Description = "Save a map in the editor.", Hat = "antenna" },
-            new Achievement { Id = "online", Title = "Connected", Description = "Finish an online match." },
+            new Achievement { Id = "online", Title = "Connected", Description = "Finish an online match.", Hat = "satellite" },
             new Achievement { Id = "graduate", Title = "Graduate", Description = "Complete training.", Hat = "party" },
-            new Achievement { Id = "modded", Title = "Tinkerer", Description = "Play a match with a mod card." },
+            new Achievement { Id = "modded", Title = "Tinkerer", Description = "Play a match with a mod card.", Hat = "lightbulb" },
             new Achievement { Id = "marathon", Title = "Marathon", Description = "Play for 2 hours.", Hat = "propeller" },
+            new Achievement { Id = "regular", Title = "Regular", Description = "Play 10 matches.", Hat = "chef" },
+            new Achievement { Id = "round_pro", Title = "Round Up", Description = "Win 10 rounds.", Hat = "cowboy" },
+            new Achievement { Id = "hunter", Title = "Hunter", Description = "Get 100 kills.", Hat = "samurai" },
+            new Achievement { Id = "iron_wall", Title = "Iron Wall", Description = "Block 50 bullets.", Hat = "knight" },
+            new Achievement { Id = "rare_taste", Title = "Refined Taste", Description = "Pick 25 Rare or Legendary cards.", Hat = "wizard" },
         };
 
         static bool hooked;
@@ -195,7 +203,12 @@ namespace Spheres
                 var me = Tracked(gm);
                 if (me == null) return;
                 var killer = info != null && info.Source != null && info.Source != victim ? info.Source : victim.LastAttacker;
-                if (killer == me && victim != me) { Profile.Current.kills++; Profile.Current.Unlock("first_blood"); }
+                if (killer == me && victim != me)
+                {
+                    Profile.Current.kills++;
+                    Profile.Current.Unlock("first_blood");
+                    if (Profile.Current.kills >= 100) Profile.Current.Unlock("hunter");
+                }
                 if (victim == me) Profile.Current.deaths++;
             };
             GameEvents.DamageBlocked += (p, info) =>
@@ -205,6 +218,11 @@ namespace Spheres
                 var pr = Profile.Current;
                 pr.blocks++;
                 if (pr.blocks >= 200) pr.Unlock("blocker");
+                if (!info.IsEnvironmental)
+                {
+                    pr.bulletBlocks++;
+                    if (pr.bulletBlocks >= 50) pr.Unlock("iron_wall");
+                }
                 if (info.IsEnvironmental && pr.blocks >= 0)
                 {
                     environmentBlocks++;
@@ -221,6 +239,7 @@ namespace Spheres
                 if (pr.cardsPicked >= 50) pr.Unlock("card_shark");
                 if (pr.DistinctCards >= 100) pr.Unlock("collector");
                 if (card.Rarity == Rarity.Legendary) pr.Unlock("gambler");
+                if (pr.rareCards >= 25) pr.Unlock("rare_taste");
                 if (p.Cards.Count >= 12) pr.Unlock("stacked");
                 if (card.Source != "Spheres" && card.Source != "Missing mod") pr.Unlock("modded");
             };
@@ -236,6 +255,7 @@ namespace Spheres
                 var me = gm != null ? Tracked(gm) : null;
                 if (me == null || gm.IsTraining || winner != me.Team) return;
                 Profile.Current.roundsWon++;
+                if (Profile.Current.roundsWon >= 10) Profile.Current.Unlock("round_pro");
                 if (roundDamageTaken <= 0.01f) Profile.Current.Unlock("untouchable");
                 if (me.IsAlive && me.Health < 10f) Profile.Current.Unlock("clutch");
             };
@@ -280,6 +300,12 @@ namespace Spheres
                     pr.Unlock("bot_slayer");
             }
             if (pr.damageDealt >= 10000f) pr.Unlock("sharpshooter");
+            // Count-based unlocks (also catches stats earned before these achievements existed).
+            if (pr.matchesPlayed >= 10) pr.Unlock("regular");
+            if (pr.roundsWon >= 10) pr.Unlock("round_pro");
+            if (pr.kills >= 100) pr.Unlock("hunter");
+            if (pr.bulletBlocks >= 50) pr.Unlock("iron_wall");
+            if (pr.rareCards >= 25) pr.Unlock("rare_taste");
             pr.Save();
         }
 
@@ -299,12 +325,23 @@ namespace Spheres
         public Action<Transform, Color> Build;
     }
 
-    /// <summary>Cosmetic hats (unlocked by achievements; bots wear random ones).</summary>
-    public static class Hats
+    /// <summary>Cosmetic hats (most are free, some unlock through achievements; bots wear random ones).</summary>
+    public static partial class Hats
     {
         static Material M(Color c) => Mats.Solid(c);
 
-        public static readonly List<Hat> All = new List<Hat>
+        /// <summary>Every hat: the originals first (so saved ids stay put), then the larger collection in Hats2.cs.</summary>
+        public static readonly List<Hat> All = Combine();
+
+        static List<Hat> Combine()
+        {
+            var list = OriginalHats();
+            foreach (var h in More())
+                if (list.All(x => x.Id != h.Id)) list.Add(h);
+            return list;
+        }
+
+        static List<Hat> OriginalHats() => new List<Hat>
         {
             new Hat { Id = "none", Name = "No hat", Build = (t, c) => { } },
             new Hat { Id = "headband", Name = "Headband", Build = (t, c) => Prim.Cube("Band", t, new Vector3(0f, -0.12f, 0f), new Vector3(0.94f, 0.08f, 0.94f), M(new Color(0.9f, 0.15f, 0.15f))) },
@@ -376,10 +413,12 @@ namespace Spheres
 
         public static Hat Get(string id) => All.FirstOrDefault(h => h.Id == id) ?? All[0];
 
+        /// <summary>The achievement that unlocks a hat, or null if it's free.</summary>
+        public static Achievement UnlockedBy(string id) => id == "none" ? null : Achievements.All.FirstOrDefault(x => x.Hat == id);
+
         public static bool Unlocked(string id)
         {
-            if (id == "none") return true;
-            var a = Achievements.All.FirstOrDefault(x => x.Hat == id);
+            var a = UnlockedBy(id);
             return a == null || Profile.Current.Has(a.Id);
         }
 
