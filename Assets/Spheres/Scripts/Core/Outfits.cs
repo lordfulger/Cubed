@@ -364,7 +364,8 @@ namespace Spheres
             for (int i = gun.childCount - 1; i >= 0; i--)
             {
                 var ch = gun.GetChild(i);
-                if (ch != parts.Muzzle) Object.Destroy(ch.gameObject);
+                // Keep the muzzle and gear other systems hang on the gun (DeckVisuals' "DeckGear").
+                if (ch != parts.Muzzle && ch.name != "DeckGear") Object.Destroy(ch.gameObject);
             }
             var dark = Mats.Solid(Color.Lerp(body, Color.black, 0.55f));
             Material barrel = dark, grip = dark, ring = null, extra = null;
