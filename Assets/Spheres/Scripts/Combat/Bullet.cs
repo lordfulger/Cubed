@@ -95,6 +95,9 @@ namespace Spheres
                 b.Color = Color.white;
             }
             b.BuildVisual();
+            // Homing bullets leave a long trail so you can see them curving (and know to block).
+            var tr = b.GetComponent<TrailRenderer>();
+            if (tr != null) tr.time = b.Homing > 0f ? 0.4f : 0.12f;
             return b;
         }
 

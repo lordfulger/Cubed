@@ -95,7 +95,8 @@ namespace Spheres
             D(Stat.BlockCooldown, "Block Cooldown", 4f, 0.25f, 30f, -1, false, "s");
             D(Stat.BlockDuration, "Block Duration", 0.35f, 0.05f, 6f, 1, false, "s");
             D(Stat.Regen, "Regen", 0f, 0f, 200f, 1, false, "/s");
-            D(Stat.Homing, "Homing", 0f, 0f, 20f);
+            // Capped so stacked homing cards curve hard but can still be dodged (and always blocked).
+            D(Stat.Homing, "Homing", 0f, 0f, 3.5f);
             D(Stat.ExplosionRadius, "Blast Radius", 0f, 0f, 20f, 1, false, "m");
             D(Stat.Pierce, "Pierce", 0f, 0f, 30f, 1, true);
             D(Stat.ExtraLives, "Extra Lives", 0f, 0f, 10f, 1, true);
