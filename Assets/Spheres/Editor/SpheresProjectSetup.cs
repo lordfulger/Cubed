@@ -166,6 +166,32 @@ namespace Spheres.EditorTools
             }
         }
 
+        /// <summary>
+        /// Spheres reads input through the classic Input Manager (plus the Input System package for rumble when
+        /// present). Unity 6 templates switch "Active Input Handling" to the new system only, which makes every
+        /// UnityEngine.Input call throw, so set it to Both. Unity must restart for this to take effect.
+        /// </summary>
+        static void EnsureLegacyInputEnabled(bool interactive)
+        {
+            try
+            {
+                var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/ProjectSettings.asset");
+                if (assets == null || assets.Length == 0) return;
+                var so = new SerializedObject(assets[0]);
+                var prop = so.FindProperty("activeInputHandler");
+                if (prop == null || prop.intValue != 1) return; // 0 = old, 1 = new only, 2 = both
+                prop.intValue = 2;
+                so.ApplyModifiedProperties();
+                AssetDatabase.SaveAssets();
+                Debug.LogWarning("[Spheres] Set Active Input Handling to 'Both'. Restart Unity for it to take effect.");
+                if (EditorUtility.DisplayDialog("Spheres: restart needed",
+                        "Spheres switched 'Active Input Handling' to 'Both' so keyboard, mouse and gamepads work.\n\nUnity needs to restart for this to take effect. Restart now?",
+                        "Restart", "Later"))
+                    EditorApplication.OpenProject(System.IO.Directory.GetCurrentDirectory());
+            }
+            catch (System.Exception e) { Debug.LogWarning("[Spheres] Could not check Active Input Handling: " + e.Message); }
+        }
+
         static void ForceDomainReload()
         {
             try
@@ -187,6 +213,7 @@ namespace Spheres.EditorTools
             if (PlayerSettings.colorSpace != ColorSpace.Linear) PlayerSettings.colorSpace = ColorSpace.Linear;
             ForceDomainReload();
             UseBuiltInRenderPipeline();
+            EnsureLegacyInputEnabled(interactive);
             if (PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Spheres";
 #if UNITY_2021_2_OR_NEWER
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
