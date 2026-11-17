@@ -317,7 +317,16 @@ namespace Spheres
         public FighterParts Parts { get; private set; }
         Camera cam;
         Transform model;
-        float spin, blink = 2f;
+        float spin, blink = 2f, lastDrag = -10f;
+        /// <summary>Extra turn set by dragging the preview (degrees, 0 = facing the camera).</summary>
+        public float UserYaw;
+
+        /// <summary>Turn the preview by dragging (degrees).</summary>
+        public void Drag(float degrees)
+        {
+            UserYaw = Mathf.Repeat(UserYaw + degrees + 180f, 360f) - 180f;
+            lastDrag = Time.unscaledTime;
+        }
         Color team;
 
         public static CharacterPreview Create(Color team, CharacterLook look)
@@ -368,7 +377,10 @@ namespace Spheres
             spin += dt * 35f;
             if (model != null)
             {
-                model.localRotation = Quaternion.Euler(0f, 180f + Mathf.Sin(spin * Mathf.Deg2Rad * 2f) * 35f, 0f);
+                // The face is on the model's +Z side and the camera looks back along -Z, so 0 = facing you.
+                // Drag in the editor to turn it; it gently sways when left alone.
+                float sway = Time.unscaledTime - lastDrag > 2f ? Mathf.Sin(spin * Mathf.Deg2Rad * 2f) * 25f : 0f;
+                model.localRotation = Quaternion.Euler(0f, UserYaw + sway, 0f);
                 Parts.Rig.localPosition = new Vector3(0f, Mathf.Abs(Mathf.Sin(Time.unscaledTime * 2.4f)) * 0.06f, 0f);
                 float s = 1f + Mathf.Sin(Time.unscaledTime * 4.8f) * 0.025f;
                 Parts.Rig.localScale = new Vector3(1f / Mathf.Sqrt(s), s, 1f / Mathf.Sqrt(s));

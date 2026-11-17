@@ -652,6 +652,15 @@ namespace Spheres
             var pv = new Rect(panel.x + 24f, panel.y + 110f, ps, ps);
             UIKit.Fill(new Rect(pv.x - 3f, pv.y - 3f, pv.width + 6f, pv.height + 6f), Teams.GetColor(previewTeam) * new Color(1f, 1f, 1f, 0.6f));
             if (preview.Texture != null) GUI.DrawTexture(pv, preview.Texture, ScaleMode.ScaleToFit, false);
+            // Drag to turn the fighter; Q / E also turn it (not while typing a name).
+            var ev = Event.current;
+            if (ev.type == EventType.MouseDrag && pv.Contains(ev.mousePosition)) { preview.Drag(-ev.delta.x * 0.8f); ev.Use(); }
+            if (GUIUtility.keyboardControl == 0 && ev.type == EventType.Repaint)
+            {
+                if (Input.GetKey(KeyCode.Q)) preview.Drag(120f * Time.unscaledDeltaTime);
+                if (Input.GetKey(KeyCode.E)) preview.Drag(-120f * Time.unscaledDeltaTime);
+            }
+            UIKit.Text(new Rect(pv.x, pv.yMax - 22f, pv.width, 20f), "Drag (or Q / E) to turn", UIKit.SmallCenter, new Color(1f, 1f, 1f, 0.45f));
             float sw = (ps - 7f * 6f) / 8f;
             for (int t = 0; t < Teams.Max; t++)
             {
