@@ -71,6 +71,16 @@ namespace Spheres
                     Header("HUD");
                     o.damageNumbers = UIKit.CheckRow(Row(), "Damage numbers", o.damageNumbers);
                     o.funnyDeathMessages = UIKit.CheckRow(Row(), "Funny death messages", o.funnyDeathMessages);
+                    if (AutoUpdater.Supported)
+                    {
+                        Header("Updates");
+                        o.checkForUpdates = UIKit.CheckRow(Row(), "Check for updates at startup", o.checkForUpdates);
+                        var u = AutoUpdater.Instance;
+                        string status = u == null ? "" : u.State == AutoUpdater.UpdateState.UpToDate ? "Up to date (" + Application.version + ")"
+                            : u.State == AutoUpdater.UpdateState.Available ? "Update available: " + u.LatestVersion
+                            : u.State == AutoUpdater.UpdateState.Checking ? "Checking..." : u.State == AutoUpdater.UpdateState.Failed ? "Couldn't check: " + u.Error : "Version " + Application.version;
+                        if (UIKit.Btn(Row(), "Check now   " + status, true) && u != null) { u.Dismissed = false; u.Check(); }
+                    }
                     break;
 
                 case 1:

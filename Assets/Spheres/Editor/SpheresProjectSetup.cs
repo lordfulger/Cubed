@@ -284,7 +284,61 @@ namespace Spheres.EditorTools
             return null;
         }
 
-        static void Build(BuildTarget target, string path, bool reveal = true)
+        /// <summary>
+        /// Bump the version, build Windows, zip it and open a new GitHub release page. Players' games see the
+        /// release and offer to update themselves (Spheres.AutoUpdater).
+        /// </summary>
+        [MenuItem("Spheres/Publish Update (Windows)", priority = 25)]
+        public static void PublishUpdate()
+        {
+            string current = string.IsNullOrEmpty(PlayerSettings.bundleVersion) ? "0.1.0" : PlayerSettings.bundleVersion;
+            string next = NextVersion(current);
+            if (!EditorUtility.DisplayDialog("Publish a Spheres update",
+                    "This builds Spheres " + next + " for Windows (current: " + current + "), zips it, and opens GitHub's \"new release\" page.\n\n" +
+                    "On that page: drag the zip into the box at the bottom, then click 'Publish release'. Everyone's game will offer the update next time it starts.",
+                    "Build " + next, "Cancel"))
+                return;
+            PlayerSettings.bundleVersion = next;
+            AssetDatabase.SaveAssets();
+            const string dir = "Builds/Windows";
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+            catch (System.Exception e) { Debug.LogWarning("[Spheres] Couldn't clear old build: " + e.Message); }
+            if (!Build(BuildTarget.StandaloneWindows64, dir + "/Spheres.exe", false)) return;
+
+            string zip = "Builds/Spheres-Windows-v" + next + ".zip";
+            try
+            {
+                if (File.Exists(zip)) File.Delete(zip);
+                using (var archive = System.IO.Compression.ZipFile.Open(zip, System.IO.Compression.ZipArchiveMode.Create))
+                {
+                    string root = Path.GetFullPath(dir);
+                    foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+                    {
+                        string rel = file.Substring(root.Length + 1).Replace('\\', '/');
+                        if (rel.Contains("DoNotShip")) continue; // Burst/IL2CPP debug folders
+                        System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(archive, file, rel);
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                EditorUtility.DisplayDialog("Spheres", "Zipping the build failed: " + e.Message, "OK");
+                return;
+            }
+            Debug.Log("[Spheres] Packaged " + zip);
+            EditorUtility.RevealInFinder(Path.GetFullPath(zip));
+            Application.OpenURL("https://github.com/" + AutoUpdater.Repo + "/releases/new?tag=v" + next + "&title=Spheres%20v" + next);
+        }
+
+        static string NextVersion(string v)
+        {
+            var parts = v.Split('.').Select(p => int.TryParse(new string(p.TakeWhile(char.IsDigit).ToArray()), out int n) ? n : 0).ToList();
+            while (parts.Count < 3) parts.Add(0);
+            parts[parts.Count - 1]++;
+            return string.Join(".", parts);
+        }
+
+        static bool Build(BuildTarget target, string path, bool reveal = true)
         {
             Setup(!Application.isBatchMode);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -300,11 +354,12 @@ namespace Spheres.EditorTools
             {
                 Debug.LogError("[Spheres] Build failed: " + report.summary.result);
                 if (Application.isBatchMode) EditorApplication.Exit(1);
-                return;
+                return false;
             }
             Debug.Log("[Spheres] Built " + path + " (" + report.summary.totalSize / (1024 * 1024) + " MB). " +
                       "Install BepInEx 5 (x64) next to the executable to enable code mods.");
             if (reveal && !Application.isBatchMode) EditorUtility.RevealInFinder(path);
+            return true;
         }
 
         [MenuItem("Spheres/Open User Data Folder", priority = 40)]

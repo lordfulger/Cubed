@@ -115,6 +115,7 @@ namespace Spheres
         void DrawMainMenu()
         {
             var s = UIKit.Size;
+            AutoUpdater.DrawBanner(new Rect(s.x - 520f, 20f, 500f, 80f));
             UIKit.Fill(new Rect(0f, 0f, 460f, s.y), new Color(0.05f, 0.06f, 0.09f, 0.82f));
             // Animated title: each letter bobs and cycles through the team colors.
             var title = new GUIStyle(UIKit.Huge) { alignment = TextAnchor.MiddleLeft, fontSize = 78 };

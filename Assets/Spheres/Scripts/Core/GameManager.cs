@@ -111,6 +111,7 @@ namespace Spheres
             Net = gameObject.AddComponent<Net.NetSession>();
             gameObject.AddComponent<MusicPlayer>();
             gameObject.AddComponent<SpheresUI>();
+            AutoUpdater.Ensure(gameObject);
             Editor = gameObject.AddComponent<MapEditor>();
             ShowMenuBackdrop();
         }

@@ -27,6 +27,8 @@ namespace Spheres
         public bool reduceFlashes;
         public int colorPalette;                  // 0 default, 1 colorblind-safe, 2 high contrast
         public bool damageNumbers = true;
+        /// <summary>Built game: check GitHub for a newer version at startup.</summary>
+        public bool checkForUpdates = true;
         /// <summary>Silly kill-feed lines ("X popped Y") instead of plain "X > Y".</summary>
         public bool funnyDeathMessages = true;
         /// <summary>Language code ("" = follow the system language).</summary>
