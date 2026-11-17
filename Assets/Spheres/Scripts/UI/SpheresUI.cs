@@ -168,9 +168,32 @@ namespace Spheres
                 y += 40f + 8f;
             }
             DrawAccountBadge(new Rect(s.x - 340f, s.y - 70f, 320f, 50f));
+            DrawDailyCard(new Rect(s.x - 340f, s.y - 290f, 320f, 210f));
             if (UIKit.Btn(new Rect(50f, s.y - 90f, w, 44f), "Quit")) Application.Quit();
             UIKit.Text(new Rect(54f, s.y - 130f, 380f, 20f), "Gamepad: stick/d-pad to move, A select, B back", UIKit.Small, UIKit.Muted);
             UIKit.Text(new Rect(54f, s.y - 36f, 380f, 20f), "v" + SpheresAPI.GameVersion + (ContentLoader.BepInExLoaded ? "  -  BepInEx active" : ""), UIKit.Small, UIKit.Muted);
+        }
+
+        // ---------------------------------------------------------------- daily challenge
+
+        void DrawDailyCard(Rect r)
+        {
+            DailyChallenge.Day d;
+            try { d = DailyChallenge.Today(); }
+            catch (Exception) { return; }
+            UIKit.Fill(r, new Color(0.05f, 0.06f, 0.09f, 0.85f));
+            UIKit.Outline(r, new Color(1f, 0.8f, 0.3f, 0.8f), 1.5f);
+            float x = r.x + 12f, w = r.width - 24f, y = r.y + 8f;
+            UIKit.Text(new Rect(x, y, w, 24f), "<b>Daily Challenge</b>  <color=#8890a8>" + d.Date + "</color>", UIKit.Label, new Color(1f, 0.85f, 0.4f));
+            y += 26f;
+            UIKit.Text(new Rect(x, y, w, 20f), GameManager.ModeName(d.Mode) + " on " + d.MapName + (d.FreeForAll ? "  (free-for-all)" : "  (vs " + d.Bots + " bot" + (d.Bots > 1 ? "s" : "") + ")"), UIKit.Small, Color.white);
+            y += 22f;
+            string cards = string.Join(", ", d.StartingCards.Select(id => CardRegistry.Get(id)?.Title ?? id));
+            UIKit.Text(new Rect(x, y, w, 36f), "Everyone starts with: " + cards, UIKit.Wrap, UIKit.Muted);
+            y += 40f;
+            UIKit.Text(new Rect(x, y, w, 20f), DailyChallenge.BestText(), UIKit.Small, UIKit.Accent);
+            y += 26f;
+            if (UIKit.Btn(new Rect(x, y, w, 38f), "<b>Play today's challenge</b>")) gm.StartDaily();
         }
 
         // ---------------------------------------------------------------- account
@@ -402,6 +425,11 @@ namespace Spheres
             GUI.enabled = setupError == null;
             if (UIKit.Btn(new Rect(panel.xMax - 280f, fy, 260f, 50f), "<b>START MATCH</b>")) gm.StartMatch();
             GUI.enabled = true;
+            if (!Net.IsClient && UIKit.Btn(new Rect(panel.xMax - 280f, fy - 42f, 260f, 36f), "Start a Tournament (1v1 bracket)", true))
+            {
+                string err = gm.StartTournament();
+                if (err != null) Toasts.Show("Can't start tournament", err, UIKit.Bad);
+            }
         }
 
         string localIps = "";

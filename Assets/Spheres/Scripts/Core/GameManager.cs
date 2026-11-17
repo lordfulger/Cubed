@@ -223,6 +223,7 @@ namespace Spheres
             Weather.Active = false;
             Weather.Clear();
             EndTraining();
+            EndParty();
             if (NetClientMode) ClientExitMatch(GameState.MainMenu);
             if (Net != null && Net.IsHosting && InMatch)
             {
@@ -285,7 +286,7 @@ namespace Spheres
 
         public void SaveSettings()
         {
-            if (NetClientMode || trainingBackup != null)
+            if (NetClientMode || trainingBackup != null || partyBackup != null)
             {
                 Sfx.Volume = Settings.volume;
                 return; // temporary rules are active; preferences are copied back on exit

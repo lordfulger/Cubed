@@ -67,6 +67,7 @@ namespace Spheres
             if (modeEventsHooked) return;
             modeEventsHooked = true;
             GameEvents.PlayerDied += OnPlayerDiedForMode;
+            GameEvents.MatchEnded += OnPartyMatchEnded;
         }
 
         void ModeRoundStart()

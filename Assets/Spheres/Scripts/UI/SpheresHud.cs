@@ -892,6 +892,18 @@ namespace Spheres
                 if (UIKit.Btn(new Rect(r.xMax - 240f, by, 220f, 42f), "Leave")) { gm.Net.Leave(); gm.ReturnToMenu(); }
                 return;
             }
+            // Tournament: show the bracket and move on to the next duel.
+            if (gm.Bracket != null)
+            {
+                var b = gm.Bracket;
+                UIKit.Fill(new Rect(r.x, r.yMax + 8f, w, 150f), new Color(0.05f, 0.06f, 0.09f, 0.92f));
+                UIKit.Text(new Rect(r.x + 12f, r.yMax + 12f, w - 24f, 22f), b.Finished ? "<b>" + b.Champion.name + " is the champion!</b>" : "Tournament bracket", UIKit.Label, UIKit.Accent);
+                b.Draw(new Rect(r.x + 8f, r.yMax + 40f, w - 16f, 112f));
+                if (!b.Finished && UIKit.Btn(new Rect(r.x + 20f, by, w - 40f, 42f), "<b>Next match</b>")) gm.NextTournamentMatch();
+                else if (b.Finished && UIKit.Btn(new Rect(r.x + 20f, by, w - 40f, 42f), "<b>Finish tournament</b>")) gm.ReturnToMenu();
+                return;
+            }
+            if (gm.InDaily) UIKit.Text(new Rect(r.x + 20f, by - 84f, w - 40f, 24f), "Daily challenge  -  " + DailyChallenge.BestText(), UIKit.SmallCenter, UIKit.Accent);
             // Keep the same fighters and cards and play on.
             float kw = (w - 60f) / 2f;
             if (UIKit.Btn(new Rect(r.x + 20f, by - 52f, kw, 42f), "<b>Keep Going</b> (+" + Mathf.Max(1, gm.Settings.roundsToWin) + " rounds)")) gm.KeepGoing(false);
