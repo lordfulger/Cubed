@@ -633,20 +633,21 @@ namespace Spheres
         void Update()
         {
             float udt = Time.unscaledDeltaTime;
-            Controllers.Poll();
-            Rumble.Update();
-            UpdateScoreboardKey();
-            UpdateLocalVoteInput();
-            Achievements.Tick(udt);
-            Weather.Update(udt);
-            Spheres.Net.SteamIntegration.Update();
+            // Each subsystem is isolated: an error in one is logged (once) instead of stalling the match.
+            Safe("controllers", Controllers.Poll);
+            Safe("rumble", Rumble.Update);
+            Safe("scoreboard", UpdateScoreboardKey);
+            Safe("map vote", UpdateLocalVoteInput);
+            Safe("achievements", () => Achievements.Tick(udt));
+            Safe("weather", () => Weather.Update(udt));
+            Safe("steam", Spheres.Net.SteamIntegration.Update);
             if (!launchJoinChecked && State == GameState.MainMenu)
             {
                 launchJoinChecked = true;
-                Spheres.Net.SteamIntegration.ProcessLaunchJoin();
-                Spheres.Net.SteamWorkshop.LoadSubscribed();
+                Safe("steam join", Spheres.Net.SteamIntegration.ProcessLaunchJoin);
+                Safe("workshop", Spheres.Net.SteamWorkshop.LoadSubscribed);
             }
-            HandlePause();
+            Safe("pause", HandlePause);
             if (NetClientMode)
             {
                 StateTime += udt;
@@ -740,6 +741,17 @@ namespace Spheres
         }
 
         bool launchJoinChecked;
+        readonly HashSet<string> safeLogged = new HashSet<string>();
+
+        /// <summary>Run a per-frame subsystem; log its first exception instead of breaking the frame.</summary>
+        void Safe(string name, System.Action action)
+        {
+            try { action(); }
+            catch (System.Exception e)
+            {
+                if (safeLogged.Add(name + e.GetType().Name)) Debug.LogError("[Spheres] Error in " + name + " (logged once): " + e);
+            }
+        }
 
         /// <summary>True while a local player holds the scoreboard button (Tab / View).</summary>
         public bool ScoreboardOpen { get; private set; }
