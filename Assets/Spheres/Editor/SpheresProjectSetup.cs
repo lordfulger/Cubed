@@ -288,24 +288,56 @@ namespace Spheres.EditorTools
         /// Bump the version, build Windows, zip it and open a new GitHub release page. Players' games see the
         /// release and offer to update themselves (Spheres.AutoUpdater).
         /// </summary>
-        [MenuItem("Spheres/Publish Update (Windows)", priority = 25)]
+        [MenuItem("Spheres/Publish Update (Windows + Mac)", priority = 25)]
         public static void PublishUpdate()
         {
             string current = string.IsNullOrEmpty(PlayerSettings.bundleVersion) ? "0.1.0" : PlayerSettings.bundleVersion;
             string next = NextVersion(current);
+            bool mac = BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, BuildTarget.StandaloneOSX);
             if (!EditorUtility.DisplayDialog("Publish a Spheres update",
-                    "This builds Spheres " + next + " for Windows (current: " + current + "), zips it, and opens GitHub's \"new release\" page.\n\n" +
-                    "On that page: drag the zip into the box at the bottom, then click 'Publish release'. Everyone's game will offer the update next time it starts.",
+                    "This builds Spheres " + next + " for Windows" + (mac ? " and Mac" : "") + " (current: " + current + "), zips the builds and opens GitHub's \"new release\" page.\n\n" +
+                    "On that page: drag the zip(s) into the box at the bottom, then click 'Publish release'. Everyone's game will offer the update next time it starts." +
+                    (mac ? "" : "\n\n(No Mac build: add 'Mac Build Support (Mono)' to this Unity in Unity Hub > Installs to include one.)"),
                     "Build " + next, "Cancel"))
                 return;
             PlayerSettings.bundleVersion = next;
             AssetDatabase.SaveAssets();
-            const string dir = "Builds/Windows";
+            var zips = new System.Collections.Generic.List<string>();
+
+            const string winDir = "Builds/Windows";
+            Clean(winDir);
+            if (!Build(BuildTarget.StandaloneWindows64, winDir + "/Spheres.exe", false)) return;
+            string winZip = "Builds/Spheres-Windows-v" + next + ".zip";
+            if (!Zip(winDir, winZip, false)) return;
+            zips.Add(winZip);
+
+            if (mac)
+            {
+                const string macDir = "Builds/macOS";
+                Clean(macDir);
+                if (Build(BuildTarget.StandaloneOSX, macDir + "/Spheres.app", false))
+                {
+                    string macZip = "Builds/Spheres-macOS-v" + next + ".zip";
+                    if (Zip(macDir, macZip, true)) zips.Add(macZip);
+                }
+            }
+            Debug.Log("[Spheres] Packaged " + string.Join(", ", zips));
+            EditorUtility.RevealInFinder(Path.GetFullPath(zips[0]));
+            Application.OpenURL("https://github.com/" + AutoUpdater.Repo + "/releases/new?tag=v" + next + "&title=Spheres%20v" + next);
+        }
+
+        static void Clean(string dir)
+        {
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
             catch (System.Exception e) { Debug.LogWarning("[Spheres] Couldn't clear old build: " + e.Message); }
-            if (!Build(BuildTarget.StandaloneWindows64, dir + "/Spheres.exe", false)) return;
+        }
 
-            string zip = "Builds/Spheres-Windows-v" + next + ".zip";
+        /// <summary>
+        /// Zip a build folder. For Mac builds, files in Contents/MacOS (and dylibs) get Unix "executable" permissions in
+        /// the zip, otherwise a Mac refuses to launch an app that was zipped on Windows.
+        /// </summary>
+        static bool Zip(string dir, string zip, bool macPermissions)
+        {
             try
             {
                 if (File.Exists(zip)) File.Delete(zip);
@@ -316,18 +348,21 @@ namespace Spheres.EditorTools
                     {
                         string rel = file.Substring(root.Length + 1).Replace('\\', '/');
                         if (rel.Contains("DoNotShip")) continue; // Burst/IL2CPP debug folders
-                        System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(archive, file, rel);
+                        var entry = System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(archive, file, rel);
+                        if (macPermissions)
+                        {
+                            bool exec = rel.Contains("/Contents/MacOS/") || rel.EndsWith(".dylib") || rel.EndsWith(".bundle") || rel.EndsWith(".sh");
+                            entry.ExternalAttributes = (exec ? 0x81ED : 0x81A4) << 16; // -rwxr-xr-x or -rw-r--r--
+                        }
                     }
                 }
+                return true;
             }
             catch (System.Exception e)
             {
                 EditorUtility.DisplayDialog("Spheres", "Zipping the build failed: " + e.Message, "OK");
-                return;
+                return false;
             }
-            Debug.Log("[Spheres] Packaged " + zip);
-            EditorUtility.RevealInFinder(Path.GetFullPath(zip));
-            Application.OpenURL("https://github.com/" + AutoUpdater.Repo + "/releases/new?tag=v" + next + "&title=Spheres%20v" + next);
         }
 
         static string NextVersion(string v)
@@ -338,8 +373,22 @@ namespace Spheres.EditorTools
             return string.Join(".", parts);
         }
 
+        static void UseUniversalMac()
+        {
+            try
+            {
+                var t = System.Type.GetType("UnityEditor.OSXStandalone.UserBuildSettings, UnityEditor.OSXStandalone.Extensions");
+                var prop = t?.GetProperty("architecture", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (prop == null) return;
+                var universal = System.Enum.GetNames(prop.PropertyType).FirstOrDefault(n => n == "x64ARM64");
+                if (universal != null) prop.SetValue(null, System.Enum.Parse(prop.PropertyType, universal));
+            }
+            catch (System.Exception e) { Debug.LogWarning("[Spheres] Couldn't set the Mac architecture: " + e.Message); }
+        }
+
         static bool Build(BuildTarget target, string path, bool reveal = true)
         {
+            if (target == BuildTarget.StandaloneOSX) UseUniversalMac();
             Setup(!Application.isBatchMode);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             var options = new BuildPlayerOptions

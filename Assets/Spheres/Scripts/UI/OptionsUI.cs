@@ -120,7 +120,7 @@ namespace Spheres
                     var np = MusicPlayer.NowPlaying;
                     UIKit.Text(Row(), "Now playing: " + (np != null ? np.Name : "-") + "   (" + MusicPlayer.Entries.Count + " songs)", UIKit.Small, UIKit.Muted);
                     if (UIKit.Btn(Row(), "Next song", true)) MusicPlayer.Instance?.Skip();
-                    if (UIKit.Btn(Row(), "Open my music folder", true)) Application.OpenURL("file:///" + MusicPlayer.CustomFolder.Replace('\\', '/'));
+                    if (UIKit.Btn(Row(), "Open my music folder", true)) FolderOpener.Open(MusicPlayer.CustomFolder);
                     break;
 
                 case 3:

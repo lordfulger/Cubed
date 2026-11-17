@@ -122,7 +122,7 @@ namespace Spheres
             public string report;
         }
 
-        public static void OpenFolder() => Application.OpenURL("file://" + Folder);
+        public static void OpenFolder() => FolderOpener.Open(Folder);
     }
 
     /// <summary>Runs callbacks from background threads on the main thread.</summary>

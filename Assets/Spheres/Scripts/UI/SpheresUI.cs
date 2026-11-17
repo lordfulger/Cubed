@@ -729,7 +729,7 @@ namespace Spheres
                 MapRegistry.RefreshUserMaps();
             }
             if (UIKit.Btn(new Rect(panel.x + 500f, by, 280f, 46f), "Open content folder"))
-                Application.OpenURL("file://" + ContentLoader.UserContentFolder);
+                FolderOpener.Open(ContentLoader.UserContentFolder);
             if (UIKit.Btn(new Rect(panel.x + 800f, by, 220f, 46f), "Open logs"))
                 CrashLog.OpenFolder();
         }

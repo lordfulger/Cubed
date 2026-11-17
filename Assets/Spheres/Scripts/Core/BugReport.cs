@@ -64,7 +64,7 @@ namespace Spheres
         static System.Collections.IEnumerator OpenSoon(string dir)
         {
             yield return new WaitForSecondsRealtime(0.6f); // let the screenshot finish writing
-            Application.OpenURL("file:///" + dir.Replace('\\', '/'));
+            FolderOpener.Open(dir);
         }
 
         static string Describe()

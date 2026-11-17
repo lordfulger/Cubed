@@ -38,7 +38,19 @@ namespace Spheres
         [Serializable] class AssetJson { public string name; public string browser_download_url; public long size; }
 
         /// <summary>Only installed Windows builds update themselves (the editor uses Spheres > Update from GitHub).</summary>
-        public static bool Supported => !Application.isEditor && Application.platform == RuntimePlatform.WindowsPlayer;
+        public static bool Supported => !Application.isEditor && (IsWindows || IsMac);
+        static bool IsWindows => Application.platform == RuntimePlatform.WindowsPlayer;
+        static bool IsMac => Application.platform == RuntimePlatform.OSXPlayer;
+
+        /// <summary>Release zips are named per platform: Spheres-Windows-v1.2.3.zip, Spheres-macOS-v1.2.3.zip.</summary>
+        static bool ForThisPlatform(string name)
+        {
+            name = name.ToLowerInvariant();
+            if (!name.EndsWith(".zip")) return false;
+            bool mac = name.Contains("mac") || name.Contains("osx");
+            bool win = name.Contains("win");
+            return IsMac ? mac : win || (!mac && !name.Contains("linux"));
+        }
 
         public static void Ensure(GameObject host)
         {
@@ -80,9 +92,7 @@ namespace Spheres
                 if (rel == null || string.IsNullOrEmpty(rel.tag_name)) { State = UpdateState.Failed; yield break; }
                 LatestVersion = rel.tag_name.TrimStart('v', 'V');
                 Notes = rel.body ?? "";
-                var asset = rel.assets?.FirstOrDefault(a => a != null && a.name != null && a.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
-                                                            && a.name.IndexOf("win", StringComparison.OrdinalIgnoreCase) >= 0)
-                            ?? rel.assets?.FirstOrDefault(a => a != null && a.name != null && a.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+                var asset = rel.assets?.FirstOrDefault(a => a != null && a.name != null && ForThisPlatform(a.name));
                 if (asset == null || Compare(LatestVersion, Application.version) <= 0)
                 {
                     State = UpdateState.UpToDate;
@@ -143,6 +153,37 @@ namespace Spheres
             }
 
             State = UpdateState.Installing;
+            if (IsMac)
+            {
+                // macOS: unpack with ditto (keeps the app's executable permissions), swap the .app, clear the
+                // download quarantine flag and relaunch, all after the game has quit.
+                try
+                {
+                    string app = Path.GetDirectoryName(Application.dataPath); // .../Spheres.app (dataPath is .../Spheres.app/Contents)
+                    string macScript = Path.Combine(root, "apply-update.sh");
+                    int macPid = Process.GetCurrentProcess().Id;
+                    File.WriteAllText(macScript,
+                        "#!/bin/bash\n" +
+                        "while kill -0 " + macPid + " 2>/dev/null; do sleep 1; done\n" +
+                        "STAGE=\"" + staging + "\"\n" +
+                        "rm -rf \"$STAGE\" && mkdir -p \"$STAGE\"\n" +
+                        "ditto -x -k \"" + zip + "\" \"$STAGE\" || exit 1\n" +
+                        "NEWAPP=$(find \"$STAGE\" -maxdepth 3 -name \"*.app\" -type d | head -1)\n" +
+                        "[ -z \"$NEWAPP\" ] && exit 1\n" +
+                        "rm -rf \"" + app + "\"\n" +
+                        "ditto \"$NEWAPP\" \"" + app + "\"\n" +
+                        "xattr -dr com.apple.quarantine \"" + app + "\" 2>/dev/null\n" +
+                        "chmod -R u+x \"" + app + "/Contents/MacOS\" 2>/dev/null\n" +
+                        "open \"" + app + "\"\n" +
+                        "rm -rf \"$STAGE\" \"" + zip + "\"\n");
+                    Process.Start(new ProcessStartInfo("/bin/bash", "\"" + macScript + "\"") { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = root });
+                }
+                catch (Exception e) { Fail("Couldn't install the update: " + e.Message); yield break; }
+                Debug.Log("[Spheres] Installing update " + LatestVersion + " and restarting.");
+                yield return new WaitForSecondsRealtime(0.3f);
+                Application.Quit();
+                yield break;
+            }
             string install = Path.GetDirectoryName(Application.dataPath); // folder containing Spheres.exe
             string exe;
             string source;

@@ -45,7 +45,7 @@ so you can open it and press Play.
    adds it to Build Settings, makes sure the gamepad input axes exist, and sets the build to
    **Mono + no managed stripping**, which BepInEx needs.
 4. Press **Play** (in any scene). The game builds itself at startup.
-5. To make a release build, use **Spheres > Build > Windows / Linux / macOS**. Output goes to `Builds/<platform>/`.
+5. To make a release build, use **Spheres > Build > Windows / Linux / macOS**. Output goes to `Builds/<platform>/`. Mac details: [docs/MAC.md](docs/MAC.md).
 
 > Unity will generate `.meta` files and other `ProjectSettings` the first time you open the project. Commit them.
 
