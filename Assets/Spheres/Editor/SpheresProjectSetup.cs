@@ -131,11 +131,31 @@ namespace Spheres.EditorTools
         }
 
         /// <summary>BepInEx 5 needs a Mono build with readable (unstripped) managed assemblies.</summary>
+        /// <summary>
+        /// The game keeps state in statics (player lists, pools, weather...), so entering Play mode must reload
+        /// scripts. Newer Unity versions (6.6+) default new projects to skipping that, so turn it back on.
+        /// Done by reflection because the property has moved between Unity versions.
+        /// </summary>
+        static void ForceDomainReload()
+        {
+            try
+            {
+                var t = typeof(EditorSettings);
+                var enabled = t.GetProperty("enterPlayModeOptionsEnabled", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (enabled != null && enabled.CanWrite && (bool)enabled.GetValue(null)) enabled.SetValue(null, false);
+                var opts = t.GetProperty("enterPlayModeOptions", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (opts != null && opts.CanWrite && System.Convert.ToInt32(opts.GetValue(null)) != 0)
+                    opts.SetValue(null, System.Enum.ToObject(opts.PropertyType, 0)); // 0 = reload domain and scene
+            }
+            catch (System.Exception e) { Debug.LogWarning("[Spheres] Could not force domain reload: " + e.Message); }
+        }
+
         static void ConfigurePlayerSettings()
         {
             PlayerSettings.productName = "Spheres";
             // Linear lighting + HDR is what the post-processing stack is tuned for.
             if (PlayerSettings.colorSpace != ColorSpace.Linear) PlayerSettings.colorSpace = ColorSpace.Linear;
+            ForceDomainReload();
             if (PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Spheres";
 #if UNITY_2021_2_OR_NEWER
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
