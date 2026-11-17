@@ -18,6 +18,19 @@ namespace Spheres
         public int trail;
         /// <summary>Index into <see cref="Cosmetics.Poses"/> (victory pose on the podium).</summary>
         public int pose;
+        /// <summary>Body color: index into <see cref="BodyColors"/>, or -1 to use your team's color.</summary>
+        public int bodyColor = -1;
+
+        public static readonly string[] BodyColorNames = { "Cherry", "Tangerine", "Sunflower", "Lime", "Mint", "Teal", "Sky", "Cobalt", "Grape", "Bubblegum", "Snow", "Charcoal" };
+        public static readonly Color[] BodyColors =
+        {
+            new Color(0.9f, 0.18f, 0.22f), new Color(1f, 0.5f, 0.12f), new Color(1f, 0.84f, 0.2f), new Color(0.55f, 0.9f, 0.2f),
+            new Color(0.35f, 0.95f, 0.65f), new Color(0.1f, 0.7f, 0.7f), new Color(0.35f, 0.75f, 1f), new Color(0.2f, 0.32f, 0.95f),
+            new Color(0.6f, 0.3f, 0.95f), new Color(1f, 0.45f, 0.75f), new Color(0.92f, 0.93f, 0.96f), new Color(0.2f, 0.21f, 0.25f),
+        };
+
+        /// <summary>The color your body is painted (team color unless you picked one).</summary>
+        public Color BodyColorOr(Color team) => bodyColor >= 0 && bodyColor < BodyColors.Length ? BodyColors[bodyColor] : team;
 
         public static readonly string[] EyeStyles = { "Round", "Sleepy", "Angry", "Happy", "Big", "Cyclops", "Visor", "Dots" };
         public static readonly string[] MouthStyles = { "None", "Smile", "Grin", "Frown", "Gasp", "Fangs", "Flat", "Tongue" };
@@ -32,13 +45,13 @@ namespace Spheres
         public CharacterLook Clone() => (CharacterLook)MemberwiseClone();
 
         /// <summary>Compact form for the network and match slots: "eyes.mouth.detail.color.hat.trail.pose".</summary>
-        public string Encode() => eyes + "." + mouth + "." + detail + "." + eyeColor + "." + (hat ?? "none") + "." + trail + "." + pose;
+        public string Encode() => eyes + "." + mouth + "." + detail + "." + eyeColor + "." + (hat ?? "none") + "." + trail + "." + pose + "." + bodyColor;
 
         public static CharacterLook Decode(string code)
         {
             var l = new CharacterLook();
             if (string.IsNullOrEmpty(code)) return l;
-            var p = code.Split(new[] { '.' }, 7);
+            var p = code.Split(new[] { '.' }, 8);
             if (p.Length > 0) int.TryParse(p[0], out l.eyes);
             if (p.Length > 1) int.TryParse(p[1], out l.mouth);
             if (p.Length > 2) int.TryParse(p[2], out l.detail);
@@ -46,6 +59,7 @@ namespace Spheres
             if (p.Length > 4) l.hat = p[4];
             if (p.Length > 5) int.TryParse(p[5], out l.trail);
             if (p.Length > 6) int.TryParse(p[6], out l.pose);
+            if (p.Length > 7) int.TryParse(p[7], out l.bodyColor);
             l.Clamp();
             return l;
         }
@@ -59,6 +73,7 @@ namespace Spheres
             if (string.IsNullOrEmpty(hat)) hat = "none";
             trail = Mathf.Clamp(trail, 0, Cosmetics.Trails.Length - 1);
             pose = Mathf.Clamp(pose, 0, Cosmetics.Poses.Length - 1);
+            bodyColor = Mathf.Clamp(bodyColor, -1, BodyColors.Length - 1);
         }
 
         /// <summary>Deterministic random look (bots), so a bot keeps its face between rounds and machines.</summary>
@@ -95,6 +110,9 @@ namespace Spheres
     {
         public static readonly Vector3 GunRest = new Vector3(0.55f, -0.25f, 0.3f);
 
+        /// <summary>The glossy body material for a look (its body color, or the team color).</summary>
+        public static Material BodyMaterial(Color team, CharacterLook look) => Gloss(look != null ? look.BodyColorOr(team) : team, 0.62f);
+
         static Material Gloss(Color c, float g)
         {
             var m = Mats.Solid(c);
@@ -117,8 +135,10 @@ namespace Spheres
             rig.SetParent(model, false);
             parts.Rig = rig;
 
-            var body = Gloss(team, 0.62f);
-            var dark = Mats.Solid(Color.Lerp(team, Color.black, 0.55f));
+            // Your chosen body color; the glowing band and blaster tip always show your team.
+            var bodyColor = look != null ? look.BodyColorOr(team) : team;
+            var body = BodyMaterial(team, look);
+            var dark = Mats.Solid(Color.Lerp(bodyColor, Color.black, 0.55f));
 
             parts.Body = Ball("Body", rig, new Vector3(0f, 0.7f, 0f), Vector3.one, body, true).GetComponent<Renderer>();
             Ball("Pack", rig, new Vector3(0f, 0.74f, -0.46f), new Vector3(0.46f, 0.42f, 0.26f), dark);

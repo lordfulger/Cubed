@@ -669,7 +669,7 @@ namespace Spheres
                 if (t == previewTeam) UIKit.Outline(r, Color.white, 2f);
                 if (UIKit.Clickable(r)) { previewTeam = t; preview.SetTeamColor(Teams.GetColor(t), look); }
             }
-            UIKit.Text(new Rect(pv.x, pv.yMax + 40f, ps, 20f), "Preview team color (your body always uses your team's color)", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(pv.x, pv.yMax + 40f, ps, 20f), "Preview on a team (team shows as the glowing band)", UIKit.Small, UIKit.Muted);
 
             // Options.
             float x = pv.xMax + 30f, w = panel.xMax - 24f - x, y = panel.y + 110f;
@@ -694,6 +694,25 @@ namespace Spheres
                 if (UIKit.Clickable(r) && look.eyeColor != i) { look.eyeColor = i; changed = true; }
             }
             y += 48f;
+
+            // Body color: your own color, or your team's.
+            UIKit.Text(new Rect(x, y, 160f, 34f), "Body color", UIKit.Label, Color.white);
+            int nb = CharacterLook.BodyColors.Length + 1;
+            float bw2 = Mathf.Min(34f, (w - 170f) / nb - 5f);
+            for (int i = -1; i < CharacterLook.BodyColors.Length; i++)
+            {
+                var r = new Rect(x + 170f + (i + 1) * (bw2 + 5f), y + 3f, bw2, 30f);
+                if (i < 0)
+                {
+                    // "Team" swatch: split into a few team colors.
+                    for (int k = 0; k < 4; k++) UIKit.Fill(new Rect(r.x + k * r.width / 4f, r.y, r.width / 4f, r.height), Teams.GetColor(k));
+                }
+                else UIKit.Fill(r, CharacterLook.BodyColors[i]);
+                if (i == look.bodyColor) UIKit.Outline(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Color.white, 2f);
+                if (UIKit.Clickable(r) && look.bodyColor != i) { look.bodyColor = i; changed = true; }
+            }
+            UIKit.Text(new Rect(x, y + 34f, w, 18f), look.bodyColor < 0 ? "Team color" : CharacterLook.BodyColorNames[look.bodyColor], UIKit.Small, UIKit.Muted);
+            y += 58f;
 
             var hats = Hats.All.Where(hh => Hats.Unlocked(hh.Id)).ToList();
             int hi = Mathf.Max(0, hats.FindIndex(hh => hh.Id == look.hat));

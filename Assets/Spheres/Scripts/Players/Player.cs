@@ -96,6 +96,11 @@ namespace Spheres
             if (parts == null || look == null) return;
             FighterModel.BuildFace(parts, Color, look);
             FighterModel.SetHat(parts, Color, look.hat);
+            if (parts.Body != null)
+            {
+                bodyMaterial = FighterModel.BodyMaterial(Color, look);
+                parts.Body.sharedMaterial = bodyMaterial;
+            }
             Cosmetics.ApplyTrail(parts.Rig, look.trail, Color);
             if (Slot != null) Slot.look = look.Encode();
         }
