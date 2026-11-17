@@ -600,6 +600,18 @@ namespace Spheres
             float accel = Grounded
                 ? GroundAccel * (groundBlock != null && groundBlock.Type != null ? groundBlock.Type.GroundAccel : 1f)
                 : AirAccel * GetStat(Stat.AirControl);
+            // Sliding along walls: if we're pressing into a wall we touched a moment ago, steer the desired
+            // movement along it at full speed instead of grinding to a halt.
+            if (Time.time - wallTime < 0.12f && desired.sqrMagnitude > 0.01f)
+            {
+                float into = Vector3.Dot(desired, wallNormal);
+                if (into < 0f)
+                {
+                    var along = desired - wallNormal * into;
+                    if (along.sqrMagnitude > 0.04f) desired = along.normalized * desired.magnitude;
+                    else desired = along;
+                }
+            }
             Vector3 horizontal = new Vector3(Velocity.x, 0f, Velocity.z);
             bool knockback = horizontal.magnitude > speed + 0.5f;
             if (Grounded && !knockback)
@@ -690,8 +702,17 @@ namespace Spheres
             else hazardTick = 0f;
         }
 
+        Vector3 wallNormal;
+        float wallTime = -1f;
+
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            // Remember steep surfaces we bump into so movement can slide along them.
+            if (Mathf.Abs(hit.normal.y) < 0.3f && hit.collider.GetComponent<Player>() == null && (hit.collider.attachedRigidbody == null || hit.collider.attachedRigidbody.isKinematic))
+            {
+                wallNormal = new Vector3(hit.normal.x, 0f, hit.normal.z).normalized;
+                wallTime = Time.time;
+            }
             if (hit.normal.y > 0.6f)
             {
                 var mech = hit.collider.GetComponentInParent<Mechanism>();
