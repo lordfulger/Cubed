@@ -136,6 +136,36 @@ namespace Spheres.EditorTools
         /// scripts. Newer Unity versions (6.6+) default new projects to skipping that, so turn it back on.
         /// Done by reflection because the property has moved between Unity versions.
         /// </summary>
+        /// <summary>
+        /// Spheres uses the built-in render pipeline (its own shaders and post effects). If the project was
+        /// created from a URP/HDRP template, switch every quality level and the graphics default back to built-in.
+        /// </summary>
+        static void UseBuiltInRenderPipeline()
+        {
+            bool changed = false;
+            if (UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline != null)
+            {
+                UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = null;
+                changed = true;
+            }
+            int current = QualitySettings.GetQualityLevel();
+            for (int i = 0; i < QualitySettings.names.Length; i++)
+            {
+                QualitySettings.SetQualityLevel(i, false);
+                if (QualitySettings.renderPipeline != null)
+                {
+                    QualitySettings.renderPipeline = null;
+                    changed = true;
+                }
+            }
+            QualitySettings.SetQualityLevel(current, false);
+            if (changed)
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log("[Spheres] Switched the project to the built-in render pipeline (Spheres doesn't use URP/HDRP).");
+            }
+        }
+
         static void ForceDomainReload()
         {
             try
@@ -156,6 +186,7 @@ namespace Spheres.EditorTools
             // Linear lighting + HDR is what the post-processing stack is tuned for.
             if (PlayerSettings.colorSpace != ColorSpace.Linear) PlayerSettings.colorSpace = ColorSpace.Linear;
             ForceDomainReload();
+            UseBuiltInRenderPipeline();
             if (PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Spheres";
 #if UNITY_2021_2_OR_NEWER
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
