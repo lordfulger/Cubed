@@ -165,7 +165,7 @@ namespace Spheres
             Controller.height = 1.4f;
             Controller.center = new Vector3(0f, 0.7f, 0f);
             Controller.slopeLimit = 50f;
-            Controller.stepOffset = 0.3f;
+            Controller.stepOffset = 0.45f;
             Controller.skinWidth = 0.04f;
             Controller.minMoveDistance = 0f;
 
@@ -661,9 +661,13 @@ namespace Spheres
             if ((flags & CollisionFlags.Above) != 0 && Velocity.y > 0f) Velocity.y = 0f;
             if ((flags & CollisionFlags.Sides) != 0)
             {
-                // Bleed knockback when slamming into walls.
-                Velocity.x *= 0.9f;
-                Velocity.z *= 0.9f;
+                // Bleed knockback when slamming into walls (but don't slow normal running along them).
+                if (new Vector3(Velocity.x, 0f, Velocity.z).magnitude > speed + 1f)
+                {
+                    Velocity.x *= 0.9f;
+                    Velocity.z *= 0.9f;
+                }
+                if (Grounded && move.sqrMagnitude > 0.2f) TryStepUp(move);
             }
 
             if (hazardBlock != null)
@@ -712,7 +716,17 @@ namespace Spheres
                     if (Vector3.Dot(dv, push) > 0f) rb.AddForce(dv * 0.6f, ForceMode.VelocityChange);
                     prop.LastAttacker = this;
                 }
-                else rb.AddForceAtPosition(push * Mathf.Clamp(speed, 2f, 20f) * 1.5f, hit.point, ForceMode.Acceleration);
+                else
+                {
+                    // Shove props along at walking pace (heavier ones move slower) instead of grinding against them.
+                    float want = Mathf.Max(speed, 3f) * Mathf.Clamp(2.5f / Mathf.Max(0.1f, rb.mass), 0.3f, 1.1f);
+#if UNITY_6000_0_OR_NEWER
+                    float along = Vector3.Dot(rb.linearVelocity, push.normalized);
+#else
+                    float along = Vector3.Dot(rb.velocity, push.normalized);
+#endif
+                    if (along < want) rb.AddForceAtPosition(push.normalized * (want - along) * 0.6f, hit.point, ForceMode.VelocityChange);
+                }
                 if (prop != null && !prop.Kind.Kickable) prop.LastAttacker = this;
             }
             var info = hit.collider.GetComponent<BlockInfo>();
@@ -723,6 +737,41 @@ namespace Spheres
                 groundBlock = info;
                 if (info.Type.BounceSpeed > 0f) bounceBlock = info;
             }
+        }
+
+        float stepUpCooldown;
+
+        /// <summary>
+        /// Running into something knee-high (a step, a crate, a ledge up to about one block) hops you onto it,
+        /// so you don't get stuck on small obstacles.
+        /// </summary>
+        void TryStepUp(Vector3 move)
+        {
+            if (Time.time < stepUpCooldown) return;
+            float size = Size;
+            Vector3 dir = new Vector3(move.x, 0f, move.z).normalized;
+            Vector3 feet = transform.position;
+            float reach = Controller.radius * size + 0.35f;
+            const float maxStep = 1.15f;
+            // Is there an obstacle right in front at foot height?
+            if (!Physics.Raycast(feet + Vector3.up * 0.2f, dir, out var front, reach + 0.1f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
+            if (front.collider.GetComponent<Player>() != null || front.normal.y > 0.6f) return;
+            // Find its top a little past the edge, and make sure there's room to stand there.
+            Vector3 probe = feet + dir * (reach + 0.25f) + Vector3.up * (maxStep + 0.1f);
+            if (!Physics.Raycast(probe, Vector3.down, out var top, maxStep + 0.1f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
+            float h = top.point.y - feet.y;
+            if (h < 0.1f || h > maxStep || top.normal.y < 0.7f) return;
+            // Never hop onto lava, spikes or other players.
+            var topBlock = top.collider.GetComponent<BlockInfo>();
+            if (topBlock != null && topBlock.Type != null && topBlock.Type.DamagePerSecond > 0f) return;
+            if (top.collider.GetComponent<Player>() != null) return;
+            if (Mechanism.All.Count > 0 && Mechanism.AnyDangerAt(top.point + Vector3.up * 0.5f, 0.6f)) return;
+            float headroom = Controller.height * size;
+            if (Physics.CheckCapsule(top.point + Vector3.up * (Controller.radius * size + 0.05f), top.point + Vector3.up * (headroom - Controller.radius * size), Controller.radius * size * 0.9f, Bullet.CollisionMask, QueryTriggerInteraction.Ignore)) return;
+            Velocity.y = Mathf.Sqrt(2f * Gravity * (h + 0.25f));
+            Velocity += dir * 1.5f;
+            Grounded = false;
+            stepUpCooldown = Time.time + 0.25f;
         }
 
         void OnLand(float impactVelocity)
