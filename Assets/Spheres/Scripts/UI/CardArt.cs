@@ -14,8 +14,11 @@ namespace Spheres
         class Entry { public Texture2D Tex; public string Caption; public int LastUsed; }
 
         static readonly Dictionary<string, Entry> cache = new Dictionary<string, Entry>();
-        static int frame = -1, builtThisFrame;
-        const int MaxCached = 160, BuildPerFrame = 3;
+        static readonly HashSet<string> pending = new HashSet<string>();
+        static readonly Queue<(string id, byte[] pixels, string caption)> done = new Queue<(string, byte[], string)>();
+        static readonly object gate = new object();
+        static int frame = -1, uploadedThisFrame;
+        const int MaxCached = 160, UploadPerFrame = 4, MaxPending = 12;
 
         /// <summary>Mods: return your own picture for a card (or null for the generated one).</summary>
         public static System.Func<CardDefinition, Texture2D> Override;
@@ -31,35 +34,74 @@ namespace Spheres
                 try { var t = Override(c); if (t != null) return t; }
                 catch (System.Exception ex) { Debug.LogException(ex); }
             }
-            if (Time.frameCount != frame) { frame = Time.frameCount; builtThisFrame = 0; }
+            if (Time.frameCount != frame) { frame = Time.frameCount; uploadedThisFrame = 0; }
+            Upload();
             if (cache.TryGetValue(c.Id, out var e) && e.Tex != null)
             {
                 e.LastUsed = frame;
                 caption = e.Caption;
                 return e.Tex;
             }
-            if (builtThisFrame >= BuildPerFrame) return null;
-            builtThisFrame++;
+            Request(c);
+            return null;
+        }
 
-            var painter = new CardArtPainter(Width, Height, StableHash(c.Id));
-            var rc = CardDefinition.FrameColor(c);
-            string scene = !string.IsNullOrEmpty(c.ArtScene) ? c.ArtScene : c.IsCurse ? "curse" : CardIcons.PrimaryGlyph(c);
-            string cap;
-            try { cap = painter.Paint(scene, new CardArtPainter.Col(rc.r, rc.g, rc.b), CardIcons.HasDrawback(c), c.Rarity == Rarity.Legendary); }
-            catch (System.Exception ex) { Debug.LogException(ex); cap = null; }
-            var tex = new Texture2D(Width, Height, TextureFormat.RGBA32, false)
+        /// <summary>Paint a card's picture on a worker thread (the painter is plain C#).</summary>
+        static void Request(CardDefinition c)
+        {
+            lock (gate)
             {
-                name = "CardArt " + c.Id,
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-            tex.LoadRawTextureData(painter.ToRGBA32BottomUp());
-            tex.Apply(false, true);
-            cache[c.Id] = new Entry { Tex = tex, Caption = cap, LastUsed = frame };
-            caption = cap;
-            Trim();
-            return tex;
+                if (pending.Contains(c.Id) || pending.Count >= MaxPending) return;
+                pending.Add(c.Id);
+            }
+            var rc = CardDefinition.FrameColor(c);
+            string id = c.Id;
+            string scene = !string.IsNullOrEmpty(c.ArtScene) ? c.ArtScene : c.IsCurse ? "curse" : CardIcons.PrimaryGlyph(c);
+            var bg = new CardArtPainter.Col(rc.r, rc.g, rc.b);
+            bool drawback = CardIcons.HasDrawback(c), legendary = c.Rarity == Rarity.Legendary;
+            int seed = StableHash(id);
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                byte[] pixels = null;
+                string cap = null;
+                try
+                {
+                    var painter = new CardArtPainter(Width, Height, seed);
+                    cap = painter.Paint(scene, bg, drawback, legendary);
+                    pixels = painter.ToRGBA32BottomUp();
+                }
+                catch (System.Exception) { pixels = null; }
+                lock (gate) done.Enqueue((id, pixels, cap));
+            });
+        }
+
+        /// <summary>Turn finished paintings into textures (main thread, a few per frame).</summary>
+        static void Upload()
+        {
+            while (uploadedThisFrame < UploadPerFrame)
+            {
+                (string id, byte[] pixels, string caption) item;
+                lock (gate)
+                {
+                    if (done.Count == 0) return;
+                    item = done.Dequeue();
+                    pending.Remove(item.id);
+                }
+                if (item.pixels == null) continue;
+                uploadedThisFrame++;
+                var tex = new Texture2D(Width, Height, TextureFormat.RGBA32, false)
+                {
+                    name = "CardArt " + item.id,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp,
+                    hideFlags = HideFlags.HideAndDontSave,
+                };
+                tex.LoadRawTextureData(item.pixels);
+                tex.Apply(false, true);
+                if (cache.TryGetValue(item.id, out var old) && old.Tex != null) Object.Destroy(old.Tex);
+                cache[item.id] = new Entry { Tex = tex, Caption = item.caption, LastUsed = frame };
+                Trim();
+            }
         }
 
         static void Trim()

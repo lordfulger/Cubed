@@ -21,8 +21,11 @@ namespace Spheres
 
         public enum Mood { Happy, Angry, Panic, Smug, Dizzy, Cool, Sleepy, Sad }
 
+        /// <summary>Logical size (what scenes draw in). The canvas is K times bigger and averaged down at the end.</summary>
         public readonly int W, H;
-        readonly float[] px; // RGBA, row 0 = top
+        const int K = 2;
+        readonly int PW, PH;
+        readonly float[] px; // RGBA at K x resolution, row 0 = top
         readonly Random rng;
         static readonly Col Ink = new Col(0.08f, 0.08f, 0.12f);
         static readonly Col White = new Col(1f, 1f, 1f);
@@ -30,7 +33,8 @@ namespace Spheres
         public CardArtPainter(int w, int h, int seed)
         {
             W = w; H = h;
-            px = new float[w * h * 4];
+            PW = w * K; PH = h * K;
+            px = new float[PW * PH * 4];
             rng = new Random(seed);
         }
 
@@ -42,11 +46,20 @@ namespace Spheres
         public byte[] ToRGBA32BottomUp()
         {
             var o = new byte[W * H * 4];
+            float inv = 1f / (K * K);
             for (int y = 0; y < H; y++)
-            {
-                int src = y * W * 4, dst = (H - 1 - y) * W * 4;
-                for (int i = 0; i < W * 4; i++) o[dst + i] = (byte)Math.Round(Math.Max(0f, Math.Min(1f, px[src + i])) * 255f);
-            }
+                for (int x = 0; x < W; x++)
+                {
+                    int dst = ((H - 1 - y) * W + x) * 4;
+                    for (int ch = 0; ch < 4; ch++)
+                    {
+                        float sum = 0f;
+                        for (int sy = 0; sy < K; sy++)
+                            for (int sx = 0; sx < K; sx++)
+                                sum += px[((y * K + sy) * PW + x * K + sx) * 4 + ch];
+                        o[dst + ch] = (byte)Math.Round(Math.Max(0f, Math.Min(1f, sum * inv)) * 255f);
+                    }
+                }
             return o;
         }
 
@@ -54,9 +67,9 @@ namespace Spheres
 
         void Blend(int x, int y, Col c, float cov)
         {
-            if (x < 0 || y < 0 || x >= W || y >= H || cov <= 0f) return;
+            if (x < 0 || y < 0 || x >= PW || y >= PH || cov <= 0f) return;
             float a = c.A * Math.Min(1f, cov);
-            int i = (y * W + x) * 4;
+            int i = (y * PW + x) * 4;
             px[i] += (c.R - px[i]) * a;
             px[i + 1] += (c.G - px[i + 1]) * a;
             px[i + 2] += (c.B - px[i + 2]) * a;
@@ -64,18 +77,28 @@ namespace Spheres
         }
 
         /// <summary>Fill everything where sdf(x,y) &lt; 0, anti-aliased over one pixel.</summary>
-        void Shape(float x0, float y0, float x1, float y1, Func<float, float, float> sdf, Col c)
+        void Shape(float x0, float y0, float x1, float y1, Func<float, float, float> sdf, Col c) =>
+            ShapeColored(x0, y0, x1, y1, sdf, null, c, 0f);
+
+        /// <summary>
+        /// Rasterize where sdf &lt; 0 (logical coords), at K x resolution. color(x,y) gives per-pixel color when set.
+        /// soft &gt; 0 widens the edge into a soft falloff of that many logical pixels (shadows, glows).
+        /// </summary>
+        void ShapeColored(float x0, float y0, float x1, float y1, Func<float, float, float> sdf, Func<float, float, Col> color, Col c, float soft)
         {
-            int ax = Math.Max(0, (int)Math.Floor(x0) - 1), ay = Math.Max(0, (int)Math.Floor(y0) - 1);
-            int bx = Math.Min(W - 1, (int)Math.Ceiling(x1) + 1), by = Math.Min(H - 1, (int)Math.Ceiling(y1) + 1);
+            int ax = Math.Max(0, (int)Math.Floor(x0 * K) - 2), ay = Math.Max(0, (int)Math.Floor(y0 * K) - 2);
+            int bx = Math.Min(PW - 1, (int)Math.Ceiling(x1 * K) + 2), by = Math.Min(PH - 1, (int)Math.Ceiling(y1 * K) + 2);
             for (int y = ay; y <= by; y++)
                 for (int x = ax; x <= bx; x++)
                 {
-                    float d = sdf(x + 0.5f, y + 0.5f);
-                    float cov = 0.5f - d;
-                    if (cov > 0f) Blend(x, y, c, cov);
+                    float lx = (x + 0.5f) / K, ly = (y + 0.5f) / K;
+                    float d = sdf(lx, ly);
+                    float cov = soft > 0f ? Clamp01(0.5f - d / soft) : 0.5f - d * K;
+                    if (cov > 0f) Blend(x, y, color != null ? color(lx, ly) : c, cov);
                 }
         }
+
+        static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
 
         /// <summary>Draw a filled shape with an ink outline of the given width.</summary>
         void Outlined(float x0, float y0, float x1, float y1, Func<float, float, float> sdf, Col fill, float outline)
@@ -98,12 +121,12 @@ namespace Spheres
 
         public void Gradient(Col top, Col bottom)
         {
-            for (int y = 0; y < H; y++)
+            for (int y = 0; y < PH; y++)
             {
-                var c = Col.Lerp(top, bottom, y / (float)(H - 1));
-                for (int x = 0; x < W; x++)
+                var c = Col.Lerp(top, bottom, y / (float)(PH - 1));
+                for (int x = 0; x < PW; x++)
                 {
-                    int i = (y * W + x) * 4;
+                    int i = (y * PW + x) * 4;
                     px[i] = c.R; px[i + 1] = c.G; px[i + 2] = c.B; px[i + 3] = 1f;
                 }
             }
@@ -140,6 +163,79 @@ namespace Spheres
                 float k = Len(lx / rx, ly / ry);
                 return (k - 1f) * Math.Min(rx, ry);
             }, fill, outline);
+        }
+
+        /// <summary>A lit 3D-looking ball: diffuse light from the top left, a specular highlight and a rim light.</summary>
+        public void Ball(float cx, float cy, float r, Col baseCol, float outline = 3f)
+        {
+            if (outline > 0f) Shape(cx - r - outline, cy - r - outline, cx + r + outline, cy + r + outline, (x, y) => { float d = Len(x - cx, y - cy) - r; return Math.Max(d - outline, -d - 0.75f); }, Col.Lerp(baseCol.Mul(0.25f), Ink, 0.5f));
+            const float lx = -0.45f, ly = -0.62f, lz = 0.64f;
+            ShapeColored(cx - r, cy - r, cx + r, cy + r, (x, y) => Len(x - cx, y - cy) - r, (x, y) =>
+            {
+                float nx = (x - cx) / r, ny = (y - cy) / r;
+                float nz2 = 1f - nx * nx - ny * ny;
+                float nz = nz2 > 0f ? (float)Math.Sqrt(nz2) : 0f;
+                float lam = Math.Max(0f, nx * lx + ny * ly + nz * lz);
+                // Blinn-ish highlight toward the viewer.
+                float hx = lx, hy = ly, hz = lz + 1f, hl = Len(Len(hx, hy), hz);
+                float spec = (float)Math.Pow(Math.Max(0f, (nx * hx + ny * hy + nz * hz) / hl), 28.0);
+                float rim = (float)Math.Pow(1f - nz, 3.0) * 0.35f;
+                float k = 0.52f + 0.62f * lam;
+                return new Col(Math.Min(1f, baseCol.R * k + spec * 0.85f + rim * 0.5f), Math.Min(1f, baseCol.G * k + spec * 0.85f + rim * 0.6f), Math.Min(1f, baseCol.B * k + spec * 0.85f + rim * 0.8f), baseCol.A);
+            }, baseCol, 0f);
+        }
+
+        /// <summary>A soft drop shadow (blurry ellipse).</summary>
+        public void SoftShadow(float cx, float cy, float rx, float ry, float alpha = 0.35f)
+        {
+            float soft = ry * 1.2f;
+            ShapeColored(cx - rx - soft, cy - ry - soft, cx + rx + soft, cy + ry + soft,
+                (x, y) => (Len((x - cx) / rx, (y - cy) / ry) - 1f) * ry, null, new Col(0f, 0f, 0f, alpha), soft);
+        }
+
+        /// <summary>A soft radial glow.</summary>
+        public void Glow(float cx, float cy, float r, Col c)
+        {
+            ShapeColored(cx - r, cy - r, cx + r, cy + r, (x, y) => Len(x - cx, y - cy) - r * 0.35f, null, c, r * 1.3f);
+        }
+
+        /// <summary>Darken the corners (drawn last).</summary>
+        public void Vignette(float strength)
+        {
+            for (int y = 0; y < PH; y++)
+                for (int x = 0; x < PW; x++)
+                {
+                    float dx = (x / (float)PW - 0.5f) * 2f, dy = (y / (float)PH - 0.5f) * 2f;
+                    float v = Clamp01((dx * dx * 0.6f + dy * dy * 0.8f - 0.35f) * strength);
+                    int i = (y * PW + x) * 4;
+                    px[i] *= 1f - v; px[i + 1] *= 1f - v; px[i + 2] *= 1f - v;
+                }
+        }
+
+        /// <summary>Arena backdrop: sky, soft clouds, a spotlight behind the hero, and a floor with perspective lines.</summary>
+        void Backdrop(Col bg, bool legendary)
+        {
+            var top = Col.Lerp(bg, White, 0.5f);
+            var mid = Col.Lerp(bg, White, 0.15f);
+            Gradient(top, mid);
+            if (legendary) Rays(W * 0.5f, H * 0.55f, 16, White.WithA(0.16f), Rand(0f, 1f));
+            // Clouds.
+            for (int i = 0; i < 4; i++)
+            {
+                float cx = Rand(0f, W), cy = Rand(H * 0.08f, H * 0.4f), s = Rand(10f, 20f);
+                var cc = White.WithA(0.32f);
+                Glow(cx, cy, s * 1.4f, cc);
+                Glow(cx + s, cy + 3f, s, cc);
+            }
+            Glow(W * 0.5f, H * 0.5f, H * 0.6f, White.WithA(0.35f));
+            // Floor.
+            float horizon = H * 0.74f;
+            var floorTop = Col.Lerp(bg, new Col(0.12f, 0.12f, 0.2f), 0.45f);
+            var floorBottom = Col.Lerp(bg, new Col(0.05f, 0.05f, 0.1f), 0.7f);
+            ShapeColored(0f, horizon, W, H, (x, y) => horizon - y, (x, y) => Col.Lerp(floorTop, floorBottom, (y - horizon) / (H - horizon)), floorTop, 0f);
+            for (int i = -6; i <= 6; i++) Line(W * 0.5f + i * 12f, horizon, W * 0.5f + i * 45f, H + 2f, 1f, White.WithA(0.08f));
+            for (int i = 1; i <= 3; i++) Line(0f, horizon + (H - horizon) * i * i / 10f, W, horizon + (H - horizon) * i * i / 10f, 1f, White.WithA(0.07f));
+            Line(0f, horizon, W, horizon, 1.5f, White.WithA(0.18f));
         }
 
         public void Line(float x0, float y0, float x1, float y1, float width, Col c)
@@ -253,13 +349,17 @@ namespace Spheres
             var dark = body.Mul(0.55f);
             if (feet)
             {
-                Ellipse(cx - r * 0.38f, cy + r * 0.95f, r * 0.3f, r * 0.17f, 0f, dark, 2.5f);
-                Ellipse(cx + r * 0.38f, cy + r * 0.95f, r * 0.3f, r * 0.17f, 0f, dark, 2.5f);
+                SoftShadow(cx, cy + r * 1.08f, r * 1.05f, r * 0.2f, 0.4f);
+                Ball(cx - r * 0.38f, cy + r * 0.95f, r * 0.24f, dark, 2.5f);
+                Ball(cx + r * 0.38f, cy + r * 0.95f, r * 0.24f, dark, 2.5f);
             }
-            Circle(cx, cy, r, body, 3f);
-            // Shade and shine.
-            Shape(cx - r, cy - r, cx + r, cy + r, (x, y) => Math.Max(Len(x - cx, y - cy) - r + 1.5f, -(Len(x - cx + r * 0.25f, y - cy + r * 0.3f) - r * 0.95f)), dark.WithA(0.45f));
-            Ellipse(cx - r * 0.42f, cy - r * 0.48f, r * 0.24f, r * 0.13f, -35f, White.WithA(0.75f), 0f);
+            Ball(cx, cy, r, body, 3f);
+            Ellipse(cx - r * 0.42f, cy - r * 0.5f, r * 0.2f, r * 0.1f, -35f, White.WithA(0.55f), 0f);
+            if (mood == Mood.Happy || mood == Mood.Smug || mood == Mood.Sleepy)
+            {
+                Ellipse(cx - r * 0.55f, cy + r * 0.2f, r * 0.14f, r * 0.08f, 0f, new Col(1f, 0.45f, 0.55f, 0.45f), 0f);
+                Ellipse(cx + r * 0.55f, cy + r * 0.2f, r * 0.14f, r * 0.08f, 0f, new Col(1f, 0.45f, 0.55f, 0.45f), 0f);
+            }
 
             // Face.
             float ex = r * 0.3f, ey = cy - r * 0.08f, ew = r * 0.17f, eh = r * 0.23f;
@@ -290,7 +390,8 @@ namespace Spheres
                         Ellipse(cx + s * ex, ey, ew * big, eh * big, 0f, White, 2f);
                         float pr = mood == Mood.Panic ? ew * 0.35f : ew * 0.55f;
                         Circle(cx + s * ex + lookX * ew * 0.45f, ey + lookY * eh * 0.4f + (mood == Mood.Smug ? eh * 0.25f : 0f), pr, Ink, 0f);
-                        Circle(cx + s * ex + lookX * ew * 0.45f - pr * 0.35f, ey + lookY * eh * 0.4f - pr * 0.4f, pr * 0.3f, White, 0f);
+                        Circle(cx + s * ex + lookX * ew * 0.45f - pr * 0.35f, ey + lookY * eh * 0.4f - pr * 0.4f, pr * 0.32f, White, 0f);
+                        Circle(cx + s * ex + lookX * ew * 0.45f + pr * 0.35f, ey + lookY * eh * 0.4f + pr * 0.35f, pr * 0.15f, White.WithA(0.85f), 0f);
                         if (mood == Mood.Smug)
                             Shape(cx + s * ex - ew - 2, ey - eh - 2, cx + s * ex + ew + 2, ey + 1, (x, y) => Math.Max(Len((x - cx - s * ex) / ew, (y - ey) / eh) - 1f, y - ey + 0.5f) * ew, body);
                     }
@@ -350,6 +451,7 @@ namespace Spheres
 
         public void Flash(float x, float y, float s)
         {
+            Glow(x, y, s * 2f, new Col(1f, 0.85f, 0.4f, 0.55f));
             Star(x, y, s, s * 0.45f, 8, Rand(0f, 40f), new Col(1f, 0.85f, 0.25f), 2.5f);
             Star(x, y, s * 0.55f, s * 0.25f, 8, Rand(0f, 40f), new Col(1f, 1f, 0.85f), 0f);
         }
@@ -387,11 +489,7 @@ namespace Spheres
         /// <param name="drawback">The card has a downside: the hero looks a bit worried.</param>
         public string Paint(string scene, Col bg, bool drawback, bool legendary)
         {
-            var top = Col.Lerp(bg, White, 0.55f);
-            var bottom = Col.Lerp(bg, new Col(0.1f, 0.1f, 0.18f), 0.35f);
-            Gradient(top, bottom);
-            if (legendary) Rays(W * 0.5f, H * 0.55f, 14, White.WithA(0.18f), Rand(0f, 1f));
-            else Dots(White.WithA(0.13f), 12f, 2f);
+            Backdrop(bg, legendary);
             var guy = GuyColors[rng.Next(GuyColors.Length)];
             float cx = W * 0.5f, cy = H * 0.56f, r = H * 0.24f;
             var ground = new Col(0f, 0f, 0f, 0.18f);
@@ -400,6 +498,7 @@ namespace Spheres
             switch (scene)
             {
                 case "heart":
+                    Glow(W * 0.68f, H * 0.5f, H * 0.45f, new Col(1f, 0.5f, 0.6f, 0.45f));
                     Heart(W * 0.68f, H * 0.5f, H * 0.26f, new Col(1f, 0.3f, 0.4f));
                     Ellipse(W * 0.6f, H * 0.4f, 6f, 4f, -30f, White.WithA(0.7f), 0f);
                     Guy(W * 0.34f, cy + 4f, r, guy, drawback ? Mood.Panic : Mood.Happy, 1f, 0f);
@@ -528,6 +627,7 @@ namespace Spheres
                 }
 
                 case "bomb":
+                    Glow(cx, cy - 6f, r * 2.6f, new Col(1f, 0.6f, 0.2f, 0.6f));
                     for (int i = 0; i < 9; i++)
                     {
                         float a = i * 40f * (float)Math.PI / 180f;
@@ -550,6 +650,7 @@ namespace Spheres
                     break;
 
                 case "star":
+                    Glow(cx, cy, r * 2.2f, new Col(1f, 0.95f, 0.6f, 0.45f));
                     Ellipse(cx, cy - r * 1.25f, r * 0.6f, r * 0.15f, 0f, new Col(1f, 0.92f, 0.4f, 0f), 0f);
                     Arc(cx, cy - r * 1.25f, r * 0.55f, 0f, 360f, 4f, new Col(1f, 0.9f, 0.35f));
                     Ellipse(cx - r * 1.15f, cy - r * 0.1f, r * 0.55f, r * 0.3f, -25f, White, 2.5f);
@@ -595,7 +696,7 @@ namespace Spheres
 
                 case "feather":
                     Line(cx + r * 0.2f, cy - r, cx + r * 0.9f, H * 0.2f, 1.5f, Ink);
-                    Circle(cx + r * 1.05f, H * 0.15f, 14f, new Col(1f, 0.4f, 0.55f), 2.5f);
+                    Ball(cx + r * 1.05f, H * 0.15f, 14f, new Col(1f, 0.4f, 0.55f), 2.5f);
                     Ellipse(cx + r * 0.85f, H * 0.1f, 4f, 2.5f, -30f, White.WithA(0.7f), 0f);
                     Guy(cx - 6f, cy, r, guy, Mood.Happy, 0.5f, -1f);
                     Ellipse(W * 0.18f, H * 0.3f, 14f, 5f, -30f, White, 2f);
@@ -619,6 +720,7 @@ namespace Spheres
                     break;
 
                 case "flame":
+                    Glow(cx, cy - r * 0.4f, r * 2.4f, new Col(1f, 0.5f, 0.15f, 0.55f));
                     for (int i = 0; i < 5; i++)
                     {
                         float fx = cx - r + i * r * 0.5f;
@@ -633,6 +735,8 @@ namespace Spheres
                     Guy(cx, cy, r, guy, Mood.Panic, 0f, 0f);
                     RoundRect(cx, cy + 4f, r * 2.7f, r * 2.7f, 6f, 4f, new Col(0.7f, 0.92f, 1f, 0.55f), 3f);
                     Line(cx - r * 1.1f, cy - r * 1.1f, cx - r * 0.6f, cy - r * 1.2f, 3f, White.WithA(0.9f));
+                    Line(cx - r * 1.15f, cy - r * 0.9f, cx - r * 1.15f, cy - r * 0.5f, 2.5f, White.WithA(0.7f));
+                    Glow(cx, cy, r * 2f, new Col(0.7f, 0.95f, 1f, 0.25f));
                     for (int i = 0; i < 6; i++) Star(Rand(8f, W - 8f), Rand(6f, H * 0.3f), 4f, 1.5f, 6, 0f, White, 0f);
                     caption = "BRRR";
                     break;
@@ -666,6 +770,7 @@ namespace Spheres
                 // Downsides: a little band-aid on the floor of the scene.
                 RoundRect(W * 0.1f, H * 0.88f, 18f, 7f, 3f, -20f, new Col(1f, 0.82f, 0.65f), 1.5f);
             }
+            Vignette(0.7f);
             return caption;
         }
     }
