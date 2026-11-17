@@ -267,7 +267,7 @@ namespace Spheres
                 current = e;
                 e.LastUsed = Time.unscaledTime;
                 NowPlaying = e;
-                if (Options.Current.showNowPlaying)
+                if (Options.Current.showSongNames)
                     Toasts.Show("Now playing", e.Name + (e.Custom ? "  (your music)" : ""), new Color(0.6f, 0.75f, 1f));
             }
         }

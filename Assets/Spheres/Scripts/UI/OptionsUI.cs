@@ -115,7 +115,7 @@ namespace Spheres
                     Sfx.Volume = st.volume;
                     Header("Music");
                     o.musicSource = UIKit.Cycle(Row(), "Songs", o.musicSource, new[] { "Spheres + your music", "Only Spheres' songs", "Only your music" });
-                    o.showNowPlaying = UIKit.CheckRow(Row(), "Show song names", o.showNowPlaying);
+                    o.showSongNames = UIKit.CheckRow(Row(), "Show song names", o.showSongNames);
                     var np = MusicPlayer.NowPlaying;
                     UIKit.Text(Row(), "Now playing: " + (np != null ? np.Name : "-") + "   (" + MusicPlayer.Entries.Count + " songs)", UIKit.Small, UIKit.Muted);
                     if (UIKit.Btn(Row(), "Next song", true)) MusicPlayer.Instance?.Skip();

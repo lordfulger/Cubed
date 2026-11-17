@@ -32,7 +32,7 @@ namespace Spheres
         /// <summary>0 = Spheres + your music, 1 = only Spheres' songs, 2 = only your music.</summary>
         public int musicSource;
         /// <summary>Show the song name when the music changes.</summary>
-        public bool showNowPlaying = true;
+        public bool showSongNames;
         /// <summary>Silly kill-feed lines ("X popped Y") instead of plain "X > Y".</summary>
         public bool funnyDeathMessages = true;
         /// <summary>Language code ("" = follow the system language).</summary>
