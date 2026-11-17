@@ -99,7 +99,7 @@ paths below with yours. Unity Hub shows the editor path under **Installs** (gear
 **Smoke test** (Command Prompt):
 
 ```bat
-set UNITY="C:\Program Files\Unity\Hub\Editor\2022.3.62f1\Editor\Unity.exe"
+set UNITY="C:\Program Files\Unity\Hub\Editor\2022.3.62f2\Editor\Unity.exe"
 start /wait "" %UNITY% -batchmode -projectPath "C:\dev\Spheres" -executeMethod Spheres.EditorTools.SmokeTest.Run -logFile "C:\dev\Spheres\Builds\smoke.log"
 echo Exit code: %ERRORLEVEL%
 type "C:\dev\Spheres\Builds\smoke-report.txt"
@@ -116,7 +116,7 @@ Results: `Builds\balance-report.csv` (open it in Excel) and `Builds\balance-repo
 PowerShell equivalent:
 
 ```powershell
-$unity = "C:\Program Files\Unity\Hub\Editor\2022.3.62f1\Editor\Unity.exe"
+$unity = "C:\Program Files\Unity\Hub\Editor\2022.3.62f2\Editor\Unity.exe"
 $p = Start-Process $unity -Wait -PassThru -ArgumentList '-batchmode','-projectPath','C:\dev\Spheres','-executeMethod','Spheres.EditorTools.SmokeTest.Run','-logFile','C:\dev\Spheres\Builds\smoke.log'
 "Exit code: $($p.ExitCode)"
 ```
