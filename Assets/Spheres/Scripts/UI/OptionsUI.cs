@@ -113,6 +113,13 @@ namespace Spheres
                     st.volume = UIKit.Stepper(Row(), "Sound effects", st.volume * 100f, 10f, 0f, 100f, "0", "%") / 100f;
                     st.musicVolume = UIKit.Stepper(Row(), "Music", st.musicVolume * 100f, 10f, 0f, 100f, "0", "%") / 100f;
                     Sfx.Volume = st.volume;
+                    Header("Music");
+                    o.musicSource = UIKit.Cycle(Row(), "Songs", o.musicSource, new[] { "Spheres + your music", "Only Spheres' songs", "Only your music" });
+                    o.showNowPlaying = UIKit.CheckRow(Row(), "Show song names", o.showNowPlaying);
+                    var np = MusicPlayer.NowPlaying;
+                    UIKit.Text(Row(), "Now playing: " + (np != null ? np.Name : "-") + "   (" + MusicPlayer.Entries.Count + " songs)", UIKit.Small, UIKit.Muted);
+                    if (UIKit.Btn(Row(), "Next song", true)) MusicPlayer.Instance?.Skip();
+                    if (UIKit.Btn(Row(), "Open my music folder", true)) Application.OpenURL("file:///" + MusicPlayer.CustomFolder.Replace('\\', '/'));
                     break;
 
                 case 3:

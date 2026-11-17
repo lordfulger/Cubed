@@ -1,30 +1,75 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Spheres
 {
     /// <summary>
-    /// Procedural background music: an upbeat battle loop and a calm menu loop, composed from chord
-    /// progressions and synthesized on a background thread at startup. Crossfades by game state.
+    /// The soundtrack player. Each part of the game has its own playlist (menus, battles, card picks, the map
+    /// editor, match end). Built-in songs are composed on a worker thread the first time they're needed, a few
+    /// are kept in memory, and battles get a new song every round. Your own .ogg/.wav/.mp3 files in
+    /// &lt;user data&gt;/Music/&lt;battle|menu|pick|victory|editor&gt; join the rotation.
     /// </summary>
     public class MusicPlayer : MonoBehaviour
     {
-        public const int Rate = 22050;
+        public const int Rate = Composer.Rate;
+
+        /// <summary>Mods can force a clip for a state: (state) => clip, or null to use the playlist.</summary>
+        public static Func<GameState, AudioClip> TrackOverride;
+
+        public class Entry
+        {
+            public string Name;
+            public MusicMood Mood;
+            public SongDef Def;
+            public AudioClip Clip;
+            public bool Custom;
+            public float LastUsed;
+            public bool Queued;
+        }
+
+        static readonly List<Entry> entries = new List<Entry>();
+        public static IReadOnlyList<Entry> Entries => entries;
+        public static Entry NowPlaying { get; private set; }
+        public static MusicPlayer Instance { get; private set; }
+        public static string CustomFolder => Path.Combine(Application.persistentDataPath, "Music");
+
+        // Worker thread: renders queued songs one at a time.
+        static readonly Queue<Entry> renderQueue = new Queue<Entry>();
+        static readonly Queue<(Entry e, float[] data)> finished = new Queue<(Entry, float[])>();
+        static readonly object gate = new object();
+        static Thread worker;
 
         AudioSource a, b;
-        AudioClip menuClip, battleClip;
-        AudioClip current;
-        float fade = 1f;
-        static float[] menuData, battleData;
-        static volatile bool ready;
-        static bool started;
+        Entry current, pending;
+        MusicMood? mood;
+        float fade = 1f, lastTime;
+        int loops;
+        readonly Dictionary<MusicMood, List<Entry>> shuffled = new Dictionary<MusicMood, List<Entry>>();
+        int roundsSeen = -1;
+        const int MaxBuiltInClips = 6;
 
-        /// <summary>Mods can swap tracks: (state) => clip or null to use the default.</summary>
-        public static Func<GameState, AudioClip> TrackOverride;
+        /// <summary>Register your own clip (mods): it joins the playlist for that part of the game.</summary>
+        public static void AddClip(MusicMood mood, string name, AudioClip clip)
+        {
+            if (clip == null) return;
+            entries.Add(new Entry { Name = name ?? clip.name, Mood = mood, Clip = clip, Custom = true });
+        }
+
+        /// <summary>Register another procedural song (mods).</summary>
+        public static void AddSong(SongDef def)
+        {
+            if (def != null) entries.Add(new Entry { Name = def.Name, Mood = def.Mood, Def = def });
+        }
 
         void Awake()
         {
+            Instance = this;
             a = gameObject.AddComponent<AudioSource>();
             b = gameObject.AddComponent<AudioSource>();
             foreach (var s in new[] { a, b })
@@ -34,234 +79,273 @@ namespace Spheres
                 s.spatialBlend = 0f;
                 s.volume = 0f;
             }
-            if (!started)
+            if (entries.Count == 0)
+                foreach (var def in Soundtrack.Songs) entries.Add(new Entry { Name = def.Name, Mood = def.Mood, Def = def });
+            if (worker == null)
             {
-                started = true;
-                var thread = new Thread(() =>
-                {
-                    try
-                    {
-                        menuData = Composer.Menu();
-                        battleData = Composer.Battle();
-                    }
-                    catch (Exception) { menuData = battleData = null; }
-                    ready = true;
-                }) { IsBackground = true, Name = "Spheres music" };
-                thread.Start();
+                worker = new Thread(WorkerLoop) { IsBackground = true, Name = "Spheres music" };
+                worker.Start();
             }
+            // The first menu song first, so there's music almost immediately.
+            var first = entries.FirstOrDefault(e => e.Mood == MusicMood.Menu && e.Def != null);
+            if (first != null) Queue(first);
+            StartCoroutine(LoadCustomMusic());
+        }
+
+        static void WorkerLoop()
+        {
+            while (true)
+            {
+                Entry next = null;
+                lock (gate)
+                {
+                    while (renderQueue.Count == 0) Monitor.Wait(gate);
+                    next = renderQueue.Dequeue();
+                }
+                float[] data = null;
+                try { data = Composer.Render(next.Def); }
+                catch (Exception) { data = null; }
+                lock (gate) finished.Enqueue((next, data));
+            }
+        }
+
+        static void Queue(Entry e)
+        {
+            if (e == null || e.Clip != null || e.Queued || e.Def == null) return;
+            e.Queued = true;
+            lock (gate)
+            {
+                renderQueue.Enqueue(e);
+                Monitor.Pulse(gate);
+            }
+        }
+
+        static MusicMood MoodFor(GameState s)
+        {
+            switch (s)
+            {
+                case GameState.RoundIntro:
+                case GameState.Fighting:
+                case GameState.RoundEnd: return MusicMood.Battle;
+                case GameState.CardPick: return MusicMood.Pick;
+                case GameState.MatchEnd: return MusicMood.Victory;
+                case GameState.Editor: return MusicMood.Editor;
+                default: return MusicMood.Menu;
+            }
+        }
+
+        bool Allowed(Entry e)
+        {
+            int src = Options.Current.musicSource; // 0 both, 1 Spheres only, 2 yours only
+            if (src == 1 && e.Custom) return false;
+            if (src == 2 && !e.Custom) return entries.All(x => !x.Custom || x.Mood != e.Mood); // fall back if you have none for this part
+            return true;
+        }
+
+        /// <summary>Next song for a part of the game, shuffled without repeats.</summary>
+        Entry NextFor(MusicMood m, Entry avoid)
+        {
+            if (!shuffled.TryGetValue(m, out var list) || list.Count == 0)
+            {
+                list = entries.Where(e => e.Mood == m && Allowed(e)).OrderBy(_ => UnityEngine.Random.value).ToList();
+                if (list.Count > 1 && list[0] == avoid) { list.Add(list[0]); list.RemoveAt(0); }
+                shuffled[m] = list;
+            }
+            if (list.Count == 0) return null;
+            var e = list[0];
+            list.RemoveAt(0);
+            return e;
+        }
+
+        /// <summary>Skip to another song (Options button, mods).</summary>
+        public void Skip()
+        {
+            if (mood.HasValue) Choose(mood.Value);
+        }
+
+        void Choose(MusicMood m)
+        {
+            var next = NextFor(m, current);
+            if (next == null) return;
+            pending = next;
+            Queue(next);
+            // Warm up whatever will be needed next.
+            var peek = shuffled.TryGetValue(m, out var l) && l.Count > 0 ? l[0] : null;
+            Queue(peek);
+            if (m == MusicMood.Menu) QueueFirst(MusicMood.Battle);
+            if (m == MusicMood.Battle) { QueueFirst(MusicMood.Pick); QueueFirst(MusicMood.Victory); }
+            if (m == MusicMood.Pick) QueueFirst(MusicMood.Battle);
+        }
+
+        void QueueFirst(MusicMood m)
+        {
+            if (!shuffled.TryGetValue(m, out var list) || list.Count == 0)
+            {
+                list = entries.Where(e => e.Mood == m && Allowed(e)).OrderBy(_ => UnityEngine.Random.value).ToList();
+                shuffled[m] = list;
+            }
+            if (list.Count > 0) Queue(list[0]);
         }
 
         void Update()
         {
-            if (ready && menuClip == null && menuData != null)
+            // Turn finished renders into clips (main thread only).
+            while (true)
             {
-                menuClip = AudioClip.Create("Spheres Menu", menuData.Length, 1, Rate, false);
-                menuClip.SetData(menuData, 0);
-                battleClip = AudioClip.Create("Spheres Battle", battleData.Length, 1, Rate, false);
-                battleClip.SetData(battleData, 0);
-                menuData = battleData = null;
+                (Entry e, float[] data) item;
+                lock (gate)
+                {
+                    if (finished.Count == 0) break;
+                    item = finished.Dequeue();
+                }
+                item.e.Queued = false;
+                if (item.data == null) continue;
+                var clip = AudioClip.Create("Spheres - " + item.e.Name, item.data.Length, 1, Rate, false);
+                clip.SetData(item.data, 0);
+                item.e.Clip = clip;
+                TrimCache();
             }
+
             var gm = GameManager.Instance;
-            if (gm == null || menuClip == null) return;
-
+            if (gm == null) return;
             var state = gm.State;
-            bool battle = state == GameState.RoundIntro || state == GameState.Fighting || state == GameState.RoundEnd;
-            AudioClip want = TrackOverride?.Invoke(state) ?? (battle ? battleClip : menuClip);
+            var m = MoodFor(state);
 
-            if (want != current)
+            // A new song when the part of the game changes, every new round of a match, or after two loops.
+            int rounds = gm.InMatch ? gm.TeamScores.Sum() : -1;
+            bool newRound = false;
+            if (m == MusicMood.Battle && state == GameState.RoundIntro)
             {
-                // Swap sources and fade the new one in.
-                var t = a; a = b; b = t;
-                a.clip = want;
-                a.Play();
-                current = want;
-                fade = 0f;
+                newRound = roundsSeen >= 0 && rounds != roundsSeen;
+                roundsSeen = rounds;
             }
-            fade = Mathf.Min(1f, fade + Time.unscaledDeltaTime / 1.5f);
-            float vol = gm.Settings.musicVolume * (gm.Paused ? 0.4f : 1f) * (state == GameState.Editor ? 0.5f : 1f);
+            if (mood != m || newRound || (loops >= 2 && pending == null))
+            {
+                mood = m;
+                loops = 0;
+                Choose(m);
+            }
+            if (!gm.InMatch) roundsSeen = -1;
+
+            var overrideClip = TrackOverride?.Invoke(state);
+            if (overrideClip != null)
+            {
+                if (a.clip != overrideClip) SwapTo(overrideClip, null);
+            }
+            else if (pending != null && pending.Clip != null)
+            {
+                SwapTo(pending.Clip, pending);
+                pending = null;
+            }
+
+            // Count loops of the playing song.
+            if (a.isPlaying)
+            {
+                if (a.time < lastTime - 1f) loops++;
+                lastTime = a.time;
+            }
+
+            fade = Mathf.Min(1f, fade + Time.unscaledDeltaTime / 1.6f);
+            float vol = gm.Settings.musicVolume * (gm.Paused ? 0.4f : 1f) * (state == GameState.Editor ? 0.6f : 1f);
             a.volume = vol * fade;
             b.volume = vol * (1f - fade);
             if (b.volume <= 0.001f && b.isPlaying) b.Stop();
         }
-    }
 
-    /// <summary>A tiny offline sequencer + synth used to render the music loops.</summary>
-    public static class Composer
-    {
-        const int R = MusicPlayer.Rate;
-
-        static float Mtof(int midi) => 440f * Mathf.Pow(2f, (midi - 69) / 12f);
-
-        class Track
+        void SwapTo(AudioClip clip, Entry e)
         {
-            public readonly float[] Buf;
-            public Track(int n) { Buf = new float[n]; }
-
-            /// <summary>Add a note. Writes past the end wrap around so the loop is seamless.</summary>
-            public void Note(float start, float length, float freq, float vol, Func<float, float, float> osc, float attack, float release)
+            if (a.clip == clip && a.isPlaying) return;
+            var t = a; a = b; b = t;
+            a.clip = clip;
+            a.time = 0f;
+            a.Play();
+            fade = 0f;
+            lastTime = 0f;
+            loops = 0;
+            if (e != null)
             {
-                int s0 = Mathf.RoundToInt(start * R);
-                int n = Mathf.RoundToInt((length + release) * R);
-                float phase = 0f;
-                for (int i = 0; i < n; i++)
-                {
-                    float t = i / (float)R;
-                    float env = t < attack ? t / attack : t < length ? 1f : Mathf.Max(0f, 1f - (t - length) / release);
-                    phase += freq / R;
-                    Buf[(s0 + i) % Buf.Length] += osc(phase, t) * env * vol;
-                }
+                current = e;
+                e.LastUsed = Time.unscaledTime;
+                NowPlaying = e;
+                if (Options.Current.showNowPlaying)
+                    Toasts.Show("Now playing", e.Name + (e.Custom ? "  (your music)" : ""), new Color(0.6f, 0.75f, 1f));
             }
         }
 
-        static float Saw(float p) => (p - Mathf.Floor(p)) * 2f - 1f;
-        static float Sq(float p) => (p - Mathf.Floor(p)) < 0.5f ? 1f : -1f;
-        static float Tri(float p) => 1f - 4f * Mathf.Abs(p - Mathf.Floor(p) - 0.5f);
-        static float Sin(float p) => Mathf.Sin(p * 6.2831853f);
-
-        static void Kick(Track t, float at, float vol)
+        /// <summary>Keep only a few built-in songs in memory; they're re-rendered if needed again.</summary>
+        void TrimCache()
         {
-            int s0 = Mathf.RoundToInt(at * R), n = Mathf.RoundToInt(0.28f * R);
-            float phase = 0f;
-            for (int i = 0; i < n; i++)
+            var loaded = entries.Where(e => !e.Custom && e.Clip != null && e != current && e != pending && e.Clip != a.clip && e.Clip != b.clip)
+                .OrderBy(e => e.LastUsed).ToList();
+            int total = entries.Count(e => !e.Custom && e.Clip != null);
+            for (int i = 0; i < loaded.Count && total > MaxBuiltInClips; i++)
             {
-                float k = i / (float)n;
-                phase += Mathf.Lerp(140f, 42f, Mathf.Sqrt(k)) / R;
-                t.Buf[(s0 + i) % t.Buf.Length] += Sin(phase) * (1f - k) * (1f - k) * vol;
+                // Don't evict something queued up as "next" in a playlist.
+                if (shuffled.Values.Any(l => l.Count > 0 && l[0] == loaded[i])) continue;
+                Destroy(loaded[i].Clip);
+                loaded[i].Clip = null;
+                total--;
             }
         }
 
-        static void NoiseHit(Track t, float at, float dur, float vol, float tone, System.Random rng, float lowpass)
+        // ---------------------------------------------------------------- your own music
+
+        IEnumerator LoadCustomMusic()
         {
-            int s0 = Mathf.RoundToInt(at * R), n = Mathf.RoundToInt(dur * R);
-            float y = 0f, a = Mathf.Clamp01(lowpass);
-            for (int i = 0; i < n; i++)
+            string root = CustomFolder;
+            try
             {
-                float k = i / (float)n;
-                float x = (float)(rng.NextDouble() * 2.0 - 1.0);
-                y += a * (x - y);
-                float sample = (lowpass >= 1f ? x : y) + (tone > 0f ? Sin(i * tone / R) * 0.5f : 0f);
-                t.Buf[(s0 + i) % t.Buf.Length] += sample * Mathf.Pow(1f - k, 3f) * vol;
+                foreach (var sub in new[] { "battle", "menu", "pick", "victory", "editor" })
+                    Directory.CreateDirectory(Path.Combine(root, sub));
+                string readme = Path.Combine(root, "README.txt");
+                if (!File.Exists(readme))
+                    File.WriteAllText(readme,
+                        "Put your own music here (.ogg, .wav or .mp3) and it joins Spheres' playlists:\r\n" +
+                        "  battle  - during fights\r\n  menu    - menus and lobby\r\n  pick    - card picks\r\n" +
+                        "  victory - match end / podium\r\n  editor  - the map editor\r\n" +
+                        "Restart the game after adding files. Options > Audio can switch to only your music.\r\n");
             }
-        }
+            catch (Exception e) { Debug.LogWarning("[Spheres] Music folder: " + e.Message); }
 
-        static void LowPass(float[] d, float a)
-        {
-            float y = d[d.Length - 1];
-            for (int i = 0; i < d.Length; i++) { y += a * (d[i] - y); d[i] = y; }
-        }
-
-        static void Echo(float[] d, float seconds, float feedback)
-        {
-            int dl = Mathf.RoundToInt(seconds * R);
-            for (int pass = 0; pass < 2; pass++)
-                for (int i = 0; i < d.Length; i++) d[i] += d[(i - dl + d.Length) % d.Length] * feedback;
-        }
-
-        static float[] Master(params (Track t, float gain)[] tracks)
-        {
-            int n = tracks[0].t.Buf.Length;
-            var o = new float[n];
-            foreach (var (t, g) in tracks) for (int i = 0; i < n; i++) o[i] += t.Buf[i] * g;
-            float peak = 0.001f;
-            foreach (var v in o) peak = Mathf.Max(peak, Mathf.Abs(v));
-            for (int i = 0; i < n; i++) o[i] = (float)Math.Tanh(o[i] / peak * 1.2f) * 0.75f;
-            return o;
-        }
-
-        /// <summary>124 BPM, E minor: four-on-the-floor drums, driving bass, arpeggios, lead in the second half.</summary>
-        public static float[] Battle()
-        {
-            const float bpm = 124f;
-            float beat = 60f / bpm, bar = beat * 4f;
-            const int bars = 16;
-            int n = Mathf.RoundToInt(bar * bars * R);
-            var rng = new System.Random(7);
-            var drums = new Track(n); var bass = new Track(n); var arp = new Track(n); var pad = new Track(n); var lead = new Track(n);
-            // i - VI - III - VII  (Em, C, G, D), each chord two bars.
-            int[][] chords = { new[] { 52, 55, 59 }, new[] { 48, 52, 55 }, new[] { 55, 59, 62 }, new[] { 50, 54, 57 } };
-            int[] scale = { 64, 66, 67, 69, 71, 72, 74, 76, 78, 79 };
-
-            for (int b = 0; b < bars; b++)
+            var folders = new List<string> { root };
+            try { folders.AddRange(ContentLoader.Folders.Where(Directory.Exists)); }
+            catch (Exception) { }
+            foreach (var folder in folders.Distinct())
             {
-                var chord = chords[(b / 2) % chords.Length];
-                float t0 = b * bar;
-                for (int q = 0; q < 4; q++)
+                string[] files;
+                try { files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories); }
+                catch (Exception) { continue; }
+                foreach (var file in files)
                 {
-                    Kick(drums, t0 + q * beat, 0.9f);
-                    NoiseHit(drums, t0 + q * beat + beat * 0.5f, 0.05f, 0.25f, 0f, rng, 1f); // hats
-                    if (q == 1 || q == 3) NoiseHit(drums, t0 + q * beat, 0.18f, 0.5f, 190f, rng, 0.35f); // snare
-                }
-                if (b % 4 == 3) for (int s = 0; s < 4; s++) NoiseHit(drums, t0 + 3f * beat + s * beat * 0.25f, 0.1f, 0.3f, 220f, rng, 0.4f); // fill
-
-                // Bass: driving eighths, octave bounce.
-                for (int e = 0; e < 8; e++)
-                {
-                    int note = chord[0] - 12 + (e % 4 == 3 ? 12 : 0);
-                    bass.Note(t0 + e * beat * 0.5f, beat * 0.4f, Mtof(note), 0.5f, (p, t) => Saw(p) * 0.6f + Sq(p * 0.5f) * 0.4f, 0.005f, 0.05f);
-                }
-                // Arpeggio: sixteenths through chord tones.
-                for (int s = 0; s < 16; s++)
-                {
-                    int idx = s % 4 == 3 ? 1 : s % 3;
-                    int note = chord[idx] + 12 + (s >= 8 ? 12 : 0);
-                    arp.Note(t0 + s * beat * 0.25f, beat * 0.12f, Mtof(note), 0.18f, (p, t) => Sq(p), 0.002f, 0.08f);
-                }
-                // Pad: sustained chord, detuned saws.
-                foreach (int c in chord)
-                    pad.Note(t0, bar * 0.95f, Mtof(c + 12), 0.08f, (p, t) => Saw(p) + Saw(p * 1.006f), 0.25f, 0.4f);
-
-                // Lead melody in the second half.
-                if (b >= 8)
-                {
-                    float tt = t0;
-                    while (tt < t0 + bar - 0.01f)
+                    string ext = Path.GetExtension(file).ToLowerInvariant();
+                    AudioType type = ext == ".ogg" ? AudioType.OGGVORBIS : ext == ".wav" ? AudioType.WAV : ext == ".mp3" ? AudioType.MPEG : AudioType.UNKNOWN;
+                    if (type == AudioType.UNKNOWN) continue;
+                    // Inside content folders only files under a "music" folder count (so mods' sound effects don't).
+                    string norm = file.Replace('\\', '/').ToLowerInvariant();
+                    if (folder != root && !norm.Contains("/music/")) continue;
+                    var mood = MoodFromPath(norm);
+                    using (var req = UnityWebRequestMultimedia.GetAudioClip(new Uri(file).AbsoluteUri, type))
                     {
-                        float len = rng.NextDouble() < 0.6 ? beat * 0.5f : beat;
-                        int note = rng.NextDouble() < 0.6 ? chord[rng.Next(3)] + 24 : scale[rng.Next(scale.Length)];
-                        if (rng.NextDouble() < 0.15) { tt += len; continue; }
-                        lead.Note(tt, len * 0.9f, Mtof(note), 0.22f, (p, t) => Tri(p + Mathf.Sin(t * 30f) * 0.004f * t * 10f), 0.01f, 0.12f);
-                        tt += len;
+                        ((DownloadHandlerAudioClip)req.downloadHandler).streamAudio = true;
+                        yield return req.SendWebRequest();
+                        if (req.result != UnityWebRequest.Result.Success) { Debug.LogWarning("[Spheres] Couldn't load music " + file + ": " + req.error); continue; }
+                        var clip = DownloadHandlerAudioClip.GetContent(req);
+                        if (clip == null) continue;
+                        clip.name = Path.GetFileNameWithoutExtension(file);
+                        AddClip(mood, clip.name, clip);
                     }
                 }
             }
-            LowPass(bass.Buf, 0.12f);
-            LowPass(pad.Buf, 0.08f);
-            Echo(arp.Buf, beat * 0.75f, 0.3f);
-            Echo(lead.Buf, beat * 0.5f, 0.25f);
-            return Master((drums, 0.9f), (bass, 0.8f), (arp, 0.45f), (pad, 0.5f), (lead, 0.55f));
+            shuffled.Clear();
         }
 
-        /// <summary>90 BPM, A minor seventh chords: soft pads, plucked arpeggio, gentle pulse.</summary>
-        public static float[] Menu()
+        static MusicMood MoodFromPath(string path)
         {
-            const float bpm = 90f;
-            float beat = 60f / bpm, bar = beat * 4f;
-            const int bars = 16;
-            int n = Mathf.RoundToInt(bar * bars * R);
-            var rng = new System.Random(11);
-            var pad = new Track(n); var pluck = new Track(n); var drums = new Track(n); var bass = new Track(n);
-            int[][] chords = { new[] { 57, 60, 64, 67 }, new[] { 53, 57, 60, 64 }, new[] { 48, 52, 55, 59 }, new[] { 55, 59, 62, 64 } };
-            for (int b = 0; b < bars; b++)
-            {
-                var chord = chords[(b / 2) % chords.Length];
-                float t0 = b * bar;
-                foreach (int c in chord)
-                    pad.Note(t0, bar, Mtof(c), 0.07f, (p, t) => Saw(p) + Saw(p * 1.004f) + Tri(p * 0.5f), 0.8f, 0.9f);
-                bass.Note(t0, bar * 0.9f, Mtof(chord[0] - 12), 0.35f, (p, t) => Sin(p) + Tri(p) * 0.3f, 0.05f, 0.4f);
-                for (int e = 0; e < 8; e++)
-                {
-                    if (rng.NextDouble() < 0.2) continue;
-                    int note = chord[(e * 2 + b) % chord.Length] + 12;
-                    pluck.Note(t0 + e * beat * 0.5f, beat * 0.1f, Mtof(note), 0.16f, (p, t) => Tri(p) * Mathf.Exp(-t * 6f), 0.003f, 0.4f);
-                }
-                Kick(drums, t0, 0.35f);
-                Kick(drums, t0 + beat * 2f, 0.25f);
-                for (int s = 0; s < 8; s++) NoiseHit(drums, t0 + s * beat * 0.5f, 0.04f, s % 2 == 0 ? 0.08f : 0.05f, 0f, rng, 1f);
-            }
-            LowPass(pad.Buf, 0.05f);
-            LowPass(bass.Buf, 0.06f);
-            Echo(pluck.Buf, beat * 0.75f, 0.35f);
-            return Master((pad, 0.7f), (pluck, 0.6f), (drums, 0.5f), (bass, 0.6f));
+            if (path.Contains("/menu/")) return MusicMood.Menu;
+            if (path.Contains("/pick/")) return MusicMood.Pick;
+            if (path.Contains("/victory/")) return MusicMood.Victory;
+            if (path.Contains("/editor/")) return MusicMood.Editor;
+            return MusicMood.Battle;
         }
     }
 }

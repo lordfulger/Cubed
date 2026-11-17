@@ -29,6 +29,10 @@ namespace Spheres
         public bool damageNumbers = true;
         /// <summary>Built game: check GitHub for a newer version at startup.</summary>
         public bool checkForUpdates = true;
+        /// <summary>0 = Spheres + your music, 1 = only Spheres' songs, 2 = only your music.</summary>
+        public int musicSource;
+        /// <summary>Show the song name when the music changes.</summary>
+        public bool showNowPlaying = true;
         /// <summary>Silly kill-feed lines ("X popped Y") instead of plain "X > Y".</summary>
         public bool funnyDeathMessages = true;
         /// <summary>Language code ("" = follow the system language).</summary>
