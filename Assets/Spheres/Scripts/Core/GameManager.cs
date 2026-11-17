@@ -286,9 +286,16 @@ namespace Spheres
         // ------------------------------------------------------------------ match lifecycle
 
         /// <summary>Start a match with the current settings. testMap overrides the map (editor test play).</summary>
+        /// <summary>Round wins needed to take the match (grows when players choose "Keep going").</summary>
+        public int RoundsTarget { get; private set; } = 5;
+        public bool Endless => Settings.endless || endlessRun;
+        bool endlessRun;
+
         public void StartMatch(MapData testMap = null)
         {
             Settings.Validate();
+            RoundsTarget = Mathf.Max(1, Settings.roundsToWin);
+            endlessRun = false;
             Settings.weatherSeed = UnityEngine.Random.Range(1, 1 << 30);
             Weather.Active = true;
             string error = Settings.CheckPlayable();
@@ -478,7 +485,7 @@ namespace Spheres
         {
             Time.timeScale = 1f;
             int w = LastRoundWinner;
-            if (w >= 0 && TeamScores[w] >= Settings.roundsToWin)
+            if (!Endless && w >= 0 && TeamScores[w] >= RoundsTarget)
             {
                 MatchWinner = w;
                 foreach (var p in Players) p.Frozen = true;
@@ -494,7 +501,34 @@ namespace Spheres
                 GameEvents.RaiseMatchEnded(w);
                 return;
             }
+            ContinueAfterRound(w);
+        }
 
+        /// <summary>
+        /// Match over, but keep going with everyone's cards: another set of rounds (endless = never end again).
+        /// Host only; clients follow through snapshots.
+        /// </summary>
+        public void KeepGoing(bool endless)
+        {
+            if (State != GameState.MatchEnd || NetClientMode) return;
+            if (endless) endlessRun = true;
+            else RoundsTarget += Mathf.Max(1, Settings.roundsToWin);
+            int w = MatchWinner >= 0 ? MatchWinner : LastRoundWinner;
+            MatchWinner = -1;
+            SpheresHud.ShowBanner(endless ? "ENDLESS MODE - the decks get crazier" : "KEEP GOING - first to " + RoundsTarget, new Color(1f, 0.85f, 0.3f));
+            SpheresHud.AddFeedText(endless ? "The match is now endless!" : "Match extended: first to " + RoundsTarget + " rounds");
+            ContinueAfterRound(w);
+        }
+
+        /// <summary>Clients: round target and endless flag from snapshots.</summary>
+        public void ClientSetTarget(int target, bool endless)
+        {
+            RoundsTarget = Mathf.Max(1, target);
+            endlessRun = endless;
+        }
+
+        void ContinueAfterRound(int w)
+        {
             ApplyCatchUpCurses();
             List<Player> pickers;
             switch (Settings.pickRule)

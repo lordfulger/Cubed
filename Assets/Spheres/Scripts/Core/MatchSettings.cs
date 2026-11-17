@@ -81,6 +81,8 @@ namespace Spheres
         public bool catchUpCurses;
         public int curseLead = 2;
         public int roundsToWin = 5;
+        /// <summary>The match never ends: keep picking cards and fighting forever.</summary>
+        public bool endless;
         public float roundTimeLimit = 0f;
 
         // Cards

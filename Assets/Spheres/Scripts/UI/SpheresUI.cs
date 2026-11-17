@@ -362,7 +362,8 @@ namespace Spheres
             if (st.mode == GameMode.Infection) st.infectionSeconds = UIKit.Stepper(Row(), "   Survive for", st.infectionSeconds, 15f, 30f, 600f, "0", "s");
             st.catchUpCurses = UIKit.CheckRow(Row(), "Catch-up curses (leader gets a handicap card)", st.catchUpCurses);
             if (st.catchUpCurses) st.curseLead = UIKit.StepperInt(Row(), "   Lead needed (rounds)", st.curseLead, 1, 10);
-            st.roundsToWin = UIKit.StepperInt(Row(), "Rounds to win", st.roundsToWin, 1, 20);
+            st.endless = UIKit.CheckRow(Row(), "Endless match (never ends - build insane decks)", st.endless);
+            if (!st.endless) st.roundsToWin = UIKit.StepperInt(Row(), "Rounds to win", st.roundsToWin, 1, 20);
             st.roundTimeLimit = UIKit.Stepper(Row(), "Round time limit", st.roundTimeLimit, 30f, 0f, 600f, "0", "s", "Off");
             st.friendlyFire = UIKit.CheckRow(Row(), "Friendly fire", st.friendlyFire);
 

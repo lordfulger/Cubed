@@ -15,7 +15,7 @@ namespace Spheres
         public static readonly List<Player> All = new List<Player>();
 
         public const float Gravity = 25f;
-        public const float GroundAccel = 70f;
+        public const float GroundAccel = 110f;
         public const float AirAccel = 45f;
         /// <summary>Landing faster than this (m/s) causes landing damage.</summary>
         public static float SafeLandingSpeed = 19f;
@@ -596,8 +596,15 @@ namespace Spheres
                 ? GroundAccel * (groundBlock != null && groundBlock.Type != null ? groundBlock.Type.GroundAccel : 1f)
                 : AirAccel * GetStat(Stat.AirControl);
             Vector3 horizontal = new Vector3(Velocity.x, 0f, Velocity.z);
+            bool knockback = horizontal.magnitude > speed + 0.5f;
+            if (Grounded && !knockback)
+            {
+                // Tight ground control: stop almost immediately when you let go, and turn around without skidding.
+                if (move.sqrMagnitude < 0.01f) accel *= 2f;
+                else if (Vector3.Dot(desired, horizontal) < 0f) accel *= 1.6f;
+            }
             // Preserve knockback: decelerate slowly when moving faster than we could run.
-            if (horizontal.magnitude > speed + 0.5f && Vector3.Dot(desired, horizontal) >= 0f) accel *= Grounded ? 0.5f : 0.25f;
+            if (knockback && Vector3.Dot(desired, horizontal) >= 0f) accel *= Grounded ? 0.5f : 0.25f;
             horizontal = Vector3.MoveTowards(horizontal, desired, accel * dt);
             Velocity.x = horizontal.x;
             Velocity.z = horizontal.z;

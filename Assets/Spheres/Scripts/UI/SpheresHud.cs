@@ -429,7 +429,7 @@ namespace Spheres
             UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.35f));
             UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.94f));
             UIKit.Outline(r, new Color(1f, 1f, 1f, 0.12f), 1f);
-            string mode = GameManager.ModeName(gm.Settings.mode) + "  -  Round " + Mathf.Max(1, gm.RoundNumber) + "  -  first to " + gm.Settings.roundsToWin;
+            string mode = GameManager.ModeName(gm.Settings.mode) + "  -  Round " + Mathf.Max(1, gm.RoundNumber) + (gm.Endless ? "  -  endless" : "  -  first to " + gm.RoundsTarget);
             UIKit.Text(new Rect(r.x + 20f, r.y + 10f, W - 40f, 32f), "<b>Scoreboard</b>   <color=#8890a8>" + mode + "</color>", UIKit.Header, Color.white);
 
             float[] cols = { 20f, 260f, 320f, 380f, 460f, 540f };
@@ -447,7 +447,7 @@ namespace Spheres
                 UIKit.Fill(new Rect(r.x + 10f, y, 4f, 26f), tc);
                 string extra = gm.Settings.mode == GameMode.Deathmatch ? "   kills this round: " + gm.RoundKills[t]
                     : gm.Settings.mode == GameMode.KingOfTheHill ? "   hill: " + Mathf.FloorToInt(gm.HillProgress[t]) + "s" : "";
-                UIKit.Text(new Rect(r.x + 20f, y, W - 40f, 26f), "<b>" + Teams.GetName(t) + "</b>   " + gm.TeamScores[t] + " / " + gm.Settings.roundsToWin + " rounds" + extra, UIKit.Label, tc);
+                UIKit.Text(new Rect(r.x + 20f, y, W - 40f, 26f), "<b>" + Teams.GetName(t) + "</b>   " + gm.TeamScores[t] + (gm.Endless ? " rounds" : " / " + gm.RoundsTarget + " rounds") + extra, UIKit.Label, tc);
                 y += 30f;
                 foreach (var p in gm.Players.Where(p => p.HomeTeam == t).OrderByDescending(p => p.Kills).ThenByDescending(p => p.DamageDealt))
                 {
@@ -615,7 +615,7 @@ namespace Spheres
             float total = teams.Count * w + (teams.Count - 1) * gap;
             float x = UIKit.Size.x * 0.5f - total * 0.5f;
             const float y = 10f;
-            int target = gm.Settings.roundsToWin;
+            int target = gm.Endless ? 0 : gm.RoundsTarget;
             foreach (int t in teams)
             {
                 var r = new Rect(x, y, w, 44f);
@@ -625,7 +625,9 @@ namespace Spheres
                 bool anyAlive = gm.Players.Any(p => p.Team == t && p.IsAlive);
                 UIKit.Text(new Rect(r.x + 10f, r.y + 2f, w - 14f, 20f), Teams.GetName(t) + (anyAlive || !gm.InMatch ? "" : "  (out)"), UIKit.Small, col);
                 int score = gm.TeamScores[t];
-                if (target <= 10)
+                if (target == 0)
+                    UIKit.Text(new Rect(r.x + 10f, r.y + 22f, w - 14f, 20f), score + " wins", UIKit.Small, Color.white);
+                else if (target <= 10)
                 {
                     float pw = Mathf.Min(14f, (w - 20f) / target - 3f);
                     for (int i = 0; i < target; i++)
@@ -634,7 +636,7 @@ namespace Spheres
                 else UIKit.Text(new Rect(r.x + 10f, r.y + 22f, w - 14f, 20f), score + " / " + target, UIKit.Small, Color.white);
                 x += w + gap;
             }
-            UIKit.Shadowed(new Rect(0f, 58f, UIKit.Size.x, 18f), "Round " + Mathf.Max(1, gm.RoundNumber) + "  -  first to " + target, UIKit.SmallCenter, UIKit.Muted);
+            UIKit.Shadowed(new Rect(0f, 58f, UIKit.Size.x, 18f), "Round " + Mathf.Max(1, gm.RoundNumber) + (target == 0 ? "  -  endless" : "  -  first to " + target), UIKit.SmallCenter, UIKit.Muted);
 
             var map = gm.Map;
             if (gm.State == GameState.Fighting && map != null && map.Shrink > 0f && map.Shrink < 1f && Mathf.Repeat(Time.unscaledTime, 1f) < 0.65f)
@@ -783,7 +785,7 @@ namespace Spheres
         {
             var size = UIKit.Size;
             // The podium fills the left of the screen; results sit on the right.
-            float w = Mathf.Min(600f, size.x * 0.48f), h = Mathf.Min(size.y - 40f, 160f + gm.Players.Count * 30f + 90f);
+            float w = Mathf.Min(600f, size.x * 0.48f), h = Mathf.Min(size.y - 40f, 160f + gm.Players.Count * 30f + 90f + (gm.NetClientMode ? 0f : 52f));
             var r = new Rect(size.x - w - 30f, size.y * 0.5f - h * 0.5f, w, h);
             UIKit.Fill(r, new Color(UIKit.Panel.r, UIKit.Panel.g, UIKit.Panel.b, 0.92f));
             int win = gm.MatchWinner;
@@ -813,6 +815,10 @@ namespace Spheres
                 if (UIKit.Btn(new Rect(r.xMax - 240f, by, 220f, 42f), "Leave")) { gm.Net.Leave(); gm.ReturnToMenu(); }
                 return;
             }
+            // Keep the same fighters and cards and play on.
+            float kw = (w - 60f) / 2f;
+            if (UIKit.Btn(new Rect(r.x + 20f, by - 52f, kw, 42f), "<b>Keep Going</b> (+" + Mathf.Max(1, gm.Settings.roundsToWin) + " rounds)")) gm.KeepGoing(false);
+            if (UIKit.Btn(new Rect(r.x + 40f + kw, by - 52f, kw, 42f), "<b>Endless</b> (never ends)")) gm.KeepGoing(true);
             float bw = gm.TestingFromEditor ? (w - 80f) / 3f : (w - 60f) / 2f;
             float bx = r.x + 20f;
             if (UIKit.Btn(new Rect(bx, by, bw, 42f), "Rematch")) gm.Rematch();
