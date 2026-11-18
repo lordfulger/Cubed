@@ -71,6 +71,32 @@ namespace Spheres
             if (Ammo <= 0) StartReload();
         }
 
+        /// <summary>
+        /// Aim higher so a bullet under gravity <paramref name="g"/> passes through the target point at the end of
+        /// <paramref name="toTarget"/>. Capped at 30° extra so huge drop (from cards) still sinks at long range.
+        /// </summary>
+        public static Vector3 CompensateDrop(Vector3 toTarget, float g, float speed, float lifetime)
+        {
+            float dist = toTarget.magnitude;
+            if (g <= 0.01f || dist < 0.5f || speed <= 0.1f) return toTarget;
+            dist = Mathf.Min(dist, speed * Mathf.Max(0.1f, lifetime));
+            Vector3 dir = toTarget / toTarget.magnitude;
+            Vector3 target = dir * dist;
+            Vector3 aim = target;
+            for (int i = 0; i < 3; i++)
+            {
+                // The horizontal speed sets the flight time; the drop over that time is added back as height.
+                Vector3 a = aim.normalized;
+                float horiz = Mathf.Max(0.2f, new Vector2(a.x, a.z).magnitude) * speed;
+                float flat = new Vector2(target.x, target.z).magnitude;
+                float t = flat > 0.5f ? flat / horiz : dist / speed;
+                aim = target + Vector3.up * (0.5f * g * t * t);
+            }
+            Vector3 result = aim.normalized;
+            if (Vector3.Angle(dir, result) > 30f) result = Vector3.RotateTowards(dir, result, 30f * Mathf.Deg2Rad, 0f);
+            return result;
+        }
+
         public void Fire()
         {
             int count = Mathf.Max(1, owner.GetStatInt(Stat.BulletsPerShot));
@@ -79,7 +105,11 @@ namespace Spheres
             Vector3 muzzle = owner.Muzzle.position;
 
             Vector3 baseDir = owner.Input != null ? owner.Input.AimPoint - muzzle : owner.AimDirection;
-            if (baseDir.sqrMagnitude < 0.01f || Vector3.Dot(baseDir.normalized, owner.AimDirection) < 0.5f) baseDir = owner.AimDirection;
+            bool aimedAtPoint = owner.Input != null;
+            if (baseDir.sqrMagnitude < 0.01f || Vector3.Dot(baseDir.normalized, owner.AimDirection) < 0.5f) { baseDir = owner.AimDirection; aimedAtPoint = false; }
+            // Bullet drop: players aim with a crosshair, so tilt the shot up just enough that it lands on the crosshair
+            // instead of sinking below it. (Bots already lead their shots for drop themselves.)
+            if (aimedAtPoint && (owner.IsHuman || owner.Input is Net.NetworkInput)) baseDir = CompensateDrop(baseDir, owner.GetStat(Stat.BulletGravity), speed, owner.GetStat(Stat.BulletLifetime));
             baseDir.Normalize();
 
             // Don't spawn bullets inside a wall the muzzle is poking through.
