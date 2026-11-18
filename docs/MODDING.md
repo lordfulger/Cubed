@@ -57,7 +57,7 @@ Load errors are shown on the in-game Mods screen and written to the Unity/BepInE
 }
 ```
 
-* `rarity` is `Common` (weight 10), `Uncommon` (5), `Rare` (2) or `Legendary` (0.7). `weight` multiplies the rarity weight.
+* `rarity` is `Common`, `Uncommon`, `Rare` or `Legendary`. Each card slot first rolls a rarity (52% / 30% / 13% / 5%, changeable through `CardRegistry.CommonChance` etc.), then picks a card of that rarity; `weight` makes a card more or less likely among cards of its rarity.
 * `maxStacks: 0` means a player can take the card any number of times.
 * Modifiers combine as `value = Set ?? (base + ΣAdd) × ΠMultiply`, then the result is clamped. The order you pick cards in doesn't matter.
 * A card that reuses an existing `id` replaces that card. Use this to rebalance built-in `spheres.*` cards.

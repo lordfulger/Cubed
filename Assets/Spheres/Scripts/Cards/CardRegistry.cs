@@ -49,16 +49,23 @@ namespace Spheres
 
         public static CardDefinition Get(string id) => id != null && byId.TryGetValue(id, out var c) ? c : null;
 
+        /// <summary>
+        /// Chance of each rarity per card slot. The rarity is rolled first and then a card of that rarity is picked,
+        /// so the odds don't depend on how many cards each rarity has (there are far more commons than legendaries).
+        /// Mods can change these.
+        /// </summary>
         public static float RarityWeight(Rarity r)
         {
             switch (r)
             {
-                case Rarity.Uncommon: return 5f;
-                case Rarity.Rare: return 2f;
-                case Rarity.Legendary: return 0.7f;
-                default: return 10f;
+                case Rarity.Uncommon: return UncommonChance;
+                case Rarity.Rare: return RareChance;
+                case Rarity.Legendary: return LegendaryChance;
+                default: return CommonChance;
             }
         }
+
+        public static float CommonChance = 0.52f, UncommonChance = 0.30f, RareChance = 0.13f, LegendaryChance = 0.05f;
 
         public static bool IsEnabled(CardDefinition c, MatchSettings settings) =>
             settings == null || settings.disabledCards == null || !settings.disabledCards.Contains(c.Id);
@@ -86,15 +93,24 @@ namespace Spheres
             var hand = new List<CardDefinition>();
             while (hand.Count < count && pool.Count > 0)
             {
-                float total = 0f;
-                foreach (var c in pool) total += RarityWeight(c.Rarity) * Mathf.Max(0f, c.WeightMultiplier);
-                if (total <= 0f) break;
+                // 1) roll a rarity (only among rarities that still have cards), 2) pick a card of that rarity.
+                var byRarity = pool.Where(c => c.WeightMultiplier > 0f).GroupBy(c => c.Rarity).ToList();
+                if (byRarity.Count == 0) break;
+                float total = byRarity.Sum(g => RarityWeight(g.Key));
                 float roll = Random.value * total;
-                CardDefinition chosen = pool[pool.Count - 1];
-                foreach (var c in pool)
+                var group = byRarity[byRarity.Count - 1];
+                foreach (var g in byRarity)
                 {
-                    roll -= RarityWeight(c.Rarity) * Mathf.Max(0f, c.WeightMultiplier);
-                    if (roll <= 0f) { chosen = c; break; }
+                    roll -= RarityWeight(g.Key);
+                    if (roll <= 0f) { group = g; break; }
+                }
+                float inner = group.Sum(c => c.WeightMultiplier);
+                float pick = Random.value * inner;
+                CardDefinition chosen = group.Last();
+                foreach (var c in group)
+                {
+                    pick -= c.WeightMultiplier;
+                    if (pick <= 0f) { chosen = c; break; }
                 }
                 hand.Add(chosen);
                 pool.Remove(chosen);

@@ -464,7 +464,7 @@ namespace Spheres
             var s = UIKit.Size;
             var teams = gm.ActiveTeams;
             int rows = gm.Players.Count + teams.Count;
-            float W = Mathf.Min(1180f, s.x - 60f), H = Mathf.Min(s.y - 140f, 110f + rows * 34f);
+            float W = Mathf.Min(1180f, s.x - 60f), H = Mathf.Min(s.y - 300f, 110f + rows * 34f);
             var r = new Rect(s.x * 0.5f - W * 0.5f, 110f, W, H);
             UIKit.Fill(new Rect(0f, 0f, s.x, s.y), new Color(0f, 0f, 0f, 0.35f));
             UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.94f));
@@ -480,6 +480,7 @@ namespace Spheres
 
             var mouse = Event.current.mousePosition;
             var net = gm.Net;
+            Player inspected = null;
             foreach (int t in teams.OrderByDescending(t => gm.TeamScores[t]))
             {
                 var tc = Teams.GetColor(t);
@@ -493,7 +494,9 @@ namespace Spheres
                 {
                     if (y > r.yMax - 30f) break;
                     bool me = p.Input is HumanInput;
-                    if (me) UIKit.Fill(new Rect(r.x + 10f, y - 2f, W - 20f, 30f), new Color(1f, 1f, 1f, 0.05f));
+                    var rowRect = new Rect(r.x + 10f, y - 2f, W - 20f, 30f);
+                    if (rowRect.Contains(mouse)) { inspected = p; UIKit.Fill(rowRect, new Color(1f, 1f, 1f, 0.07f)); }
+                    else if (me) UIKit.Fill(rowRect, new Color(1f, 1f, 1f, 0.05f));
                     string tag = p.IsBot ? " <color=#8890a8>(bot)</color>" : p.IsRemote ? " <color=#7dff8a>(online)</color>" : me ? " <color=#ffd75e>(you)</color>" : "";
                     var nameCol = p.IsAlive ? Color.Lerp(p.Color, Color.white, 0.35f) : new Color(0.55f, 0.55f, 0.6f);
                     UIKit.Text(new Rect(r.x + cols[0] + 10f, y, 240f, 26f), p.DisplayName + tag + (p.IsAlive ? "" : "  <color=#ff7a70>x</color>"), UIKit.Label, nameCol);
@@ -513,6 +516,7 @@ namespace Spheres
                         bool focused = UIKit.NavFocus(ir);
                         if (focused || ir.Contains(mouse))
                         {
+                            inspected = p;
                             tooltipCard = g.Key;
                             tooltipAnchor = ir;
                             UIKit.Outline(new Rect(ir.x - 2f, ir.y - 2f, ir.width + 4f, ir.height + 4f), Color.white, 2f);
@@ -524,7 +528,85 @@ namespace Spheres
                     y += 32f;
                 }
             }
-            UIKit.Text(new Rect(r.x + 20f, r.yMax - 26f, W - 40f, 20f), "Hold Tab (View / Select on a gamepad). Gamepad: use the stick to move between cards.", UIKit.Small, UIKit.Muted);
+            UIKit.Text(new Rect(r.x + 20f, r.yMax - 26f, W - 40f, 20f), "Hold Tab (View / Select on a gamepad). Hover a player to see their stats. Gamepad: use the stick to move between cards.", UIKit.Small, UIKit.Muted);
+
+            inspected = inspected ?? gm.Players.FirstOrDefault(p => p.Input is HumanInput) ?? gm.Players.FirstOrDefault();
+            if (inspected != null) DrawStatsPanel(inspected, new Rect(r.x, r.yMax + 10f, W, Mathf.Min(170f, s.y - r.yMax - 20f)));
+        }
+
+        /// <summary>A player's current build: health, damage, defense and everything their cards changed.</summary>
+        static void DrawStatsPanel(Player p, Rect r)
+        {
+            if (r.height < 60f) return;
+            UIKit.Fill(r, new Color(0.05f, 0.06f, 0.1f, 0.94f));
+            UIKit.Outline(r, new Color(1f, 1f, 1f, 0.12f), 1f);
+            UIKit.Fill(new Rect(r.x, r.y, 4f, r.height), p.Color);
+            bool me = p.Input is HumanInput;
+            UIKit.Text(new Rect(r.x + 20f, r.y + 8f, r.width - 40f, 26f),
+                "<b>" + (me ? "Your stats" : p.DisplayName + "'s stats") + "</b>   <color=#8890a8>" + p.Cards.Count + " card" + (p.Cards.Count == 1 ? "" : "s") +
+                "   <color=#7dff8a>green</color> = better than default, <color=#ff7a70>red</color> = worse</color>", UIKit.Label, Color.white);
+
+            float V(Stat st) => p.GetStat(st);
+            // Colour a value by whether it beats the default (polarity says which direction is "better").
+            string C(Stat st, string text)
+            {
+                var d = StatInfo.Get(st);
+                float v = V(st), b = d.Base;
+                int better = Mathf.Abs(v - b) < 0.0001f * Mathf.Max(1f, Mathf.Abs(b)) || d.Polarity == 0 ? 0 : (v > b ? 1 : -1) * d.Polarity;
+                return better > 0 ? "<color=#7dff8a>" + text + "</color>" : better < 0 ? "<color=#ff7a70>" + text + "</color>" : text;
+            }
+            string N(float v) => Mathf.Abs(v - Mathf.Round(v)) < 0.01f ? Mathf.RoundToInt(v).ToString() : v.ToString(v >= 10f ? "0.#" : "0.##");
+
+            float dmg = V(Stat.Damage), bullets = Mathf.Max(1, p.GetStatInt(Stat.BulletsPerShot)), cd = Mathf.Max(0.03f, V(Stat.AttackCooldown));
+            int ammo = Mathf.Max(1, p.GetStatInt(Stat.Ammo));
+            float reload = V(Stat.ReloadTime);
+            float dps = dmg * bullets * ammo / (ammo * cd + reload);
+            float baseDps = StatInfo.Get(Stat.Damage).Base * StatInfo.Get(Stat.Ammo).Base / (StatInfo.Get(Stat.Ammo).Base * StatInfo.Get(Stat.AttackCooldown).Base + StatInfo.Get(Stat.ReloadTime).Base);
+            float taken = V(Stat.DamageTaken), defense = (1f - taken) * 100f;
+            float hazardDef = (1f - V(Stat.HazardDamageTaken)) * 100f;
+            string Pct(float v) => (v > 0.5f ? "+" : "") + Mathf.RoundToInt(v) + "%";
+            string Col(bool good, bool bad, string t) => good ? "<color=#7dff8a>" + t + "</color>" : bad ? "<color=#ff7a70>" + t + "</color>" : t;
+
+            var items = new System.Collections.Generic.List<(string label, string value)>
+            {
+                ("Health", (p.IsAlive ? Mathf.CeilToInt(Mathf.Max(0f, p.Health)) + " / " : "") + C(Stat.MaxHealth, N(V(Stat.MaxHealth)))),
+                ("Damage", C(Stat.Damage, N(dmg)) + (bullets > 1 ? " x" + C(Stat.BulletsPerShot, N(bullets)) : "")),
+                ("Damage / sec", Col(dps > baseDps * 1.02f, dps < baseDps * 0.98f, N(dps))),
+                ("Defense", Col(defense > 0.5f, defense < -0.5f, Pct(defense))),
+                ("Fire Rate", C(Stat.AttackCooldown, N(1f / cd) + "/s")),
+                ("Ammo", C(Stat.Ammo, ammo.ToString())),
+                ("Reload", C(Stat.ReloadTime, N(reload) + "s")),
+                ("Bullet Speed", C(Stat.BulletSpeed, N(V(Stat.BulletSpeed)))),
+                ("Range", C(Stat.BulletLifetime, N(V(Stat.BulletSpeed) * V(Stat.BulletLifetime)) + "m")),
+                ("Spread", C(Stat.Spread, N(V(Stat.Spread)) + "°")),
+                ("Knockback", C(Stat.Knockback, N(V(Stat.Knockback)))),
+                ("Move Speed", C(Stat.MoveSpeed, N(V(Stat.MoveSpeed)))),
+                ("Jump", C(Stat.JumpHeight, N(V(Stat.JumpHeight))) + (p.GetStatInt(Stat.ExtraJumps) > 0 ? " +" + C(Stat.ExtraJumps, p.GetStatInt(Stat.ExtraJumps) + " air") : "")),
+                ("Block Cooldown", C(Stat.BlockCooldown, N(V(Stat.BlockCooldown)) + "s")),
+            };
+            void Opt(Stat st, string label, string value) { if (Mathf.Abs(V(st) - StatInfo.Get(st).Base) > 0.001f) items.Add((label, C(st, value))); }
+            Opt(Stat.Lifesteal, "Lifesteal", Mathf.RoundToInt(V(Stat.Lifesteal) * 100f) + "%");
+            Opt(Stat.Regen, "Regen", N(V(Stat.Regen)) + "/s");
+            Opt(Stat.Bounces, "Bounces", p.GetStatInt(Stat.Bounces).ToString());
+            Opt(Stat.Pierce, "Pierce", p.GetStatInt(Stat.Pierce).ToString());
+            Opt(Stat.Homing, "Homing", N(V(Stat.Homing)));
+            Opt(Stat.ExplosionRadius, "Blast Radius", N(V(Stat.ExplosionRadius)) + "m");
+            Opt(Stat.BulletSize, "Bullet Size", N(V(Stat.BulletSize) / StatInfo.Get(Stat.BulletSize).Base * 100f) + "%");
+            Opt(Stat.BulletGravity, "Bullet Drop", N(V(Stat.BulletGravity)));
+            Opt(Stat.BlockDuration, "Block Time", N(V(Stat.BlockDuration)) + "s");
+            Opt(Stat.PlayerSize, "Size", N(V(Stat.PlayerSize) * 100f) + "%");
+            if (p.GetStatInt(Stat.ExtraLives) > 0) items.Add(("Extra Lives", C(Stat.ExtraLives, p.LivesRemaining + " / " + p.GetStatInt(Stat.ExtraLives))));
+            if (Mathf.Abs(hazardDef) > 0.5f) items.Add(("Fall/Border Def.", Col(hazardDef > 0f, hazardDef < 0f, Pct(hazardDef))));
+
+            const float cellW = 160f, cellH = 24f;
+            int perRow = Mathf.Max(1, Mathf.FloorToInt((r.width - 30f) / cellW));
+            float x0 = r.x + 20f, y0 = r.y + 38f;
+            for (int i = 0; i < items.Count; i++)
+            {
+                float cx = x0 + (i % perRow) * cellW, cy = y0 + (i / perRow) * cellH;
+                if (cy + cellH > r.yMax - 4f) break;
+                UIKit.Text(new Rect(cx, cy, cellW - 6f, cellH), "<color=#8890a8>" + items[i].label + "</color>  <b>" + items[i].value + "</b>", UIKit.Small, Color.white);
+            }
         }
 
         // ------------------------------------------------------------------ picking
