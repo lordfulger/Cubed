@@ -141,8 +141,15 @@ namespace Spheres
         }
 
         /// <summary>The combos a set of cards activates, with levels. Each keyword pair runs one way (by order).</summary>
+        /// <summary>
+        /// Bonus keyword combos (extra trigger + payload effects on top of the cards). Off by default: cards already
+        /// combine with each other through <see cref="CardSynergy"/>. Mods or a future option can turn this on.
+        /// </summary>
+        public static bool Enabled = false;
+
         public static List<(Combo combo, int level)> Active(IEnumerable<CardDefinition> cards)
         {
+            if (!Enabled) return new List<(Combo, int)>();
             var counts = Counts(cards);
             var list = new List<(Combo, int)>();
             for (int a = 0; a < KeywordCount; a++)
@@ -265,7 +272,7 @@ namespace Spheres
 
         public override void OnBulletBounce(Bullet bullet, RaycastHit hit)
         {
-            if (bullet.FromCombo) return;
+            if (bullet != null && bullet.FromCombo) return;
             if (Combo.Trigger == Keyword.Bouncy) Fire(hit.point + hit.normal * 0.3f, null);
         }
 

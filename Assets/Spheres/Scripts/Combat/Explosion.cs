@@ -9,7 +9,7 @@ namespace Spheres
         static readonly Collider[] buffer = new Collider[64];
 
         /// <param name="selfDamage">Should the owner be hurt by their own blast?</param>
-        public static void Create(Vector3 center, float radius, float damage, Player owner, float knockback, Color color, bool selfDamage = false, string cause = null)
+        public static void Create(Vector3 center, float radius, float damage, Player owner, float knockback, Color color, bool selfDamage = false, string cause = null, Bullet bullet = null)
         {
             if (radius <= 0f) return;
             // Fireball: hot core, colored shell, smoke and a scorch mark.
@@ -43,7 +43,7 @@ namespace Spheres
                     Vector3 to = p.Center - center;
                     float dist = to.magnitude;
                     float falloff = Mathf.Lerp(1f, 0.35f, Mathf.Clamp01(dist / radius));
-                    p.TakeDamage(new DamageInfo
+                    var info = new DamageInfo
                     {
                         Amount = damage * falloff,
                         Source = owner,
@@ -52,7 +52,9 @@ namespace Spheres
                         Direction = dist > 0.01f ? (to / dist + Vector3.up * 0.3f) : Vector3.up,
                         Knockback = (knockback + radius * 2f) * falloff,
                         Cause = cause,
-                    });
+                    };
+                    // Card explosions trigger your on-hit cards (poison bombs, freezing blasts...). Map hazards don't.
+                    if (p.TakeDamage(info) && cause == null && p != owner) CardSynergy.Proc(owner, p, info, bullet);
                     continue;
                 }
                 var prop = col.GetComponentInParent<Prop>();

@@ -296,7 +296,7 @@ namespace Spheres
                 Vector3 dir = Quaternion.Euler(0f, i * 360f / count, 0f) * Vector3.forward;
                 var b = Bullet.Spawn(Player, Player.Center + dir * (Player.Radius + 0.4f), dir * speed);
                 b.Damage *= 0.5f;
-                b.Data[EchoShotEffect.EchoFlag] = true;
+                CardSynergy.ApplyFireEffects(Player, b);
             }
             Sfx.Play("shoot", 0.4f);
         }
@@ -355,7 +355,7 @@ namespace Spheres
             b.Damage *= 0.35f;
             b.Gravity = 0f;
             b.BouncesLeft = 0;
-            b.Data[EchoShotEffect.EchoFlag] = true;
+            CardSynergy.ApplyFireEffects(Owner, b);
             Sfx.Play("shoot", 0.2f);
         }
     }
@@ -413,7 +413,7 @@ namespace Spheres
             {
                 if (!p.IsAlive || p.Team == Owner.Team) continue;
                 if (Vector3.Distance(p.transform.position, transform.position) > 1.8f) continue;
-                Explosion.Create(transform.position + Vector3.up * 0.3f, 3.2f, 45f, Owner, 12f, Owner.Color);
+                Explosion.Create(transform.position + Vector3.up * 0.3f, 3.2f * CardSynergy.RadiusScale(Owner), 45f * CardSynergy.DamageScale(Owner), Owner, 12f + Owner.GetStat(Stat.Knockback) * 0.5f, Owner.Color);
                 Destroy(gameObject);
                 return;
             }

@@ -115,8 +115,10 @@ namespace Spheres
             b.Homing = Homing;
             b.ExplosionRadius = ExplosionRadius * 0.6f;
             b.Lifetime = Mathf.Min(Lifetime, 1.5f);
-            b.BouncesLeft = 0;
-            b.PierceLeft = 0;
+            // Children keep the parent's bullet cards (half its remaining bounces / pierces, all its wall passes).
+            b.BouncesLeft = BouncesLeft / 2;
+            b.PierceLeft = PierceLeft / 2;
+            b.TerrainPierceLeft = TerrainPierceLeft;
             b.CanHitOwner = CanHitOwner;
             b.Color = Color;
             b.BuildVisual();
@@ -415,6 +417,8 @@ namespace Spheres
             if (PierceLeft > 0)
             {
                 PierceLeft--;
+                // Explosive + piercing: a smaller blast at every enemy the bullet passes through.
+                if (ExplosionRadius > 0f) Explosion.Create(hit.point, ExplosionRadius * 0.6f, Damage * 0.4f, Owner, Knockback * 0.5f, Color, false, null, this);
                 pos += Velocity.normalized * 0.05f;
                 return;
             }
@@ -457,7 +461,7 @@ namespace Spheres
                 transform.position = pos;
                 if (Owner != null) Owner.ForEachEffect(e => e.OnBulletBounce(this, hit));
                 Fx.Burst(hit.point, Color, 3, 3f, 0.08f, 0.2f);
-                if (ExplosionRadius > 0f) Explosion.Create(hit.point + hit.normal * 0.1f, ExplosionRadius * 0.6f, Damage * 0.4f, Owner, Knockback, Color);
+                if (ExplosionRadius > 0f) Explosion.Create(hit.point + hit.normal * 0.1f, ExplosionRadius * 0.6f, Damage * 0.4f, Owner, Knockback, Color, false, null, this);
                 return;
             }
 
@@ -498,10 +502,18 @@ namespace Spheres
             CanHitOwner = false;
             AlreadyHit.Clear();
             Lifetime = Mathf.Max(Lifetime, 2f);
+            Age = 0f; // a fresh shot for the new owner (fuses, boomerangs etc. start over)
             if (newOwner != null)
             {
                 Color = Color.Lerp(newOwner.Color, Color.white, 0.35f);
+                // The bullet is yours now: it picks up your bullet stats where they're better, and your bullet cards.
+                Homing = Mathf.Max(Homing, newOwner.GetStat(Stat.Homing));
+                BouncesLeft = Mathf.Max(BouncesLeft, newOwner.GetStatInt(Stat.Bounces));
+                PierceLeft = Mathf.Max(PierceLeft, newOwner.GetStatInt(Stat.Pierce));
+                ExplosionRadius = Mathf.Max(ExplosionRadius, newOwner.GetStat(Stat.ExplosionRadius));
+                Damage = Mathf.Max(Damage, newOwner.GetStat(Stat.Damage));
                 BuildVisual();
+                CardSynergy.ApplyFireEffects(newOwner, this);
             }
             transform.position += Velocity.normalized * (Radius + 0.6f);
         }
@@ -511,7 +523,7 @@ namespace Spheres
             if (dead) return;
             dead = true;
             if (explode && ExplosionRadius > 0f)
-                Explosion.Create(transform.position, ExplosionRadius, Damage, Owner, Knockback, Color);
+                Explosion.Create(transform.position, ExplosionRadius, Damage, Owner, Knockback, Color, false, null, this);
             Release();
         }
     }

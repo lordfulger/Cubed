@@ -31,21 +31,23 @@ namespace Spheres
         public override void OnBlock()
         {
             Vector3 c = Player.Center;
-            Fx.Pulse(c, new Color(Player.Color.r, Player.Color.g, Player.Color.b, 0.45f), 1f, Radius * 2f, 0.3f);
+            float radius = Radius * CardSynergy.RadiusScale(Player), damage = Damage * CardSynergy.DamageScale(Player);
+            Fx.Pulse(c, new Color(Player.Color.r, Player.Color.g, Player.Color.b, 0.45f), 1f, radius * 2f, 0.3f);
             foreach (var p in Player.All.ToArray())
             {
                 if (p == Player || !p.IsAlive || p.Team == Player.Team) continue;
                 Vector3 to = p.Center - c;
-                if (to.magnitude > Radius) continue;
-                p.TakeDamage(new DamageInfo
+                if (to.magnitude > radius) continue;
+                var info = new DamageInfo
                 {
-                    Amount = Damage,
+                    Amount = damage,
                     Source = Player,
                     Type = DamageType.Effect,
                     Point = p.Center,
                     Direction = (to.normalized + Vector3.up * 0.4f).normalized,
-                    Knockback = Force,
-                });
+                    Knockback = Force + Player.GetStat(Stat.Knockback) * 0.5f,
+                };
+                if (p.TakeDamage(info)) CardSynergy.Proc(Player, p, info);
             }
         }
     }
@@ -155,15 +157,16 @@ namespace Spheres
             if (best == null) return;
             Fx.Zap(Player.Top, best.Center, new Color(0.75f, 0.6f, 1f, 0.9f));
             Sfx.PlayAt("zap", best.Center, 0.6f);
-            best.TakeDamage(new DamageInfo
+            var info = new DamageInfo
             {
-                Amount = Damage,
+                Amount = Damage * CardSynergy.DamageScale(Player),
                 Source = Player,
                 Type = DamageType.Effect,
                 Point = best.Center,
                 Direction = best.Center - Player.Center,
                 Knockback = 2f,
-            });
+            };
+            if (best.TakeDamage(info)) CardSynergy.Proc(Player, best, info);
         }
     }
 
@@ -214,14 +217,15 @@ namespace Spheres
         public override void OnDamaged(DamageInfo info)
         {
             if (info.Type != DamageType.Bullet || info.Source == null || info.Source == Player) return;
-            info.Source.TakeDamage(new DamageInfo
+            var back = new DamageInfo
             {
                 Amount = info.Amount * 0.3f,
                 Source = Player,
                 Type = DamageType.Effect,
                 Point = info.Source.Center,
                 Blockable = false,
-            });
+            };
+            if (info.Source.TakeDamage(back)) CardSynergy.Proc(Player, info.Source, back);
         }
     }
 

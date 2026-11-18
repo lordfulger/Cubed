@@ -98,7 +98,7 @@ namespace Spheres
         /// <summary>Modify damage this player is about to deal (info.Amount is writable).</summary>
         public virtual void OnBeforeDealDamage(Player target, DamageInfo info) { }
         public virtual void OnBulletHitTerrain(Bullet bullet, RaycastHit hit) { }
-        /// <summary>Called after one of the player's bullets damages someone.</summary>
+        /// <summary>Called after one of the player's bullets damages someone, and also after their explosions, zaps, shockwaves and thorns do (see CardSynergy). <paramref name="bullet"/> can be null then.</summary>
         public virtual void OnBulletHitPlayer(Bullet bullet, Player target, DamageInfo info) { }
         /// <summary>Called when the player activates block.</summary>
         public virtual void OnBlock() { }

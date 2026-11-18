@@ -457,7 +457,7 @@ namespace Spheres
             y = pill.yMax + 4f;
             // Keywords: any two in your deck form a combo.
             var kws = Combos.Of(c);
-            if (kws.Length > 0 && !small)
+            if (Combos.Enabled && kws.Length > 0 && !small)
             {
                 Text(new Rect(inner.x + 4f, y, inner.width - 8f, 15f), string.Join("  ·  ", kws), cardPill, new Color(1f, 0.85f, 0.4f, 0.85f * alpha));
                 y += 15f;

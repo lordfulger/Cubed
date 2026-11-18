@@ -245,7 +245,7 @@ SpheresAPI.RegisterCard(new CardDefinition("you.trophy", "Trophy Hunter", "Kills
 | `OnBulletBounce` / `OnBulletHitTerrain` | Bullet interactions with terrain |
 | `OnBulletUpdate(bullet, dt)` | Every frame for each of your bullets (steering, growth, fuses; `bullet.Age` and `SpawnPosition` help) |
 | `OnBeforeDealDamage(target, info)` | Change damage you're about to deal (executes, backstabs, range bonuses) |
-| `OnBulletHitPlayer(bullet, target, info)` | After one of your bullets damages someone |
+| `OnBulletHitPlayer(bullet, target, info)` | After your bullets, explosions, zaps, shockwaves or thorns damage someone (`bullet` is null when no bullet was involved). This is what makes on-hit cards combine with everything |
 | `OnBlock` | When block is activated |
 | `OnBlockedDamage(info)` | A block negated something: a bullet, border, fall, lava or explosion |
 | `TryReflectBullet(bullet)` | Return `true` to keep a blocked bullet alive (see `bullet.Reflect`) |
@@ -331,3 +331,16 @@ Useful patch targets include `GameManager.StartMatch`, `GameManager.Pick`, `Card
 Players are driven by `IPlayerInput` (`HumanInput`, `BotBrain`). To drive a player from a network peer or a
 replay, implement the interface, then patch `GameManager.StartMatch` (or replace `player.Input` on
 `GameEvents.MatchStarted`).
+
+## How cards combine
+
+Spheres has no list of combos. Cards combine because their effects hook into shared events, and `CardSynergy` makes those events fire everywhere:
+
+- On-hit cards trigger from all of your damage: bullets, explosions, zaps, shockwaves, thorns, mines and turret shots.
+- Bullets made from your bullets carry your bullet cards: splits, echoes, guard bursts, turret shots and blocked bullets you send back.
+- Explosive bullets also burst on every bounce and every enemy they pierce.
+- Card abilities scale with your stats (`CardSynergy.DamageScale` and `RadiusScale`).
+
+A new effect that hooks the normal events will combine with every other card automatically. If your effect creates bullets, call `CardSynergy.ApplyFireEffects(owner, bullet)`. If it deals damage, call `CardSynergy.Proc(owner, target, info)`.
+
+The old keyword combo bonuses are still in the code. They are off unless a mod sets `Combos.Enabled = true`.
