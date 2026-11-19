@@ -1,0 +1,8 @@
+<!-- Keeps code that the game finds by reflection (card effects, game modes, mod hooks) when IL2CPP strips
+     unused code, e.g. in Android builds. -->
+<linker>
+  <assembly fullname="Spheres" preserve="all" />
+  <assembly fullname="Assembly-CSharp" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="UnityEngine.JSONSerializeModule" preserve="all" />
+  <assembly fullname="System.IO.Compression" preserve="all" ignoreIfMissing="1" />
+</linker>

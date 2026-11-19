@@ -8,6 +8,13 @@ namespace Spheres
         public static void Open(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
+            if (Application.isMobilePlatform)
+            {
+                // Android/iOS can't open a file manager at a path; tell the player where it is instead.
+                try { System.IO.Directory.CreateDirectory(path); } catch (System.Exception) { }
+                SpheresHud.AddFeedText("Saved in " + path);
+                return;
+            }
             try
             {
                 System.IO.Directory.CreateDirectory(path);

@@ -793,7 +793,7 @@ namespace Spheres
             var view = new Rect(loadRect.x + 8f, loadRect.y + 46f, loadRect.width - 16f, loadRect.height - 54f);
             var maps = MapRegistry.All.ToList();
             var content = new Rect(0f, 0f, view.width - 20f, maps.Count * 40f);
-            loadScroll = GUI.BeginScrollView(view, loadScroll, content);
+            loadScroll = UIKit.ScrollView(view, loadScroll, content);
             for (int i = 0; i < maps.Count; i++)
             {
                 var m = maps[i];

@@ -123,6 +123,18 @@ namespace Spheres
                 BlockPressed = binds.KeyDown(GameAction.Block) && (locked || !Input.GetMouseButtonDown(1));
                 ReloadPressed = binds.KeyDown(GameAction.Reload);
                 PausePressed = binds.KeyDown(GameAction.Pause);
+                if (TouchControls.Active)
+                {
+                    // Phones/tablets: the on-screen stick and buttons drive the keyboard player.
+                    TouchControls.Update();
+                    move = Vector2.ClampMagnitude(move + TouchControls.Move, 1f);
+                    look += TouchControls.Look;
+                    JumpPressed |= TouchControls.JumpPressed;
+                    FireHeld |= TouchControls.FireHeld;
+                    BlockPressed |= TouchControls.BlockPressed;
+                    ReloadPressed |= TouchControls.ReloadPressed;
+                    PausePressed |= TouchControls.PausePressed;
+                }
             }
             else
             {

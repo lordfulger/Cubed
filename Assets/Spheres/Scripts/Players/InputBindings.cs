@@ -110,6 +110,7 @@ namespace Spheres
 
         static bool IsWindows => Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
         static bool IsMac => Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor;
+        static bool IsAndroid => Application.platform == RuntimePlatform.Android;
 
         static readonly PadProfile XboxWindows = new PadProfile { Name = "Xbox", Layout = PadLayout.Xbox, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, Select = 6, Start = 7, LS = 8, RS = 9, RX = 4, RY = 5, LT = 9, RT = 10, DX = 6, DY = 7, InvertDY = true };
         static readonly PadProfile XboxLinux = new PadProfile { Name = "Xbox", Layout = PadLayout.Xbox, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, Select = 6, Start = 7, LS = 9, RS = 10, RX = 4, RY = 5, LT = 3, RT = 6, DX = 7, DY = 8, TriggersFromMinusOne = true };
@@ -117,6 +118,9 @@ namespace Spheres
         static readonly PadProfile PlayStationDesktop = new PadProfile { Name = "PlayStation", Layout = PadLayout.PlayStation, West = 0, South = 1, East = 2, North = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 10, RS = 11, RX = 3, RY = 6, LT = 4, RT = 5, DX = 7, DY = 8, TriggersFromMinusOne = true, InvertDY = true };
         // Linux hid-playstation driver order (best effort; players can force a layout and rebind).
         static readonly PadProfile PlayStationLinux = new PadProfile { Name = "PlayStation", Layout = PadLayout.PlayStation, South = 0, East = 1, North = 2, West = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 11, RS = 12, RX = 4, RY = 5, LT = 3, RT = 6, DX = 7, DY = 8, TriggersFromMinusOne = true };
+        // Android maps every pad through its standard gamepad layout (Bluetooth Xbox / PlayStation / generic pads).
+        // Triggers are analog axes 13 (LT) and 12 (RT) on most phones; players can rebind if theirs differ.
+        static readonly PadProfile AndroidPad = new PadProfile { Name = "Gamepad", Layout = PadLayout.Xbox, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, Select = 11, Start = 10, LS = 8, RS = 9, RX = 3, RY = 4, LT = 13, RT = 12, DX = 5, DY = 6, InvertDY = true };
         static readonly PadProfile SwitchDesktop = new PadProfile { Name = "Switch Pro", Layout = PadLayout.Switch, South = 0, East = 1, West = 2, North = 3, LB = 4, RB = 5, LTButton = 6, RTButton = 7, Select = 8, Start = 9, LS = 10, RS = 11, RX = 4, RY = 5 };
 
         /// <summary>Called every frame from the game manager; raises Changed on hot-plug.</summary>
@@ -154,6 +158,7 @@ namespace Spheres
 
         public static PadProfile Profile(int joystick)
         {
+            if (IsAndroid) return AndroidPad;
             var layout = InputBindings.Current.ForcedLayout >= 0 ? (PadLayout)InputBindings.Current.ForcedLayout : DetectLayout(joystick);
             switch (layout)
             {

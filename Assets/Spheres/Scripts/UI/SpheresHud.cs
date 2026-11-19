@@ -119,6 +119,7 @@ namespace Spheres
             DrawBanners(gm);
             if (gm.State == GameState.MatchEnd) DrawMatchEnd(gm);
             if (gm.State == GameState.CardPick && gm.VoteRunning) DrawVote(gm);
+            if (!gm.ScoreboardOpen) TouchControls.Draw();
             if (gm.ScoreboardOpen && gm.State != GameState.MatchEnd) DrawScoreTab(gm);
             DrawTooltip();
         }

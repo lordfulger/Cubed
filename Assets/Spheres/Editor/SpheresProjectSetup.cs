@@ -98,7 +98,7 @@ namespace Spheres.EditorTools
             Add("Mouse X", 1, 0, 0, 0.1f, 0f);
             Add("Mouse Y", 1, 1, 0, 0.1f, 0f);
             for (int j = 1; j <= 8; j++)
-                for (int a = 1; a <= 10; a++)
+                for (int a = 1; a <= 14; a++) // Android pads report triggers on axes 12-13
                     Add("Spheres_J" + j + "_A" + a, 2, a - 1, j, 1f, 0.05f);
             so.ApplyModifiedPropertiesWithoutUndo();
         }
@@ -235,6 +235,68 @@ namespace Spheres.EditorTools
 
         [MenuItem("Spheres/Build/macOS", priority = 22)]
         public static void BuildMac() => Build(BuildTarget.StandaloneOSX, "Builds/macOS/Spheres.app");
+
+        /// <summary>
+        /// Android phone/tablet build (an .apk you can sideload or upload). Needs "Android Build Support" (with the
+        /// OpenJDK and Android SDK &amp; NDK tools) added to this Unity in Unity Hub. Uses IL2CPP + ARM64 so it runs on
+        /// every current phone (many no longer run 32-bit apps). Code mods (BepInEx) don't exist on Android; JSON card
+        /// and map mods still work.
+        /// </summary>
+        [MenuItem("Spheres/Build/Android (APK)", priority = 23)]
+        public static void BuildAndroid()
+        {
+            if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Android, BuildTarget.Android))
+            {
+                EditorUtility.DisplayDialog("Spheres", "Android Build Support isn't installed for this Unity.\n\nUnity Hub > Installs > the gear next to this version > Add modules > tick 'Android Build Support' (and the OpenJDK + Android SDK & NDK Tools under it), then reopen the project.", "OK");
+                return;
+            }
+            ConfigureAndroid();
+            Build(BuildTarget.Android, "Builds/Android/Spheres-v" + (string.IsNullOrEmpty(PlayerSettings.bundleVersion) ? "0.1.0" : PlayerSettings.bundleVersion) + ".apk");
+        }
+
+        static void ConfigureAndroid()
+        {
+            string company = new string((PlayerSettings.companyName ?? "spheres").ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+            if (company.Length == 0 || char.IsDigit(company[0])) company = "spheres" + company;
+#if UNITY_2021_2_OR_NEWER
+            var android = NamedBuildTarget.Android;
+            if (PlayerSettings.GetApplicationIdentifier(android).Contains("DefaultCompany") || string.IsNullOrEmpty(PlayerSettings.GetApplicationIdentifier(android)))
+                PlayerSettings.SetApplicationIdentifier(android, "com." + company + ".spheres");
+            PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
+            // Low stripping: the game finds card effects, modes and mod hooks by reflection (see link.xml).
+            PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Low);
+#else
+            if (PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android).Contains("DefaultCompany"))
+                PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com." + company + ".spheres");
+            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Android, ManagedStrippingLevel.Low);
+#endif
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26; // Android 8.0+
+            PlayerSettings.Android.forceInternetPermission = true; // online play, accounts, updates
+            PlayerSettings.Android.bundleVersionCode = Mathf.Max(PlayerSettings.Android.bundleVersionCode, VersionCode(PlayerSettings.bundleVersion));
+            // Landscape only, either way round.
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToPortrait = false;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            EditorUserBuildSettings.buildAppBundle = false; // .apk (switch to .aab for the Play Store)
+        }
+
+        /// <summary>"1.2.3" -> 10203 (Android needs an increasing whole number per release).</summary>
+        static int VersionCode(string v)
+        {
+            var parts = (v ?? "0").Split('.');
+            int code = 0;
+            for (int i = 0; i < 3; i++)
+            {
+                int n = 0;
+                if (i < parts.Length) int.TryParse(new string(parts[i].TakeWhile(char.IsDigit).ToArray()), out n);
+                code = code * 100 + Mathf.Clamp(n, 0, 99);
+            }
+            return Mathf.Max(1, code);
+        }
 
         /// <summary>Command-line entry: Unity -batchmode -quit -executeMethod Spheres.EditorTools.SpheresProjectSetup.BuildWindowsCI</summary>
         public static void BuildWindowsCI() => Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Spheres.exe", false);
@@ -406,7 +468,7 @@ namespace Spheres.EditorTools
                 return false;
             }
             Debug.Log("[Spheres] Built " + path + " (" + report.summary.totalSize / (1024 * 1024) + " MB). " +
-                      "Install BepInEx 5 (x64) next to the executable to enable code mods.");
+                      (target == BuildTarget.Android ? "Copy the .apk to your phone and open it (allow installing from unknown sources)." : "Install BepInEx 5 (x64) next to the executable to enable code mods."));
             if (reveal && !Application.isBatchMode) EditorUtility.RevealInFinder(path);
             return true;
         }

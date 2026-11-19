@@ -734,6 +734,7 @@ namespace Spheres
             float udt = Time.unscaledDeltaTime;
             // Each subsystem is isolated: an error in one is logged (once) instead of stalling the match.
             Safe("controllers", Controllers.Poll);
+            Safe("touch", TouchControls.Update);
             Safe("rumble", Rumble.Update);
             Safe("scoreboard", UpdateScoreboardKey);
             Safe("map vote", UpdateLocalVoteInput);
@@ -862,6 +863,7 @@ namespace Spheres
             if (InMatch)
             {
                 var binds = InputBindings.Current;
+                if (TouchControls.ScoreboardHeld) open = true;
                 foreach (var p in Players)
                 {
                     if (!(p.Input is HumanInput h)) continue;

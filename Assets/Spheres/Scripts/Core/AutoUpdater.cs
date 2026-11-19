@@ -38,14 +38,16 @@ namespace Spheres
         [Serializable] class AssetJson { public string name; public string browser_download_url; public long size; }
 
         /// <summary>Only installed Windows builds update themselves (the editor uses Spheres > Update from GitHub).</summary>
-        public static bool Supported => !Application.isEditor && (IsWindows || IsMac);
+        public static bool Supported => !Application.isEditor && (IsWindows || IsMac || IsAndroid);
         static bool IsWindows => Application.platform == RuntimePlatform.WindowsPlayer;
         static bool IsMac => Application.platform == RuntimePlatform.OSXPlayer;
+        static bool IsAndroid => Application.platform == RuntimePlatform.Android;
 
         /// <summary>Release zips are named per platform: Spheres-Windows-v1.2.3.zip, Spheres-macOS-v1.2.3.zip.</summary>
         static bool ForThisPlatform(string name)
         {
             name = name.ToLowerInvariant();
+            if (IsAndroid) return name.EndsWith(".apk");
             if (!name.EndsWith(".zip")) return false;
             bool mac = name.Contains("mac") || name.Contains("osx");
             bool win = name.Contains("win");
@@ -122,6 +124,14 @@ namespace Spheres
         public void Install()
         {
             if (State != UpdateState.Available || string.IsNullOrEmpty(downloadUrl)) return;
+            if (IsAndroid)
+            {
+                // Android apps can't replace themselves: the browser downloads the new APK and Android installs it
+                // over this one (saves are kept).
+                Application.OpenURL(downloadUrl);
+                Dismissed = true;
+                return;
+            }
             StartCoroutine(InstallRoutine());
         }
 

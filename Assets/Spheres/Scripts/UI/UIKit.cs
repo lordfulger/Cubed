@@ -228,6 +228,30 @@ namespace Spheres
         }
 
         /// <summary>Converts a pixel rect (GUI space, top-left origin) to virtual units.</summary>
+        /// <summary>
+        /// GUI.BeginScrollView that can also be dragged with a finger (phones have no scroll wheel).
+        /// End it with GUI.EndScrollView as usual.
+        /// </summary>
+        public static Vector2 ScrollView(Rect view, Vector2 scroll, Rect content)
+        {
+            if (Input.touchCount == 1 && Event.current != null && Event.current.type == EventType.Repaint)
+            {
+                var t = Input.GetTouch(0);
+                if (t.phase == TouchPhase.Moved)
+                {
+                    Vector2 now = GUIUtility.ScreenToGUIPoint(new Vector2(t.position.x, Screen.height - t.position.y));
+                    Vector2 was = GUIUtility.ScreenToGUIPoint(new Vector2(t.position.x - t.deltaPosition.x, Screen.height - (t.position.y - t.deltaPosition.y)));
+                    if (view.Contains(was))
+                    {
+                        scroll -= now - was;
+                        scroll.x = Mathf.Clamp(scroll.x, 0f, Mathf.Max(0f, content.width - view.width));
+                        scroll.y = Mathf.Clamp(scroll.y, 0f, Mathf.Max(0f, content.height - view.height));
+                    }
+                }
+            }
+            return GUI.BeginScrollView(view, scroll, content);
+        }
+
         public static Rect FromPixels(Rect r) => new Rect(r.x / Scale, r.y / Scale, r.width / Scale, r.height / Scale);
 
         public static Vector2 MouseVirtual => Event.current != null ? Event.current.mousePosition : Vector2.zero;

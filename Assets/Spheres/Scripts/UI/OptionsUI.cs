@@ -38,7 +38,7 @@ namespace Spheres
 
             var view = new Rect(panel.x + 16f, panel.y + 110f, W - 32f, H - 190f);
             var content = new Rect(0f, 0f, view.width - 20f, 900f);
-            scroll = GUI.BeginScrollView(view, scroll, content);
+            scroll = UIKit.ScrollView(view, scroll, content);
             float y = 6f;
             Rect Row(float h = 36f) { var r = new Rect(8f, y, content.width - 16f, h); y += h + 6f; return r; }
             void Header(string text) { y += 6f; UIKit.Text(new Rect(8f, y, content.width, 28f), text, UIKit.Header, UIKit.Accent); y += 34f; }

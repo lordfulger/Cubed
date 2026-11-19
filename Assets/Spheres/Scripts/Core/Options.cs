@@ -67,7 +67,8 @@ namespace Spheres
             }
             catch (Exception e) { Debug.LogException(e); }
             Loc.SetLanguage("");
-            return new Options();
+            // Phones start on Medium graphics (shorter shadows, less anti-aliasing) to stay smooth and cool.
+            return Application.isMobilePlatform ? new Options { quality = 1 } : new Options();
         }
 
         public static Resolution[] Resolutions
@@ -86,6 +87,13 @@ namespace Spheres
         {
             QualitySettings.vSyncCount = vsync ? 1 : 0;
             Application.targetFrameRate = vsync ? -1 : fpsCap <= 0 ? -1 : fpsCap;
+            if (Application.isMobilePlatform)
+            {
+                // Phones ignore vSync and default to 30 fps; ask for 60 (or the cap) and keep the screen awake.
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = fpsCap > 0 ? Mathf.Min(fpsCap, 120) : 60;
+                Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            }
             switch (quality)
             {
                 case 0:
@@ -119,7 +127,7 @@ namespace Spheres
             Teams.SetPalette(colorPalette);
             Rumble.Strength = rumble;
 
-            if (!applyDisplay) return;
+            if (!applyDisplay || Application.isMobilePlatform) return; // phones are always full screen
             var mode = windowMode == 0 ? FullScreenMode.FullScreenWindow : windowMode == 1 ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed;
             var res = Resolutions;
             if (resolutionIndex >= 0 && resolutionIndex < res.Length)

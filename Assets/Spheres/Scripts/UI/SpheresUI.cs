@@ -339,7 +339,7 @@ namespace Spheres
             var view = new Rect(left.x + 8f, py, left.width - 16f, left.yMax - py - 54f);
             float rowH = 44f;
             var content = new Rect(0f, 0f, view.width - 20f, Mathf.Max(view.height, st.slots.Count * rowH));
-            playersScroll = GUI.BeginScrollView(view, playersScroll, content);
+            playersScroll = UIKit.ScrollView(view, playersScroll, content);
             int remove = -1;
             for (int i = 0; i < st.slots.Count; i++)
             {
@@ -399,7 +399,7 @@ namespace Spheres
             UIKit.Fill(right, UIKit.Panel);
             var rview = new Rect(right.x + 8f, right.y + 8f, right.width - 16f, right.height - 16f);
             var rcontent = new Rect(0f, 0f, rview.width - 20f, 1260f);
-            rulesScroll = GUI.BeginScrollView(rview, rulesScroll, rcontent);
+            rulesScroll = UIKit.ScrollView(rview, rulesScroll, rcontent);
             DrawRules(rcontent.width);
             GUI.EndScrollView();
 
@@ -586,7 +586,7 @@ namespace Spheres
             int perRow = Mathf.Max(1, Mathf.FloorToInt((view.width - 20f + gap) / (cw + gap)));
             int rows = Mathf.CeilToInt(all.Count / (float)perRow);
             var content = new Rect(0f, 0f, view.width - 20f, rows * (ch + gap) + 20f);
-            cardsScroll = GUI.BeginScrollView(view, cardsScroll, content);
+            cardsScroll = UIKit.ScrollView(view, cardsScroll, content);
             // Only draw rows that are on screen (there can be hundreds of cards).
             int firstRow = Mathf.Max(0, Mathf.FloorToInt((cardsScroll.y - 10f) / (ch + gap)) - 1);
             int lastRow = Mathf.CeilToInt((cardsScroll.y + view.height) / (ch + gap)) + 1;
@@ -632,7 +632,7 @@ namespace Spheres
 
             var view = new Rect(panel.x + 16f, panel.y + 64f, panel.width - 32f, panel.height - 140f);
             var content = new Rect(0f, 0f, view.width - 20f, 1400f);
-            modsScroll = GUI.BeginScrollView(view, modsScroll, content);
+            modsScroll = UIKit.ScrollView(view, modsScroll, content);
             float y = 0f, w = content.width;
 
             if (SteamWorkshop.Available)
@@ -908,7 +908,7 @@ namespace Spheres
                     int rows = Mathf.CeilToInt(Hats.All.Count / (float)cols);
                     var view = new Rect(x, y, w, bottom - y - 4f);
                     var content = new Rect(0f, 0f, w - 20f, rows * (ch + 6f));
-                    hatScroll = GUI.BeginScrollView(view, hatScroll, content);
+                    hatScroll = UIKit.ScrollView(view, hatScroll, content);
                     for (int i = 0; i < Hats.All.Count; i++)
                     {
                         var hat = Hats.All[i];
@@ -1070,7 +1070,7 @@ namespace Spheres
             UIKit.Text(new Rect(hx + 12f, y + 12f, hw, 28f), "Hats", UIKit.Header, UIKit.Accent);
             // Scrolls: there are many hats.
             var hatView = new Rect(hx + 4f, y + 48f, hw - 8f, H - 160f - 56f);
-            profileHatScroll = GUI.BeginScrollView(hatView, profileHatScroll, new Rect(0f, 0f, hatView.width - 20f, Hats.All.Count * 36f));
+            profileHatScroll = UIKit.ScrollView(hatView, profileHatScroll, new Rect(0f, 0f, hatView.width - 20f, Hats.All.Count * 36f));
             float hy = 0f;
             foreach (var hat in Hats.All)
             {
@@ -1093,7 +1093,7 @@ namespace Spheres
             UIKit.Text(new Rect(ax + 12f, y + 12f, aw, 28f), "Achievements  " + pr.achievements.Count + " / " + Achievements.All.Count, UIKit.Header, UIKit.Accent);
             var inner = new Rect(ax + 4f, y + 48f, aw - 8f, view.height - 56f);
             var content = new Rect(0f, 0f, inner.width - 20f, Achievements.All.Count * 52f);
-            profileScroll = GUI.BeginScrollView(inner, profileScroll, content);
+            profileScroll = UIKit.ScrollView(inner, profileScroll, content);
             float ay = 0f;
             foreach (var a in Achievements.All)
             {
